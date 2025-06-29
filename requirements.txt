@@ -1,9 +1,0 @@
-marimo>=0.8.0
-openlineage-python>=1.0.0
-pandas>=1.5.0
-numpy>=1.21.0
-uuid
-python-dateutil>=2.8.0
-psutil>=5.8.0
-asyncio
-pathlib 
