@@ -1,0 +1,92 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://marimo.io/schemas/runtime-event.json",
+  "title": "Marimo Runtime Event",
+  "description": "Schema for Marimo runtime execution events",
+  "type": "object",
+  "required": [
+    "event_type",
+    "execution_id",
+    "cell_id",
+    "cell_source",
+    "cell_source_lines",
+    "start_memory_mb",
+    "timestamp",
+    "session_id",
+    "emitted_at"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "description": "Type of runtime event",
+      "enum": ["cell_execution_start", "cell_execution_end", "cell_execution_error"]
+    },
+    "execution_id": {
+      "type": "string",
+      "description": "Unique identifier for this execution (8-character hex string)",
+      "pattern": "^[a-f0-9]{8}$"
+    },
+    "cell_id": {
+      "type": "string",
+      "description": "Unique identifier for the cell being executed"
+    },
+    "cell_source": {
+      "type": "string",
+      "description": "Source code of the cell being executed"
+    },
+    "cell_source_lines": {
+      "type": "integer",
+      "description": "Number of lines in the cell source code",
+      "minimum": 1
+    },
+    "start_memory_mb": {
+      "type": "number",
+      "description": "Memory usage in MB at the start of execution",
+      "minimum": 0
+    },
+    "end_memory_mb": {
+      "type": "number",
+      "description": "Memory usage in MB at the end of execution",
+      "minimum": 0
+    },
+    "duration_ms": {
+      "type": "number",
+      "description": "Execution duration in milliseconds",
+      "minimum": 0
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the event occurred"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier (8-character hex string)",
+      "pattern": "^[a-f0-9]{8}$"
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when the event was emitted"
+    },
+    "error_info": {
+      "type": "object",
+      "description": "Error information if execution failed",
+      "properties": {
+        "error_type": {
+          "type": "string",
+          "description": "Type of error that occurred"
+        },
+        "error_message": {
+          "type": "string",
+          "description": "Error message"
+        },
+        "traceback": {
+          "type": "string",
+          "description": "Full error traceback"
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+} 
