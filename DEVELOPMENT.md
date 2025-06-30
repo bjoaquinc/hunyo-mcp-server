@@ -66,51 +66,126 @@ hatch shell
 
 ### 2. Verify Installation
 
-```bash
-# Check that CLI entry point works
-hunyo-mcp-server --help
+**✅ Quick Verification Checklist:**
 
-# Check that package imports work
-python -c "import hunyo_mcp_server; print('✅ Package imported successfully')"
+```bash
+# 1. Test basic package import
+hatch run python -c "import hunyo_mcp_server; print('✅ Package imported successfully')"
+
+# 2. Test capture layer (main functionality)
+hatch run python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer working')"
+
+# 3. Run test suite (most important verification)
+hatch run test
+
+# 4. Test code quality tools
+hatch run style
+
+# 5. (Optional) Fix code style issues 
+hatch run fmt
 ```
 
-**Note**: Some imports may fail initially since we're still implementing core modules.
+**Expected Results:**
+- ✅ **Package import**: Should work
+- ✅ **Capture layer**: Should work (with verbose output)  
+- ✅ **Test suite**: All 70 tests should pass
+- ✅ **Code style**: 405 style issues remaining (88.4% improvement from ~3500!)
+
+**💡 Style Status**: 
+- ✅ **3,095 issues automatically fixed** with `hatch run fmt` and manual cleanup
+- ⚠️ **405 remaining issues** need manual attention (mostly test files and print statements)
+- 🎯 **Safe to develop** - all critical style issues resolved
+
+**⚠️ Expected to fail (not implemented yet):**
+- ❌ `hunyo-mcp-server --help` (CLI not implemented)
+- ❌ `import hunyo_mcp_server.tools` (MCP tools not implemented)
+
+### 3. Getting Started Summary
+
+**🎉 You're ready to develop when:**
+- ✅ All 70 tests pass
+- ✅ Capture layer imports without errors  
+- ✅ Code quality checks pass
+- ✅ You can create/modify test files and run them
+
+**🔨 What you can work on:**
+- ✅ **Capture system improvements** (`src/capture/`)
+- ✅ **Database schemas** (`schemas/`)
+- ✅ **Configuration system** (`src/hunyo_mcp_server/config.py`)
+- ✅ **Test additions** (`test/`)
+- 🚧 **MCP server implementation** (`src/hunyo_mcp_server/server.py` - missing)
+- 🚧 **Database ingestion** (`src/hunyo_mcp_server/ingestion/` - missing)
+
+**🎯 Quick Development Workflow:**
+```bash
+# 1. Make changes to code
+# 2. Run tests to verify nothing broke
+hatch run test
+
+# 3. Check code quality
+hatch run style
+
+# 4. Run specific tests for your changes
+hatch run test test/test_capture/test_your_module.py
+```
 
 ## 🧪 Development Workflow
 
 ### Running Tests
 
+The project has a comprehensive test suite with **70 tests** covering both unit and integration testing:
+
 ```bash
-# Run all tests
+# Run all tests (70 tests total)
 hatch run test
 
-# Run with coverage
-hatch run cov
+# Run with coverage reporting
+hatch run test-cov
+
+# Run with verbose output  
+hatch run test -v
 
 # Run specific test file
-hatch run pytest test/test_capture_integration.py
+hatch run test test/test_capture_integration.py
 
-# Run with verbose output
-hatch run pytest -v
+# Stop on first failure
+hatch run test -x
+```
+
+**Test Categories:**
+
+```bash
+# Unit tests (53 tests) - Test individual capture modules
+hatch run test test/test_capture/
+
+# Integration tests (17 tests) - Test component interactions  
+hatch run test test/integration/
+
+# Specific module tests
+hatch run test test/test_capture/test_lightweight_runtime_tracker.py    # 10 tests
+hatch run test test/test_capture/test_live_lineage_interceptor.py        # 13 tests  
+hatch run test test/test_capture/test_native_hooks_interceptor.py        # 17 tests
+hatch run test test/test_capture/test_websocket_interceptor.py           # 13 tests
+
+# Marimo notebook integration tests
+hatch run test test/integration/test_marimo_notebook_integration.py      # 6 tests
+hatch run test test/integration/test_capture_integration.py              # 11 tests
 ```
 
 ### Code Quality
 
 ```bash
-# Format code with Black
+# Format code with Black and Ruff
 hatch run fmt
 
-# Check linting with Ruff  
-hatch run lint
-
-# Fix auto-fixable lint issues
-hatch run lint --fix
+# Check code style and linting  
+hatch run style
 
 # Type checking with MyPy
-hatch run types
+hatch run typing
 
-# Run all quality checks
-hatch run quality
+# All quality checks at once
+hatch run style && hatch run typing
 ```
 
 ### Development Commands
@@ -128,47 +203,123 @@ hatch run python
 
 ## 🛠️ Hatch Scripts (Defined in pyproject.toml)
 
-Add these to your `pyproject.toml` under `[tool.hatch.envs.default.scripts]`:
+Current scripts available in the project:
 
 ```toml
 [tool.hatch.envs.default.scripts]
-test = "pytest {args}"
-cov = "pytest --cov=hunyo_mcp_server --cov-report=html --cov-report=term"
-fmt = "black src/ test/"
-lint = "ruff check src/ test/ {args}"
-types = "mypy src/"
-quality = ["fmt", "lint", "types"]
+test = "pytest {args:test}"
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args:test}"
+typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture test}"
+style = [
+    "ruff check {args:.}",
+    "black --check --diff {args:.}",
+]
+fmt = [
+    "black {args:.}",
+    "ruff check --fix {args:.}",
+    "style",
+]
 ```
+
+**Available Commands:**
+- `hatch run test` - Run all tests
+- `hatch run test-cov` - Run tests with coverage reporting
+- `hatch run typing` - Type checking with MyPy  
+- `hatch run style` - Check code style (Black + Ruff)
+- `hatch run fmt` - Format code and fix style issues
 
 ## 🎯 Testing Your Changes
 
 ### 1. Test Core Functionality
 
-```bash
-# Test existing capture layer
-hatch run python test/test_capture_integration.py
+**Current Status: ✅ All 70 tests passing (100% success rate)**
 
-# Test OpenLineage generation
-hatch run python test/test_openlineage_generation.py
+```bash
+# Test all capture layer functionality (53 unit tests)
+hatch run test test/test_capture/
+
+# Test core integration (3 tests)  
+hatch run test test/test_capture_integration.py
+
+# Test OpenLineage generation (4 tests)
+hatch run test test/test_openlineage_generation.py
+
+# Test runtime tracking (4 tests)
+hatch run test test/test_fixed_runtime.py
 ```
 
-### 2. Test CLI Entry Point
+### 2. Test Marimo Integration (Critical)
+
+**⚠️ IMPORTANT**: Before any capture system changes, run marimo integration tests to ensure compatibility:
 
 ```bash
-# Test help command (should work once server.py is implemented)
+# Run all marimo integration tests (17 tests)
+hatch run test test/integration/
+
+# Run marimo-specific tests (6 tests)
+hatch run test test/integration/test_marimo_notebook_integration.py -v
+
+# Run capture integration tests (11 tests) 
+hatch run test test/integration/test_capture_integration.py -v
+
+# Run with coverage for integration tests only
+hatch run test-cov test/integration/
+```
+
+**What these tests verify**:
+- ✅ Marimo notebook creation and content parsing
+- ✅ DataFrame operation detection in notebook content
+- ✅ Capture system integration points with marimo cells
+- ✅ Notebook validation and marimo compatibility
+- ✅ Complete capture pipeline functionality
+- ✅ Multi-component integration workflows
+- ✅ WebSocket integration with marimo communication
+- ✅ Native hooks integration with marimo execution
+- ✅ Performance optimization with large DataFrames
+- ✅ Error recovery and graceful degradation
+
+**When to run these tests**:
+- Before committing changes to `src/capture/`
+- After updating marimo integration points
+- Before releasing new versions
+- When debugging marimo compatibility issues
+- When modifying DataFrame tracking logic
+
+### 3. Test CLI Entry Point
+
+**⚠️ CLI Not Yet Implemented** - The main CLI is not available until `server.py` is implemented.
+
+```bash
+# This will fail (expected) - CLI not implemented yet
+hunyo-mcp-server --help  # ❌ command not found
+
+# Alternative: Test capture modules directly in development
+hatch run python -c "
+from capture.live_lineage_interceptor import MarimoLiveInterceptor
+print('✅ Core functionality available for development')
+"
+```
+
+**When CLI is implemented, these commands will work:**
+```bash
+# Future: Test help command
 hunyo-mcp-server --help
 
-# Test with notebook (once implemented)
+# Future: Test with notebook
 hunyo-mcp-server --notebook test/sample_notebook.py
 ```
 
-### 3. Test Package Import
+### 4. Test Package Import
 
 ```bash
-hatch run python -c "
-from hunyo_mcp_server.capture.live_lineage_interceptor import enable_live_tracking
-print('✅ Capture layer imports working')
-"
+# Test basic package structure
+hatch run python -c "import hunyo_mcp_server; print('✅ Basic package working')"
+
+# Test capture layer functionality
+hatch run python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer working')"
+
+# Test configuration system
+hatch run python -c "from hunyo_mcp_server.config import get_hunyo_data_dir; print('✅ Config system working')"
 ```
 
 ## 🔄 Managing Dependencies

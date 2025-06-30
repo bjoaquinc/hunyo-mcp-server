@@ -4,268 +4,213 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hunyo-mcp-server"
-version = "0.1.0"
-description = "Zero-touch notebook instrumentation for comprehensive DataFrame lineage tracking via MCP"
+dynamic = ["version"]
+description = "Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+requires-python = ">=3.11"
 authors = [
-    { name = "Hunyo Team" },
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Scientific/Engineering :: Information Analysis",
-    "Topic :: Software Development :: Libraries :: Python Modules",
+    { name = "Hunyo Team", email = "team@hunyo.dev" },
 ]
 keywords = [
     "marimo",
-    "notebook",
-    "lineage",
     "dataframe",
+    "tracking",
     "mcp",
     "openlineage",
-    "data-tracking",
-    "pandas",
+    "debugging",
+    "notebook",
 ]
-requires-python = ">=3.8"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
-    # Core MCP and CLI
     "mcp>=1.0.0",
     "click>=8.0.0",
-    
-    # Notebook and data processing
-    "marimo>=0.8.0",
-    "pandas>=1.5.0",
-    "numpy>=1.21.0",
-    
-    # Database and storage
-    "duckdb>=0.8.0",
-    
-    # OpenLineage compliance
-    "openlineage-python>=1.0.0",
-    
-    # System monitoring and utilities
-    "psutil>=5.8.0",
-    "python-dateutil>=2.8.0",
-    "pathlib2>=2.3.0; python_version<'3.4'",
-    
-    # File watching and async processing
+    "duckdb>=0.9.0",
+    "pandas>=2.0.0",
+    "pydantic>=2.0.0",
     "watchdog>=3.0.0",
-    "aiofiles>=23.0.0",
-    
-    # JSON schema validation
-    "jsonschema>=4.0.0",
+    "websockets>=11.0.0",
+    "openlineage-python>=0.28.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    # Testing
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest-timeout>=2.3.0",
     "pytest-cov>=4.0.0",
-    "pytest-mock>=3.10.0",
-    
-    # Code quality
     "black>=23.0.0",
     "ruff>=0.1.0",
-    "mypy>=1.5.0",
-    
-    # Documentation
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.0.0",
-    
-    # Development utilities
-    "pre-commit>=3.0.0",
-    "ipython>=8.0.0",
-]
-test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "pytest-mock>=3.10.0",
-]
-docs = [
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.0.0",
-    "mkdocs-click>=0.8.0",
+    "mypy>=1.0.0",
+    "types-click",
+    "marimo>=0.8.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/hunyo-team/hunyo-mcp-server"
-Documentation = "https://hunyo-mcp-server.readthedocs.io"
-Repository = "https://github.com/hunyo-team/hunyo-mcp-server"
-Issues = "https://github.com/hunyo-team/hunyo-mcp-server/issues"
-Changelog = "https://github.com/hunyo-team/hunyo-mcp-server/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp#readme"
+Issues = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp/issues"
+Source = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp"
 
 [project.scripts]
 hunyo-mcp-server = "hunyo_mcp_server.server:main"
 
-# Enable pipx run support
-[project.entry-points."pipx.scripts"]
-hunyo-mcp-server = "hunyo_mcp_server.server:main"
+[tool.hatch.version]
+path = "src/hunyo_mcp_server/__init__.py"
 
-# MCP server registration (for MCP clients)
-[project.entry-points."mcp.servers"]
-hunyo-mcp-server = "hunyo_mcp_server.server:create_mcp_server"
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-cov>=4.0.0",
+    "black",
+    "ruff",
+    "mypy",
+    "types-click",
+    "marimo>=0.8.0",
+]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/hunyo_mcp_server"]
-
-# Hatch development scripts
 [tool.hatch.envs.default.scripts]
+test = "pytest {args:test}"
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args:test}"
+typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture test}"
+style = [
+    "ruff check {args:.}",
+    "black --check --diff {args:.}",
+]
+fmt = [
+    "black {args:.}",
+    "ruff check --fix {args:.}",
+    "style",
+]
+
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.26.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-cov>=4.0.0",
+    "marimo>=0.8.0",
+]
+
+[tool.hatch.envs.test.scripts]
 test = "pytest {args}"
-cov = "pytest --cov=hunyo_mcp_server --cov-report=html --cov-report=term"
-fmt = "black src/ test/"
-lint = "ruff check src/ test/ {args}"
-types = "mypy src/"
-quality = ["fmt", "lint", "types"]
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args}"
 
-# Development dependencies are automatically installed from [project.optional-dependencies.dev]
-
-[tool.hatch.build.targets.sdist]
-include = [
-    "/src",
-    "/schemas",
-    "/test",
-    "/README.md",
-    "/ROADMAP.md",
-    "/DEVELOPMENT.md",
-    "/pyproject.toml",
-]
-
-# Black code formatting
-[tool.black]
-line-length = 100
-target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
-include = '\.pyi?$'
-extend-exclude = '''
-/(
-  # directories
-  \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-
-# Ruff linting and formatting
-[tool.ruff]
-target-version = "py38"
-line-length = 100
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings  
-    "F",   # pyflakes
-    "I",   # isort
-    "B",   # flake8-bugbear
-    "C4",  # flake8-comprehensions
-    "UP",  # pyupgrade
-    "ARG", # flake8-unused-arguments
-    "SIM", # flake8-simplify
-    "RET", # flake8-return
-    "ICN", # flake8-import-conventions
-]
-ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex (we'll address complexity case by case)
-    "ARG002", # unused method argument (common in event handlers)
-]
-unfixable = ["B"]
-
-[tool.ruff.per-file-ignores]
-"test/**/*.py" = ["ARG", "SIM"]
-"src/hunyo_mcp_server/capture/**/*.py" = ["C901"]  # Allow complexity in capture logic
-
-[tool.ruff.isort]
-known-first-party = ["hunyo_mcp_server"]
-force-single-line = true
-
-# MyPy type checking
-[tool.mypy]
-python_version = "3.8"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-extra_checks = true
-
-[[tool.mypy.overrides]]
-module = [
-    "marimo.*",
-    "openlineage.*",
-    "duckdb.*",
-    "watchdog.*",
-]
-ignore_missing_imports = true
-
-# Pytest configuration
+# Pytest configuration following marimo patterns
 [tool.pytest.ini_options]
-minversion = "7.0"
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=hunyo_mcp_server",
-    "--cov-report=term-missing",
-    "--cov-report=html",
-    "--cov-fail-under=80",
-]
+minversion = "8.0"
+addopts = "-ra -q -v --strict-markers --strict-config"
 testpaths = ["test"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+timeout = 30  # seconds, per test
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
 ]
-filterwarnings = [
-    "error",
-    "ignore::UserWarning", 
-    "ignore::DeprecationWarning",
+
+[tool.coverage.run]
+source_pkgs = ["hunyo_mcp_server", "capture"]
+branch = true
+parallel = true
+omit = [
+    "src/hunyo_mcp_server/__about__.py",
 ]
 
-# Coverage configuration
-[tool.coverage.run]
-source = ["src/hunyo_mcp_server"]
-omit = [
-    "*/test/*",
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/venv/*",
-    "*/.venv/*",
-]
+[tool.coverage.paths]
+hunyo_mcp_server = ["src/hunyo_mcp_server", "*/hunyo-mcp-server/src/hunyo_mcp_server"]
+capture = ["src/capture", "*/hunyo-mcp-server/src/capture"]
 
 [tool.coverage.report]
 exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if settings.DEBUG",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if 0:",
+    "no cov",
     "if __name__ == .__main__.:",
-    "class .*\\bProtocol\\):",
-    "@(abc\\.)?abstractmethod",
-] 
+    "if TYPE_CHECKING:",
+]
+
+[tool.black]
+target-version = ["py311"]
+line-length = 88
+skip-string-normalization = true
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+lint.select = [
+    "A",
+    "ARG",
+    "B",
+    "C",
+    "DTZ",
+    "E",
+    "EM",
+    "F",
+    "FBT",
+    "I",
+    "ICN",
+    "ISC",
+    "N",
+    "PLC",
+    "PLE",
+    "PLR",
+    "PLW",
+    "Q",
+    "RUF",
+    "S",
+    "T",
+    "TID",
+    "UP",
+    "W",
+    "YTT",
+]
+lint.ignore = [
+    # Allow non-abstract empty methods in abstract base classes
+    "B027",
+    # Allow boolean positional values in function calls, like `dict.get(... True)`
+    "FBT003",
+    # Ignore checks for possible passwords
+    "S105", "S106", "S107",
+    # Ignore complexity
+    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+]
+lint.unfixable = [
+    # Don't touch unused imports
+    "F401",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hunyo_mcp_server", "capture"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"test/**/*" = ["PLR2004", "S101", "TID252"]
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+pretty = true
+show_column_numbers = true
+show_error_context = true
+show_error_codes = true 

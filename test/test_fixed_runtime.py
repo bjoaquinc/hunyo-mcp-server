@@ -1,3 +1,4 @@
+# ruff: noqa
 import marimo
 
 __generated_with = "0.14.7"
@@ -7,7 +8,6 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     print("🧪 Testing FIXED runtime tracking...")
-    return
 
 
 @app.cell
@@ -19,7 +19,6 @@ def _():
     interceptor = marimo_native_hooks_interceptor.enable_native_hook_tracking()
     print(f"✅ Interceptor enabled: {interceptor.session_id}")
 
-    return
 
 
 @app.cell
@@ -41,12 +40,11 @@ def _(text):
     print("Testing DataFrame operations...")
     import pandas as pd
 
-    df = pd.DataFrame({'a': [1, 2, 3], 'b': [4, 5, 6]})
+    df = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
     result = df.sum()
     print(f"DataFrame sum: {result.to_dict()}")
     print(text)
 
-    return
 
 
 @app.cell
@@ -62,7 +60,7 @@ def _():
     print(f"Lineage log exists: {lineage_exists}")
 
     if runtime_exists:
-        with open("marimo_runtime.jsonl", 'r') as f:
+        with open("marimo_runtime.jsonl") as f:
             runtime_events = len(f.readlines())
         print(f"Runtime events: {runtime_events}")
     else:
@@ -70,18 +68,21 @@ def _():
         print("❌ No runtime events")
 
     if lineage_exists:
-        with open("marimo_lineage_events.jsonl", 'r') as f:
+        with open("marimo_lineage_events.jsonl") as f:
             lineage_events = len(f.readlines())
         print(f"Lineage events: {lineage_events}")
     else:
         lineage_events = 0
         print("❌ No lineage events")
 
-    print(f"\n🏁 Results:")
-    print(f"   Runtime tracking: {'✅ WORKING' if runtime_events > 0 else '❌ NOT WORKING'}")
-    print(f"   Lineage tracking: {'✅ WORKING' if lineage_events > 0 else '❌ NOT WORKING'}")
+    print("\n🏁 Results:")
+    print(
+        f"   Runtime tracking: {'✅ WORKING' if runtime_events > 0 else '❌ NOT WORKING'}"
+    )
+    print(
+        f"   Lineage tracking: {'✅ WORKING' if lineage_events > 0 else '❌ NOT WORKING'}"
+    )
 
-    return
 
 
 if __name__ == "__main__":

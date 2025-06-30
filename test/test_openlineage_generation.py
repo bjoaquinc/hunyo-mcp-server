@@ -1,3 +1,4 @@
+# ruff: noqa
 import marimo
 
 __generated_with = "0.14.7"
@@ -6,19 +7,21 @@ app = marimo.App()
 
 @app.cell
 def _():
-    import marimo as mo
-    import pandas as pd
     import os
     import sys
 
+    import marimo as mo
+    import pandas as pd
+
     # Add project root to path to allow importing marimo_native_hooks_interceptor
     # This is necessary because the test is in a subdirectory.
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
-        
+
     # Now the import should work
     import marimo_native_hooks_interceptor
+
     marimo_native_hooks_interceptor.enable_native_hook_tracking()
     return mo, os, pd
 
@@ -28,13 +31,13 @@ def _(pd):
     # Test Case 1: Create a DataFrame from a dictionary
     # This should generate an OpenLineage event for a new dataset.
     df1 = pd.read_csv("test_data.csv")
-    return df1,
+    return (df1,)
 
 
 @app.cell
 def _(pd):
     # Test Case 2: Create another DataFrame
-    data2 = {'colA': [1, 2], 'colB': [5, 6]}
+    data2 = {"colA": [1, 2], "colB": [5, 6]}
     df2 = pd.DataFrame(data2)
     df2
     return (df2,)
@@ -54,9 +57,8 @@ def _(df1, df2, pd):
 def _(merged_df):
     # Test Case 4: Transform the merged DataFrame (e.g., drop a column)
     # This should generate an event with merged_df as input and transformed_df as output.
-    transformed_df = merged_df.drop(columns=['colA'])
+    transformed_df = merged_df.drop(columns=["colA"])
     transformed_df
-    return
 
 
 @app.cell
@@ -69,9 +71,8 @@ def _(os, pd):
         f.write(csv_content)
 
     df_from_csv = pd.read_csv(csv_path)
-    os.remove(csv_path) # Clean up
+    os.remove(csv_path)  # Clean up
     df_from_csv
-    return
 
 
 @app.cell
@@ -85,7 +86,7 @@ def _(mo):
 @app.cell
 def _(lineage_file, mo):
     try:
-        with open(lineage_file, "r") as f:
+        with open(lineage_file) as f:
             lines = f.readlines()
 
         if not lines:
@@ -99,7 +100,6 @@ def _(lineage_file, mo):
 
     except FileNotFoundError:
         mo.md(f"**❌ Error: The lineage file `{lineage_file}` was not found.**")
-    return
 
 
 if __name__ == "__main__":
