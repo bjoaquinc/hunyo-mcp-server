@@ -1,7 +1,14 @@
 """
-Ingestion module for Hunyo MCP Server.
+Ingestion Module for Hunyo MCP Server.
 
-Handles JSONL file monitoring, event processing, and DuckDB ingestion.
+Handles the data pipeline from JSONL event files to DuckDB storage:
+- DuckDBManager: Database initialization and management
+- EventProcessor: Event validation and transformation
+- FileWatcher: Real-time monitoring of event files
 """
 
-# Module imports will be added as we implement them
+from .duckdb_manager import DuckDBManager
+from .event_processor import EventProcessor
+from .file_watcher import FileWatcher
+
+__all__ = ["DuckDBManager", "EventProcessor", "FileWatcher"]

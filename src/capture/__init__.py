@@ -8,7 +8,14 @@ with unique file naming based on notebook file paths.
 import hashlib
 import os
 from pathlib import Path
-from .logger import get_logger, capture_logger, runtime_logger, lineage_logger, hooks_logger
+
+from .logger import (
+    capture_logger,
+    get_logger,
+    hooks_logger,
+    lineage_logger,
+    runtime_logger,
+)
 
 
 def get_notebook_file_hash(notebook_path: str) -> str:
@@ -131,13 +138,13 @@ def get_user_data_dir() -> str:
 
 
 __all__ = [
+    "capture_logger",
     "get_event_filenames",
+    "get_logger",
     "get_notebook_file_hash",
     "get_notebook_name",
     "get_user_data_dir",
-    "get_logger",
-    "capture_logger",
-    "runtime_logger", 
-    "lineage_logger",
     "hooks_logger",
+    "lineage_logger",
+    "runtime_logger",
 ]

@@ -12,8 +12,8 @@ import json
 import threading
 import time
 import uuid
-from datetime import UTC, datetime
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -79,7 +79,9 @@ class MarimoWebSocketProxy:
                 self._handle_proxy_connection, "localhost", self.proxy_port
             )
             self.running = True
-            ws_logger.success(f"Proxy server listening on ws://localhost:{self.proxy_port}")
+            ws_logger.success(
+                f"Proxy server listening on ws://localhost:{self.proxy_port}"
+            )
 
         except Exception as e:
             ws_logger.error(f"Failed to start proxy server: {e}")
@@ -110,8 +112,7 @@ class MarimoWebSocketProxy:
             ws_logger.error(f"Connection error: {e}")
         finally:
             # Clean up connection
-            if connection_id in _active_connections:
-                del _active_connections[connection_id]
+            _active_connections.pop(connection_id, None)
             ws_logger.tracking(f"Connection closed: {connection_id}")
 
     async def _forward_messages(self, frontend_ws, backend_ws, connection_id):

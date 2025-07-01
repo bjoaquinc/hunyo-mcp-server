@@ -36,24 +36,49 @@ try:
     lineage_logger.lineage("Runtime tracking integration enabled")
 except ImportError:
     RUNTIME_TRACKING_AVAILABLE = False
-    
+
     # Fallback logger (silent for style compliance)
     class SimpleLogger:
-        def status(self, msg): pass
-        def success(self, msg): pass
-        def warning(self, msg): pass
-        def error(self, msg): pass
-        def config(self, msg): pass
-        def lineage(self, msg): pass
-        def tracking(self, msg): pass
-        def debug(self, msg): pass
-        def startup(self, msg): pass
-        def notebook(self, msg): pass
-        def file_op(self, msg): pass
-        def runtime(self, msg): pass
-    
+        def status(self, msg):
+            pass
+
+        def success(self, msg):
+            pass
+
+        def warning(self, msg):
+            pass
+
+        def error(self, msg):
+            pass
+
+        def config(self, msg):
+            pass
+
+        def lineage(self, msg):
+            pass
+
+        def tracking(self, msg):
+            pass
+
+        def debug(self, msg):
+            pass
+
+        def startup(self, msg):
+            pass
+
+        def notebook(self, msg):
+            pass
+
+        def file_op(self, msg):
+            pass
+
+        def runtime(self, msg):
+            pass
+
     lineage_logger = SimpleLogger()
-    lineage_logger.warning("Runtime tracking not available - running with basic lineage only")
+    lineage_logger.warning(
+        "Runtime tracking not available - running with basic lineage only"
+    )
 
 # Global tracking state
 _tracked_dataframes = weakref.WeakKeyDictionary()
@@ -125,7 +150,9 @@ class MarimoLiveInterceptor:
         self.output_file.touch()
 
         lineage_logger.status("Marimo Live Interceptor v3.0")
-        lineage_logger.notebook(f"Notebook: {self.notebook_name} ({self.notebook_hash})")
+        lineage_logger.notebook(
+            f"Notebook: {self.notebook_name} ({self.notebook_hash})"
+        )
         lineage_logger.file_op(f"Lineage logs: {self.output_file.name}")
         lineage_logger.config(f"Session: {self.session_id}")
 
@@ -346,7 +373,9 @@ class MarimoLiveInterceptor:
             if isinstance(expression, str):
                 expr_preview = expression[:50].replace("\n", "\\n")
                 globals_count = len(globals_dict) if globals_dict else 0
-                lineage_logger.debug(f"EVAL: {expr_preview}... (globals: {globals_count})")
+                lineage_logger.debug(
+                    f"EVAL: {expr_preview}... (globals: {globals_count})"
+                )
 
             return original_eval(expression, globals_dict, locals_dict)
 

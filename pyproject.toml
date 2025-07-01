@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = "Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP"
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 authors = [
     { name = "Hunyo Team", email = "team@hunyo.dev" },
 ]
@@ -28,8 +28,10 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Debuggers",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
@@ -46,15 +48,16 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.26.0",
-    "pytest-timeout>=2.3.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.1.0",
     "pytest-cov>=4.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "types-click",
     "marimo>=0.8.0",
+    "tox>=4.0.0",
 ]
 
 [project.urls]
@@ -70,9 +73,9 @@ path = "src/hunyo_mcp_server/__init__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.26.0",
-    "pytest-timeout>=2.3.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-timeout>=2.1.0",
     "pytest-cov>=4.0.0",
     "black",
     "ruff",
@@ -94,12 +97,21 @@ fmt = [
     "ruff check --fix {args:.}",
     "style",
 ]
+# Multi-version testing scripts
+test-all = "tox"
+test-py310 = "tox -e py310" 
+test-py311 = "tox -e py311"
+test-py312 = "tox -e py312"
+test-py313 = "tox -e py313"
+compatibility-check = "tox -e compatibility-check"
+test-matrix = "hatch run test:test"
+coverage-report = "tox -e coverage-report"
 
 [tool.hatch.envs.test]
 dependencies = [
-    "pytest>=8.3.0",
-    "pytest-asyncio>=0.26.0",
-    "pytest-timeout>=2.3.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0", 
+    "pytest-timeout>=2.1.0",
     "pytest-cov>=4.0.0",
     "marimo>=0.8.0",
 ]
@@ -108,13 +120,21 @@ dependencies = [
 test = "pytest {args}"
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args}"
 
+# Multi-version testing environments
+[[tool.hatch.envs.test.matrix]]
+python = ["3.10", "3.11", "3.12", "3.13"]
+
+[tool.hatch.envs.test.overrides]
+matrix.python.dependencies = [
+    { value = "pytest>=8.3.0", if = ["3.10", "3.11", "3.12", "3.13"] },
+]
+
 # Pytest configuration following marimo patterns
 [tool.pytest.ini_options]
-minversion = "8.0"
+minversion = "7.0"
 addopts = "-ra -q -v --strict-markers --strict-config"
 testpaths = ["test"]
 asyncio_mode = "auto"
-asyncio_default_fixture_loop_scope = "function"
 timeout = 30  # seconds, per test
 filterwarnings = [
     "error",
@@ -148,12 +168,12 @@ exclude_lines = [
 ]
 
 [tool.black]
-target-version = ["py311"]
+target-version = ["py310", "py311", "py312", "py313"]
 line-length = 88
 skip-string-normalization = true
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py310"
 line-length = 88
 lint.select = [
     "A",

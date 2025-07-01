@@ -212,10 +212,14 @@ class MarimoNativeHooksInterceptor:
                     setattr(pd, func_name, intercepted_func)
 
             _pandas_intercepted = True
-            hooks_logger.success("Pandas interception installed for OpenLineage tracking")
+            hooks_logger.success(
+                "Pandas interception installed for OpenLineage tracking"
+            )
 
         except ImportError:
-            hooks_logger.warning("Pandas not available - lineage tracking will be limited")
+            hooks_logger.warning(
+                "Pandas not available - lineage tracking will be limited"
+            )
         except Exception as e:
             hooks_logger.warning(f"Failed to install pandas interception: {e}")
 
@@ -457,7 +461,9 @@ class MarimoNativeHooksInterceptor:
             return {"fields": output_fields}
 
         except Exception as e:
-            hooks_logger.warning(f"⚠️  Could not calculate column lineage for '{operation}': {e}")
+            hooks_logger.warning(
+                f"⚠️  Could not calculate column lineage for '{operation}': {e}"
+            )
             return None
 
     def _extract_input_datasets(
@@ -605,7 +611,9 @@ class MarimoNativeHooksInterceptor:
                     "datasetVersion": file_hash,
                 }
             except Exception as e:
-                hooks_logger.warning(f"⚠️  Could not generate digest for {source_path}: {e}")
+                hooks_logger.warning(
+                    f"⚠️  Could not generate digest for {source_path}: {e}"
+                )
 
         # Add column lineage facet if available
         if column_lineage:
@@ -681,7 +689,9 @@ class MarimoNativeHooksInterceptor:
         # Emit the event
         self._emit_lineage_event(event)
 
-        hooks_logger.info(f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})")
+        hooks_logger.info(
+            f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})"
+        )
 
     def _create_pre_execution_hook(self):
         """Create pre-execution hook function with correct signature"""
@@ -798,7 +808,9 @@ class MarimoNativeHooksInterceptor:
                             execution_id, success=success, error=error, result=output
                         )
                     except Exception as rt_error:
-                        hooks_logger.warning(f"⚠️  Runtime tracking end error: {rt_error}")
+                        hooks_logger.warning(
+                            f"⚠️  Runtime tracking end error: {rt_error}"
+                        )
 
                 # Note: DataFrame operations are tracked via pandas interception
 
@@ -1069,7 +1081,9 @@ if __name__ == "__main__":
 else:
     # Don't auto-enable to prevent startup issues - user must call enable_native_hook_tracking()
     hooks_logger.info("🔧 Marimo hooks interceptor imported")
-    hooks_logger.info("🚨 IMPORTANT: Call enable_native_hook_tracking() to start tracking")
+    hooks_logger.info(
+        "🚨 IMPORTANT: Call enable_native_hook_tracking() to start tracking"
+    )
     hooks_logger.info(
         "   Example: import marimo_native_hooks_interceptor; marimo_native_hooks_interceptor.enable_native_hook_tracking()"
     )

@@ -11,20 +11,33 @@ from pathlib import Path
 # Import logging utility
 try:
     from ..capture.logger import get_logger
+
     mcp_logger = get_logger("hunyo.mcp")
 except ImportError:
     # Fallback for testing (silent for style compliance)
     class SimpleLogger:
-        def status(self, msg): pass
-        def success(self, msg): pass
-        def warning(self, msg): pass
-        def error(self, msg): pass
-        def config(self, msg): pass
-        def file_op(self, msg): pass
-        def debug(self, msg): pass
-    
-    mcp_logger = SimpleLogger()
+        def status(self, msg):
+            pass
 
+        def success(self, msg):
+            pass
+
+        def warning(self, msg):
+            pass
+
+        def error(self, msg):
+            pass
+
+        def config(self, msg):
+            pass
+
+        def file_op(self, msg):
+            pass
+
+        def debug(self, msg):
+            pass
+
+    mcp_logger = SimpleLogger()
 
 
 def get_hunyo_data_dir() -> Path:

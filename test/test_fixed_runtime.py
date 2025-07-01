@@ -20,7 +20,6 @@ def _():
     print(f"✅ Interceptor enabled: {interceptor.session_id}")
 
 
-
 @app.cell
 def _():
     # Simple test operations
@@ -44,7 +43,6 @@ def _(text):
     result = df.sum()
     print(f"DataFrame sum: {result.to_dict()}")
     print(text)
-
 
 
 @app.cell
@@ -82,7 +80,6 @@ def _():
     print(
         f"   Lineage tracking: {'✅ WORKING' if lineage_events > 0 else '❌ NOT WORKING'}"
     )
-
 
 
 if __name__ == "__main__":

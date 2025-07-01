@@ -31,30 +31,51 @@ except ImportError:
     def get_event_filenames(notebook_path, data_dir):
         name = Path(notebook_path).stem
         return f"{name}_runtime.jsonl", f"{name}_lineage.jsonl"
-    
+
     def get_notebook_file_hash(notebook_path):
         return "test_hash"
-    
+
     def get_notebook_name(notebook_path):
         return Path(notebook_path).stem
-    
+
     def get_user_data_dir():
         return str(Path.home() / ".hunyo")
 
     # Create a simple fallback logger (silent for style compliance)
     class SimpleLogger:
-        def status(self, msg): pass
-        def success(self, msg): pass
-        def warning(self, msg): pass
-        def error(self, msg): pass
-        def config(self, msg): pass
-        def runtime(self, msg): pass
-        def tracking(self, msg): pass
-        def debug(self, msg): pass
-        def startup(self, msg): pass
-        def notebook(self, msg): pass
-        def file_op(self, msg): pass
-    
+        def status(self, msg):
+            pass
+
+        def success(self, msg):
+            pass
+
+        def warning(self, msg):
+            pass
+
+        def error(self, msg):
+            pass
+
+        def config(self, msg):
+            pass
+
+        def runtime(self, msg):
+            pass
+
+        def tracking(self, msg):
+            pass
+
+        def debug(self, msg):
+            pass
+
+        def startup(self, msg):
+            pass
+
+        def notebook(self, msg):
+            pass
+
+        def file_op(self, msg):
+            pass
+
     runtime_logger = SimpleLogger()
 
 
@@ -103,7 +124,9 @@ class LightweightRuntimeTracker:
             self.process = None
 
         runtime_logger.status("Lightweight Runtime Tracker v2.0")
-        runtime_logger.notebook(f"Notebook: {self.notebook_name} ({self.notebook_hash})")
+        runtime_logger.notebook(
+            f"Notebook: {self.notebook_name} ({self.notebook_hash})"
+        )
         runtime_logger.file_op(f"Runtime logs: {self.output_file}")
         runtime_logger.config(f"Session: {self.session_id}")
 
@@ -640,6 +663,8 @@ if __name__ == "__main__":
     runtime_logger.runtime("Summary:")
     runtime_logger.runtime(f"   Executions: {summary['total_cell_executions']}")
     runtime_logger.runtime(f"   Success rate: {summary['success_rate']:.1%}")
-    runtime_logger.runtime(f"   Total time: {summary['total_execution_time_seconds']:.3f}s")
+    runtime_logger.runtime(
+        f"   Total time: {summary['total_execution_time_seconds']:.3f}s"
+    )
 
     runtime_logger.success("Lightweight tracker test completed!")
