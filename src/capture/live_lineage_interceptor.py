@@ -348,7 +348,7 @@ class MarimoLiveInterceptor:
         original_compile = builtins.compile
 
         def monitored_compile(
-            source, filename, mode, flags=0, dont_inherit=False, optimize=-1
+            source, filename, mode, flags=0, dont_inherit=False, optimize=-1, **kwargs
         ):
             # Debug compile calls
             if isinstance(source, str) and len(source.strip()) > 0:
@@ -358,7 +358,7 @@ class MarimoLiveInterceptor:
                 )
 
             return original_compile(
-                source, filename, mode, flags, dont_inherit, optimize
+                source, filename, mode, flags, dont_inherit, optimize, **kwargs
             )
 
         builtins.compile = monitored_compile

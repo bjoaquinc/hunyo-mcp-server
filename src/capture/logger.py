@@ -123,6 +123,10 @@ class HunyoLogger:
         """Log errors"""
         self.logger.error(message)
 
+    def info(self, message: str):
+        """Log info messages"""
+        self.logger.info(message)
+
     def debug(self, message: str):
         """Log debug messages"""
         self.logger.debug(f"🔍 {message}")

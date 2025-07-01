@@ -45,7 +45,7 @@ class TestRoadmapValidation:
         # Check that research step is marked complete
         assert "✅ **Research `server.py` architecture**" in roadmap_content
         assert "MCP patterns, CLI design, component integration" in roadmap_content
-        
+
         # Check that implementation step is present
         assert "**Implement `server.py`**" in roadmap_content
         assert "CLI that accepts --notebook parameter" in roadmap_content
@@ -94,12 +94,12 @@ class TestServerImplementationPreparation:
     def test_project_structure_ready_for_server(self):
         """Test that project structure is ready for server.py implementation"""
         src_dir = Path(__file__).parent.parent / "src" / "hunyo_mcp_server"
-        
+
         # Core directories should exist
         assert src_dir.exists(), "hunyo_mcp_server package should exist"
         assert (src_dir / "__init__.py").exists(), "Package should be importable"
         assert (src_dir / "config.py").exists(), "Config module should exist"
-        
+
         # Subdirectories should exist for server integration
         assert (src_dir / "ingestion").exists(), "Ingestion package should exist"
         assert (src_dir / "tools").exists(), "Tools package should exist"
@@ -108,25 +108,25 @@ class TestServerImplementationPreparation:
         """Test that capture layer is properly importable for server integration"""
         import sys
         from pathlib import Path
-        
+
         # Add src to path temporarily
         src_path = str(Path(__file__).parent.parent / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
-        
+
         try:
             # These imports should work for server integration
-            from capture.live_lineage_interceptor import MarimoLiveInterceptor
             from capture.lightweight_runtime_tracker import LightweightRuntimeTracker
-            from capture.native_hooks_interceptor import NativeHooksInterceptor
-            from capture.websocket_interceptor import WebSocketInterceptor
-            
+            from capture.live_lineage_interceptor import MarimoLiveInterceptor
+            from capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
+            from capture.websocket_interceptor import MarimoWebSocketProxy
+
             # Test that classes are properly defined
             assert MarimoLiveInterceptor is not None
             assert LightweightRuntimeTracker is not None
-            assert NativeHooksInterceptor is not None
-            assert WebSocketInterceptor is not None
-            
+            assert MarimoNativeHooksInterceptor is not None
+            assert MarimoWebSocketProxy is not None
+
         except ImportError as e:
             pytest.fail(f"Capture layer should be importable for server integration: {e}")
         finally:
@@ -138,23 +138,23 @@ class TestServerImplementationPreparation:
         """Test that configuration system is ready for server integration"""
         import sys
         from pathlib import Path
-        
+
         # Add src to path temporarily
         src_path = str(Path(__file__).parent.parent / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
-        
+
         try:
-            from hunyo_mcp_server.config import get_hunyo_data_dir, HunyoConfig
-            
+            from hunyo_mcp_server.config import HunyoConfig, get_hunyo_data_dir
+
             # Test config functions work
             data_dir = get_hunyo_data_dir()
             assert data_dir is not None
             assert isinstance(data_dir, Path)
-            
+
             # Test config class is available
             assert HunyoConfig is not None
-            
+
         except ImportError as e:
             pytest.fail(f"Config system should be ready for server integration: {e}")
         finally:
@@ -166,9 +166,9 @@ class TestServerImplementationPreparation:
         """Test that pyproject.toml has correct CLI entry point for server"""
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         assert pyproject_path.exists(), "pyproject.toml should exist"
-        
+
         content = pyproject_path.read_text()
-        
+
         # Should have the CLI entry point configured
         assert "hunyo-mcp-server" in content
         assert "hunyo_mcp_server.server:main" in content
@@ -177,29 +177,29 @@ class TestServerImplementationPreparation:
         """Test that required dependencies for server implementation are available"""
         pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
         content = pyproject_path.read_text()
-        
+
         # Key dependencies for MCP server should be listed
         required_deps = [
             "mcp",
-            "click", 
+            "click",
             "duckdb",
             "pandas",
             "watchdog"  # for file watching
         ]
-        
+
         for dep in required_deps:
             assert dep in content, f"Required dependency {dep} should be in pyproject.toml"
 
     def test_schemas_available_for_server(self):
         """Test that database schemas are available for server initialization"""
         schemas_dir = Path(__file__).parent.parent / "schemas" / "sql"
-        
+
         # Key schema files should exist
         assert (schemas_dir / "init_database.sql").exists()
         assert (schemas_dir / "runtime_events_table.sql").exists()
         assert (schemas_dir / "openlineage_events_table.sql").exists()
-        
+
         # Views directory should exist
         assert (schemas_dir / "views").exists()
         assert (schemas_dir / "views" / "lineage_summary.sql").exists()
-        assert (schemas_dir / "views" / "performance_metrics.sql").exists() 
+        assert (schemas_dir / "views" / "performance_metrics.sql").exists()

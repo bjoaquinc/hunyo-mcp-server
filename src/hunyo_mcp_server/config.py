@@ -252,6 +252,69 @@ def get_environment_info() -> dict:
         }
 
 
+class HunyoConfig:
+    """
+    Centralized configuration management for Hunyo MCP Server.
+    
+    Provides easy access to all configuration settings and paths.
+    """
+
+    def __init__(self):
+        """Initialize configuration with current environment detection."""
+        self._ensure_directories()
+
+    def _ensure_directories(self):
+        """Ensure all directories exist during initialization."""
+        try:
+            ensure_directory_structure()
+        except Exception as e:
+            mcp_logger.warning(f"Failed to create directory structure: {e}")
+
+    @property
+    def is_development_mode(self) -> bool:
+        """Check if running in development mode."""
+        return is_development_mode()
+
+    @property
+    def data_directory(self) -> Path:
+        """Get the main data directory."""
+        return get_hunyo_data_dir()
+
+    @property
+    def database_path(self) -> Path:
+        """Get the DuckDB database file path."""
+        return get_database_path()
+
+    @property
+    def config_path(self) -> Path:
+        """Get the configuration file path."""
+        return get_config_path()
+
+    @property
+    def runtime_events_dir(self) -> Path:
+        """Get the runtime events directory."""
+        runtime_dir, _ = get_event_directories()
+        return runtime_dir
+
+    @property
+    def lineage_events_dir(self) -> Path:
+        """Get the lineage events directory."""
+        _, lineage_dir = get_event_directories()
+        return lineage_dir
+
+    def get_event_file_path(self, event_type: str, notebook_path: str | None = None) -> Path:
+        """Get the full path for an event file."""
+        return get_event_file_path(event_type, notebook_path)
+
+    def get_environment_info(self) -> dict:
+        """Get comprehensive environment information."""
+        return get_environment_info()
+
+    def __repr__(self) -> str:
+        """String representation of config."""
+        return f"HunyoConfig(dev_mode={self.is_development_mode}, data_dir={self.data_directory})"
+
+
 # Environment detection for debugging
 if __name__ == "__main__":
     """CLI for testing configuration detection."""
