@@ -14,10 +14,9 @@ from threading import Lock
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from hunyo_mcp_server.ingestion.event_processor import EventProcessor
-
 # Import logging utility
-from ...capture.logger import get_logger
+from capture.logger import get_logger
+from hunyo_mcp_server.ingestion.event_processor import EventProcessor
 
 watcher_logger = get_logger("hunyo.watcher")
 

@@ -12,11 +12,11 @@ from typing import Any
 
 import duckdb
 
+# Import logging utility
+from capture.logger import get_logger
+
 # Import project paths
 from hunyo_mcp_server.config import get_repository_root
-
-# Import logging utility
-from ...capture.logger import get_logger
 
 db_logger = get_logger("hunyo.duckdb")
 

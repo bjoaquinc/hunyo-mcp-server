@@ -11,10 +11,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
-
 # Import logging utility
-from ...capture.logger import get_logger
+from capture.logger import get_logger
+from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 
 processor_logger = get_logger("hunyo.processor")
 
