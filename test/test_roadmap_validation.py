@@ -17,7 +17,16 @@ class TestRoadmapValidation:
     @pytest.fixture
     def roadmap_content(self, roadmap_path: Path) -> str:
         """Returns content of ROADMAP.md file"""
-        return roadmap_path.read_text()
+        try:
+            # Try UTF-8 first (most common)
+            return roadmap_path.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            # Fallback to system default encoding
+            try:
+                return roadmap_path.read_text(encoding='utf-8', errors='replace')
+            except Exception:
+                # Last resort - binary mode and decode with error handling
+                return roadmap_path.read_bytes().decode('utf-8', errors='replace')
 
     def test_roadmap_file_exists(self, roadmap_path: Path):
         """Test that ROADMAP.md exists and is readable"""
@@ -79,6 +88,10 @@ class TestRoadmapValidation:
     ])
     def test_phase_1_items_properly_marked(self, roadmap_content: str, phase_item: str):
         """Test that Phase 1 items have correct completion status"""
+        if phase_item not in roadmap_content:
+            # Better error message for debugging
+            pytest.fail(f"Phase item '{phase_item}' not found in roadmap content. "
+                       f"First 500 chars of content:\n{roadmap_content[:500]}")
         assert phase_item in roadmap_content
 
     def test_last_updated_date_present(self, roadmap_content: str):

@@ -8,7 +8,7 @@ from both runtime and lineage JSONL files into DuckDB.
 
 import json
 import uuid
-from datetime import UTC, datetime, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
@@ -293,7 +293,7 @@ class EventProcessor:
                     return datetime.fromisoformat(timestamp)
                 else:
                     # Try parsing as float (Unix timestamp)
-                    return datetime.fromtimestamp(float(timestamp), tz=UTC)
+                    return datetime.fromtimestamp(float(timestamp), tz=timezone.utc)
             except (ValueError, TypeError) as e:
                 processor_logger.warning(
                     f"Failed to parse timestamp '{timestamp}': {e}"

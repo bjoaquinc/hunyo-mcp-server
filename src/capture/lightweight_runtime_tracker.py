@@ -12,7 +12,7 @@ import time
 import traceback
 import uuid
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import psutil
@@ -185,7 +185,7 @@ class LightweightRuntimeTracker:
                 "cell_source": cell_source,
                 "cell_source_lines": cell_source.count("\n") + 1,
                 "start_memory_mb": memory_mb,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         )
 
@@ -271,7 +271,7 @@ class LightweightRuntimeTracker:
             "success": success,
             "end_memory_mb": end_memory_mb,
             "memory_delta_mb": memory_delta_mb,
-            "timestamp": datetime.now(UTC).isoformat(),
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if error_context:
@@ -491,7 +491,7 @@ class LightweightRuntimeTracker:
         """Emit a runtime event to the log file"""
         try:
             event["session_id"] = self.session_id
-            event["emitted_at"] = datetime.now(UTC).isoformat()
+            event["emitted_at"] = datetime.now(timezone.utc).isoformat()
 
             with open(self.output_file, "a") as f:
                 f.write(json.dumps(event, default=str) + "\n")

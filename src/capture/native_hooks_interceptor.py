@@ -14,7 +14,7 @@ import threading
 import time
 import uuid
 import weakref
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -654,7 +654,7 @@ class MarimoNativeHooksInterceptor:
 
         event = {
             "eventType": event_type,
-            "eventTime": datetime.now(UTC).isoformat(),
+                            "eventTime": datetime.now(timezone.utc).isoformat(),
             "run": {"runId": run_id, "facets": {}},
             "job": {"namespace": "marimo", "name": job_name, "facets": {}},
             "inputs": inputs,
@@ -944,7 +944,7 @@ class MarimoNativeHooksInterceptor:
         """Emit lineage event to lineage file"""
         try:
             event["session_id"] = self.session_id
-            event["emitted_at"] = datetime.now(UTC).isoformat()
+            event["emitted_at"] = datetime.now(timezone.utc).isoformat()
 
             with self._lock:
                 with open(self.lineage_file, "a") as f:
