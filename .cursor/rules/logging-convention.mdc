@@ -1,0 +1,10 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Emoji-rich contextual logging with Marimo-aware fallbacks → src/capture/logger.py
+
+from capture.logger import get_logger
+logger = get_logger("module.name")
+logger.success("message")  # ✅, also: startup🚀, tracking🔍, lineage🔗

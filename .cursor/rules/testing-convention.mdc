@@ -1,0 +1,17 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+After any file update, always run:
+
+hatch run style    # Black + Ruff checks  
+hatch run typing   # MyPy type checking
+hatch run test test/test_capture/ -v  # Unit tests for capture changes
+hatch run test test/integration/ -v   # Integration tests for MCP changes
+
+Commands for all tests/test fixes:
+hatch run test - Run all tests
+hatch run test-cov - Tests with coverage report
+hatch run fmt - Auto-fix style issues
+hatch run style - Check style without fixing

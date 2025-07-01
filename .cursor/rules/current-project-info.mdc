@@ -1,0 +1,12 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+🗂️ Current Project Info
+README is outdated, use these for current state:
+Structure: pyproject.toml (packages, dependencies, scripts)
+Database schema: schemas/sql/init_database.sql
+Test patterns: test/conftest.py (fixtures, mocks)
+Configuration: src/hunyo_mcp_server/config.py (paths, environment detection)
+Available commands: pyproject.toml lines 85-105 ([tool.hatch.envs.default.scripts])
