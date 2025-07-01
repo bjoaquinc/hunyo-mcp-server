@@ -7,11 +7,11 @@ tracking data flow, and understanding transformation relationships.
 """
 
 import json
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..orchestrator import get_global_orchestrator
+from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
 try:
@@ -19,108 +19,117 @@ try:
 
     tool_logger = get_logger("hunyo.tools.lineage")
 except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def info(self, msg):
-            print(f"[INFO] {msg}")
+    # Fallback for testing/standalone usage - use logging instead of print
+    import logging
 
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-    tool_logger = SimpleLogger()
+    logging.basicConfig(level=logging.INFO)
+    tool_logger = logging.getLogger("hunyo.tools.lineage")
 
 
 # Get the FastMCP instance from server.py
 try:
-    from ..server import mcp
+    from hunyo_mcp_server.server import mcp
 except ImportError:
     # Fallback for testing - create a minimal MCP instance
-    mcp = FastMCP("hunyo-test")
+    mcp = FastMCP("lineage-tool-test")
 
 
-@mcp.tool("analyze_data_lineage")
-def lineage_tool(
+# Constants for magic numbers
+DEFAULT_QUERY_LIMIT = 100
+MAX_PLACEHOLDERS = 1000
+
+# Tool function
+@mcp.tool("analyze_lineage")
+def analyze_lineage_tool(
     dataset_name: str | None = None,
     analysis_type: str = "overview",
+    *,
     include_metrics: bool = True,
 ) -> dict[str, Any]:
     """
-    Analyze data lineage patterns and relationships in notebook executions.
+    Analyze data lineage patterns from OpenLineage events.
 
-    Provides specialized analysis of how data flows through notebook cells,
-    including transformation tracking, dependency mapping, and impact analysis.
+    This tool provides comprehensive analysis of data lineage including:
+    - Overview: High-level statistics and patterns
+    - Dependencies: Upstream data dependencies for a dataset
+    - Impact: Downstream impact analysis for a dataset
+    - Flow: Complete data flow tracing through transformations
+    - Patterns: Analysis of transformation patterns and bottlenecks
 
     Args:
-        dataset_name: Focus analysis on specific dataset (None for all datasets)
-        analysis_type: Type of analysis - "overview", "dependencies", "impact", "flow"
+        dataset_name: Specific dataset to analyze (optional)
+        analysis_type: Type of analysis - 'overview', 'dependencies', 'impact', 'flow', or 'patterns'
         include_metrics: Whether to include performance metrics in the analysis
 
     Returns:
-        Dictionary containing lineage analysis results and insights
-
-    Analysis types:
-    - "overview": High-level summary of data lineage patterns
-    - "dependencies": Map upstream dependencies for datasets
-    - "impact": Show downstream impact of dataset changes
-    - "flow": Trace complete data flow through transformations
+        Dict containing analysis results with metadata
     """
+    tool_logger.info(f"Starting lineage analysis: {analysis_type}")
 
     try:
         # Get database manager from orchestrator
         orchestrator = get_global_orchestrator()
-        db_manager = orchestrator.get_db_manager()
+        if not orchestrator:
+            return {
+                "error": "Orchestrator not available",
+                "suggestion": "Ensure the MCP server is properly initialized",
+            }
 
-        tool_logger.info(
-            f"Analyzing data lineage: {analysis_type} for dataset: {dataset_name or 'all'}"
-        )
+        db_manager = orchestrator.get_duckdb_manager()
+        if not db_manager:
+            return {
+                "error": "Database manager not available",
+                "suggestion": "Check database initialization and file paths",
+            }
 
-        # Route to specific analysis function
+        # Route to appropriate analysis function
         if analysis_type == "overview":
-            result = _get_lineage_overview(db_manager, include_metrics)
+            result = _get_lineage_overview(db_manager, include_metrics=include_metrics)
         elif analysis_type == "dependencies":
-            result = _analyze_dependencies(db_manager, dataset_name, include_metrics)
+            result = _analyze_dependencies(
+                db_manager, dataset_name, include_metrics=include_metrics
+            )
         elif analysis_type == "impact":
-            result = _analyze_impact(db_manager, dataset_name, include_metrics)
+            result = _analyze_impact(
+                db_manager, dataset_name, include_metrics=include_metrics
+            )
         elif analysis_type == "flow":
-            result = _trace_data_flow(db_manager, dataset_name, include_metrics)
+            result = _trace_data_flow(
+                db_manager, dataset_name, include_metrics=include_metrics
+            )
+        elif analysis_type == "patterns":
+            result = _analyze_patterns(db_manager, include_metrics=include_metrics)
         else:
             return {
                 "error": f"Unknown analysis type: {analysis_type}",
-                "available_types": ["overview", "dependencies", "impact", "flow"],
+                "valid_types": ["overview", "dependencies", "impact", "flow", "patterns"],
             }
 
-        # Add metadata
-        result["analysis_metadata"] = {
+        # Add metadata to result
+        result["metadata"] = {
             "analysis_type": analysis_type,
             "dataset_name": dataset_name,
             "include_metrics": include_metrics,
-            "timestamp": "current",  # Could add actual timestamp
+            "generated_at": json.dumps(
+                {"timestamp": "now"}, default=str
+            ),  # JSON serializable timestamp
         }
 
-        tool_logger.info(f"Lineage analysis complete: {analysis_type}")
+        tool_logger.info(f"Lineage analysis completed successfully: {analysis_type}")
         return result
 
     except Exception as e:
-        error_msg = str(e)
-        tool_logger.error(f"Lineage analysis failed: {error_msg}")
-
-        return {
-            "success": False,
-            "error": error_msg,
-            "analysis_type": analysis_type,
-            "dataset_name": dataset_name,
-        }
+        error_msg = f"Failed to analyze lineage: {e!s}"
+        tool_logger.error(error_msg)
+        return {"error": error_msg, "suggestion": "Check database connectivity and data availability"}
 
 
-def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
+def _get_lineage_overview(db_manager, *, include_metrics: bool) -> dict[str, Any]:
     """Get high-level overview of lineage patterns."""
 
     # Get basic lineage statistics
     stats_query = """
-    SELECT 
+    SELECT
         COUNT(*) as total_lineage_events,
         COUNT(DISTINCT job_name) as unique_jobs,
         COUNT(DISTINCT execution_id) as unique_executions,
@@ -136,7 +145,7 @@ def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
 
     # Get most active jobs
     jobs_query = """
-    SELECT 
+    SELECT
         job_name,
         COUNT(*) as execution_count,
         AVG(input_count) as avg_inputs,
@@ -152,20 +161,20 @@ def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
 
     # Get dataset usage patterns
     datasets_query = """
-    SELECT 
+    SELECT
         dataset_name,
         usage_type,
         COUNT(*) as usage_count
     FROM (
-        SELECT 
+        SELECT
             TRIM('"' FROM json_extract(value, '$')) as dataset_name,
             'input' as usage_type
         FROM vw_lineage_io, json_each(input_names)
         WHERE input_names IS NOT NULL
-        
+
         UNION ALL
-        
-        SELECT 
+
+        SELECT
             TRIM('"' FROM json_extract(value, '$')) as dataset_name,
             'output' as usage_type
         FROM vw_lineage_io, json_each(output_names)
@@ -178,7 +187,7 @@ def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
 
     try:
         dataset_usage = db_manager.execute_query(datasets_query)
-    except:
+    except Exception:
         # Fallback if JSON extraction doesn't work
         dataset_usage = []
 
@@ -194,7 +203,7 @@ def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
     # Add performance metrics if requested
     if include_metrics:
         metrics_query = """
-        SELECT 
+        SELECT
             AVG(duration_ms) as avg_duration_ms,
             MAX(duration_ms) as max_duration_ms,
             AVG(lineage_to_runtime_ratio) as avg_lineage_overhead,
@@ -210,163 +219,159 @@ def _get_lineage_overview(db_manager, include_metrics: bool) -> dict[str, Any]:
 
 
 def _analyze_dependencies(
-    db_manager, dataset_name: str | None, include_metrics: bool
+    db_manager, dataset_name: str | None, *, _include_metrics: bool
 ) -> dict[str, Any]:
     """Analyze upstream dependencies for datasets."""
 
     if dataset_name:
-        # Focus on specific dataset
         # Find jobs that produce this dataset
         producer_query = """
-        SELECT 
+        SELECT
             job_name,
             execution_id,
-            event_time,
             input_names,
-            output_names
+            output_names,
+            event_time
         FROM vw_lineage_io
         WHERE json_extract(output_names, '$') LIKE '%' || ? || '%'
         ORDER BY event_time DESC
-        """
-
-        producers = db_manager.execute_query(producer_query, [dataset_name])
-
-        # Find dependencies (what inputs are needed)
-        dependencies = set()
-        for producer in producers:
-            if producer.get("input_names"):
-                try:
-                    inputs = (
-                        json.loads(producer["input_names"])
-                        if isinstance(producer["input_names"], str)
-                        else producer["input_names"]
-                    )
-                    if isinstance(inputs, list):
-                        dependencies.update(inputs)
-                except:
-                    pass
-
-        result = {
-            "success": True,
-            "dataset_name": dataset_name,
-            "dependencies": {
-                "direct_dependencies": list(dependencies),
-                "producing_jobs": producers[:10],  # Limit results
-                "dependency_count": len(dependencies),
-            },
-        }
-    else:
-        # Overall dependency analysis
-        dependency_query = """
-        SELECT 
-            job_name,
-            input_count,
-            output_count,
-            (input_count * 1.0 / NULLIF(output_count, 0)) as dependency_ratio,
-            COUNT(*) as execution_count
-        FROM vw_lineage_io
-        GROUP BY job_name, input_count, output_count
-        HAVING input_count > 0
-        ORDER BY dependency_ratio DESC, execution_count DESC
         LIMIT 20
         """
 
-        dependency_patterns = db_manager.execute_query(dependency_query)
+        try:
+            producers = db_manager.execute_query(producer_query, [dataset_name])
+            dependencies = set()
 
-        result = {
-            "success": True,
-            "dependencies": {
-                "dependency_patterns": dependency_patterns,
-                "analysis_note": "Shows jobs ordered by dependency complexity (input/output ratio)",
-            },
-        }
+            # Extract input dependencies from each producer
+            for row in producers:
+                try:
+                    inputs = json.loads(row.get("input_names", "[]"))
+                    if isinstance(inputs, list):
+                        dependencies.update(inputs)
+                except Exception as e:
+                    tool_logger.warning(f"Failed to parse input names: {e}")
+
+            result = {
+                "dataset": dataset_name,
+                "producers": [dict(row) for row in producers],
+                "upstream_dependencies": list(dependencies),
+                "dependency_count": len(dependencies),
+            }
+
+        except Exception as e:
+            tool_logger.error(f"Failed to analyze dependencies: {e}")
+            return {"error": str(e), "dataset": dataset_name}
+
+    else:
+        # Overall dependency analysis
+        dependency_query = """
+        SELECT
+            job_name,
+            input_count,
+            output_count,
+            AVG(input_count) as avg_inputs,
+            COUNT(*) as execution_count
+        FROM vw_lineage_io
+        WHERE input_count > 0
+        GROUP BY job_name, input_count, output_count
+        ORDER BY input_count DESC, execution_count DESC
+        LIMIT 20
+        """
+
+        try:
+            dependencies = db_manager.execute_query(dependency_query)
+            result = {
+                "dependency_patterns": [dict(row) for row in dependencies],
+                "analysis_scope": "all_datasets",
+            }
+        except Exception as e:
+            tool_logger.error(f"Failed to analyze general dependencies: {e}")
+            return {"error": str(e)}
 
     return result
 
 
 def _analyze_impact(
-    db_manager, dataset_name: str | None, include_metrics: bool
+    db_manager, dataset_name: str | None, *, _include_metrics: bool
 ) -> dict[str, Any]:
     """Analyze downstream impact of dataset changes."""
 
     if dataset_name:
         # Find jobs that consume this dataset
         consumer_query = """
-        SELECT 
+        SELECT
             job_name,
             execution_id,
-            event_time,
             input_names,
             output_names,
-            output_count
+            event_time
         FROM vw_lineage_io
         WHERE json_extract(input_names, '$') LIKE '%' || ? || '%'
         ORDER BY event_time DESC
+        LIMIT 20
         """
 
-        consumers = db_manager.execute_query(consumer_query, [dataset_name])
+        try:
+            consumers = db_manager.execute_query(consumer_query, [dataset_name])
+            downstream_outputs = set()
 
-        # Find downstream outputs
-        downstream_outputs = set()
-        for consumer in consumers:
-            if consumer.get("output_names"):
+            # Extract downstream outputs from each consumer
+            for row in consumers:
                 try:
-                    outputs = (
-                        json.loads(consumer["output_names"])
-                        if isinstance(consumer["output_names"], str)
-                        else consumer["output_names"]
-                    )
+                    outputs = json.loads(row.get("output_names", "[]"))
                     if isinstance(outputs, list):
                         downstream_outputs.update(outputs)
-                except:
-                    pass
+                except Exception as e:
+                    tool_logger.warning(f"Failed to parse output names: {e}")
 
-        result = {
-            "success": True,
-            "dataset_name": dataset_name,
-            "impact": {
-                "direct_consumers": consumers[:10],  # Limit results
-                "downstream_datasets": list(downstream_outputs),
+            result = {
+                "dataset": dataset_name,
+                "consumers": [dict(row) for row in consumers],
+                "downstream_outputs": list(downstream_outputs),
                 "impact_scope": len(downstream_outputs),
-            },
-        }
+            }
+
+        except Exception as e:
+            tool_logger.error(f"Failed to analyze impact: {e}")
+            return {"error": str(e), "dataset": dataset_name}
+
     else:
         # Overall impact analysis
         impact_query = """
-        SELECT 
+        SELECT
             job_name,
             output_count,
-            COUNT(*) as execution_count,
-            MAX(event_time) as last_execution,
-            AVG(input_count) as avg_input_complexity
+            input_count,
+            AVG(output_count) as avg_outputs,
+            COUNT(*) as execution_count
         FROM vw_lineage_io
-        GROUP BY job_name
-        HAVING output_count > 0
+        WHERE output_count > 0
+        GROUP BY job_name, output_count, input_count
         ORDER BY output_count DESC, execution_count DESC
         LIMIT 20
         """
 
-        impact_patterns = db_manager.execute_query(impact_query)
-
-        result = {
-            "success": True,
-            "impact": {
-                "high_impact_jobs": impact_patterns,
-                "analysis_note": "Shows jobs with highest output generation (potential impact)",
-            },
-        }
+        try:
+            impacts = db_manager.execute_query(impact_query)
+            result = {
+                "impact_patterns": [dict(row) for row in impacts],
+                "analysis_scope": "all_datasets",
+            }
+        except Exception as e:
+            tool_logger.error(f"Failed to analyze general impact: {e}")
+            return {"error": str(e)}
 
     return result
 
 
 def _trace_data_flow(
-    db_manager, dataset_name: str | None, include_metrics: bool
+    db_manager, dataset_name: str | None, *, include_metrics: bool
 ) -> dict[str, Any]:
     """Trace complete data flow through transformations."""
 
     # Get chronological flow of data transformations
     flow_query = """
-    SELECT 
+    SELECT
         execution_id,
         job_name,
         event_time,
@@ -376,7 +381,7 @@ def _trace_data_flow(
         output_count,
         session_id
     FROM vw_lineage_io
-    WHERE (? IS NULL OR 
+    WHERE (? IS NULL OR
            json_extract(input_names, '$') LIKE '%' || ? || '%' OR
            json_extract(output_names, '$') LIKE '%' || ? || '%')
     ORDER BY event_time ASC
@@ -429,25 +434,25 @@ def _trace_data_flow(
         ]
 
         if execution_ids:
-            metrics_query = """
-            SELECT 
+            # Create safe parameterized query for metrics
+            placeholders = ",".join("?" * len(execution_ids))
+            metrics_query = f"""
+            SELECT
                 AVG(duration_ms) as avg_duration,
                 MAX(duration_ms) as max_duration,
                 SUM(duration_ms) as total_duration,
                 COUNT(*) as measured_events
             FROM vw_performance_metrics
-            WHERE execution_id IN ({})
-            """.format(
-                ",".join(["?" for _ in execution_ids])
-            )
+            WHERE execution_id IN ({placeholders})
+            """
 
             try:
                 metrics = db_manager.execute_query(metrics_query, execution_ids)
                 result["data_flow"]["performance_metrics"] = (
-                    metrics[0] if metrics else {}
+                    dict(metrics[0]) if metrics else {}
                 )
-            except:
-                pass
+            except Exception as e:
+                tool_logger.warning(f"Failed to fetch performance metrics: {e}")
 
     return result
 
@@ -475,7 +480,7 @@ def find_lineage_patterns(
         if pattern_type == "common_transforms":
             # Find frequently used transformation patterns
             pattern_query = """
-            SELECT 
+            SELECT
                 input_count,
                 output_count,
                 COUNT(*) as frequency,
@@ -492,12 +497,12 @@ def find_lineage_patterns(
         elif pattern_type == "bottlenecks":
             # Find potential bottleneck datasets (high reuse)
             pattern_query = """
-            SELECT 
+            SELECT
                 dataset_name,
                 COUNT(*) as usage_frequency,
                 COUNT(DISTINCT job_name) as consuming_jobs
             FROM (
-                SELECT 
+                SELECT
                     TRIM('"' FROM json_extract(value, '$')) as dataset_name,
                     job_name
                 FROM vw_lineage_io, json_each(input_names)
@@ -510,13 +515,13 @@ def find_lineage_patterns(
 
             try:
                 patterns = db_manager.execute_query(pattern_query, [min_frequency])
-            except:
+            except Exception:
                 patterns = []
 
         elif pattern_type == "anomalies":
             # Find unusual patterns (very high input/output ratios)
             pattern_query = """
-            SELECT 
+            SELECT
                 job_name,
                 input_count,
                 output_count,
@@ -548,3 +553,115 @@ def find_lineage_patterns(
 
     except Exception as e:
         return {"success": False, "error": str(e), "pattern_type": pattern_type}
+
+
+def _analyze_patterns(db_manager, *, include_metrics: bool) -> dict[str, Any]:
+    """Analyze transformation patterns and bottlenecks."""
+
+    result = {
+        "analysis_type": "patterns",
+        "transformation_patterns": {},
+        "bottleneck_analysis": {},
+        "unusual_patterns": {},
+    }
+
+    try:
+        # Find frequently used transformation patterns
+        pattern_query = """
+        SELECT
+            input_count,
+            output_count,
+            COUNT(*) as pattern_frequency,
+            AVG(CAST(input_count AS FLOAT) / NULLIF(output_count, 1)) as avg_ratio,
+            MIN(event_time) as first_seen,
+            MAX(event_time) as last_seen
+        FROM vw_lineage_io
+        WHERE input_count > 0 AND output_count > 0
+        GROUP BY input_count, output_count
+        HAVING COUNT(*) > 2
+        ORDER BY pattern_frequency DESC
+        LIMIT 15
+        """
+
+        patterns = db_manager.execute_query(pattern_query)
+        result["transformation_patterns"] = {
+            "common_patterns": [dict(row) for row in patterns],
+            "description": "Most frequently used input/output transformation patterns"
+        }
+
+        # Find potential bottleneck datasets (high reuse)
+        bottleneck_query = """
+        SELECT
+            dataset_name,
+            COUNT(*) as usage_frequency,
+            COUNT(DISTINCT job_name) as consuming_jobs,
+            MIN(event_time) as first_usage,
+            MAX(event_time) as last_usage
+        FROM (
+            SELECT
+                TRIM('"' FROM json_extract(value, '$')) as dataset_name,
+                job_name,
+                event_time
+            FROM vw_lineage_io, json_each(input_names)
+            WHERE input_names IS NOT NULL
+        ) dataset_usage
+        WHERE dataset_name IS NOT NULL AND dataset_name != ''
+        GROUP BY dataset_name
+        HAVING COUNT(*) > 3
+        ORDER BY usage_frequency DESC, consuming_jobs DESC
+        LIMIT 10
+        """
+
+        bottlenecks = db_manager.execute_query(bottleneck_query)
+        result["bottleneck_analysis"] = {
+            "high_reuse_datasets": [dict(row) for row in bottlenecks],
+            "description": "Datasets that are heavily reused across multiple jobs"
+        }
+
+        # Find unusual patterns (very high input/output ratios)
+        unusual_query = """
+        SELECT
+            job_name,
+            input_count,
+            output_count,
+            CAST(input_count AS FLOAT) / NULLIF(output_count, 1) as input_output_ratio,
+            COUNT(*) as occurrence_count,
+            MAX(event_time) as last_execution
+        FROM vw_lineage_io
+        WHERE input_count > 0 AND output_count > 0
+        GROUP BY job_name, input_count, output_count
+        HAVING input_output_ratio > 5 OR input_output_ratio < 0.2
+        ORDER BY input_output_ratio DESC
+        LIMIT 10
+        """
+
+        unusual = db_manager.execute_query(unusual_query)
+        result["unusual_patterns"] = {
+            "atypical_transformations": [dict(row) for row in unusual],
+            "description": "Jobs with unusual input/output ratios (may indicate inefficiencies)"
+        }
+
+        if include_metrics:
+            try:
+                # Add performance context to patterns
+                perf_query = """
+                SELECT
+                    AVG(duration_ms) as avg_job_duration,
+                    MAX(duration_ms) as max_job_duration,
+                    COUNT(DISTINCT execution_id) as measured_executions
+                FROM vw_performance_metrics
+                WHERE duration_ms IS NOT NULL
+                """
+                perf_data = db_manager.execute_query(perf_query)
+                result["performance_context"] = dict(perf_data[0]) if perf_data else {}
+            except Exception as e:
+                tool_logger.warning(f"Failed to fetch performance context: {e}")
+
+    except Exception as e:
+        tool_logger.error(f"Failed to analyze patterns: {e}")
+        return {"error": str(e), "analysis_type": "patterns"}
+
+    return result
+
+# Alias for backward compatibility
+lineage_tool = analyze_lineage_tool

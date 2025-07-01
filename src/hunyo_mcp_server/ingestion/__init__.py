@@ -7,8 +7,8 @@ Handles the data pipeline from JSONL event files to DuckDB storage:
 - FileWatcher: Real-time monitoring of event files
 """
 
-from .duckdb_manager import DuckDBManager
-from .event_processor import EventProcessor
-from .file_watcher import FileWatcher
+from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
+from hunyo_mcp_server.ingestion.event_processor import EventProcessor
+from hunyo_mcp_server.ingestion.file_watcher import FileWatcher
 
 __all__ = ["DuckDBManager", "EventProcessor", "FileWatcher"]

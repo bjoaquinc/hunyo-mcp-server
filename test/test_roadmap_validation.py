@@ -19,14 +19,14 @@ class TestRoadmapValidation:
         """Returns content of ROADMAP.md file"""
         try:
             # Try UTF-8 first (most common)
-            return roadmap_path.read_text(encoding='utf-8')
+            return roadmap_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             # Fallback to system default encoding
             try:
-                return roadmap_path.read_text(encoding='utf-8', errors='replace')
+                return roadmap_path.read_text(encoding="utf-8", errors="replace")
             except Exception:
                 # Last resort - binary mode and decode with error handling
-                return roadmap_path.read_bytes().decode('utf-8', errors='replace')
+                return roadmap_path.read_bytes().decode("utf-8", errors="replace")
 
     def test_roadmap_file_exists(self, roadmap_path: Path):
         """Test that ROADMAP.md exists and is readable"""

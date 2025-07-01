@@ -6,12 +6,11 @@ Provides a secure interface for LLMs to query the captured notebook data
 using SQL with safety constraints and helpful query templates.
 """
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..orchestrator import get_global_orchestrator
+from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
 try:
@@ -22,20 +21,20 @@ except ImportError:
     # Fallback for testing
     class SimpleLogger:
         def info(self, msg):
-            print(f"[INFO] {msg}")
+            pass
 
         def warning(self, msg):
-            print(f"[WARNING] {msg}")
+            pass
 
         def error(self, msg):
-            print(f"[ERROR] {msg}")
+            pass
 
     tool_logger = SimpleLogger()
 
 
 # Get the FastMCP instance from server.py
 try:
-    from ..server import mcp
+    from hunyo_mcp_server.server import mcp
 except ImportError:
     # Fallback for testing - create a minimal MCP instance
     mcp = FastMCP("hunyo-test")
@@ -167,16 +166,16 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Recent Runtime Events",
             "description": "Get the most recent cell executions with performance metrics",
             "query": """
-            SELECT 
+            SELECT
                 execution_id,
                 cell_id,
                 event_type,
                 duration_ms,
                 memory_delta_mb,
                 timestamp
-            FROM vw_performance_metrics 
+            FROM vw_performance_metrics
             WHERE runtime_event_type IN ('cell_execution_start', 'cell_execution_end')
-            ORDER BY runtime_timestamp DESC 
+            ORDER BY runtime_timestamp DESC
             LIMIT 20
             """,
         },
@@ -184,16 +183,16 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Data Lineage Summary",
             "description": "Show input/output relationships for data processing jobs",
             "query": """
-            SELECT 
+            SELECT
                 job_name,
                 input_names,
                 output_names,
                 input_count,
                 output_count,
                 event_time
-            FROM vw_lineage_io 
+            FROM vw_lineage_io
             WHERE event_type = 'COMPLETE'
-            ORDER BY event_time DESC 
+            ORDER BY event_time DESC
             LIMIT 15
             """,
         },
@@ -201,15 +200,15 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Performance Analysis",
             "description": "Find slow-running cells and operations",
             "query": """
-            SELECT 
+            SELECT
                 execution_id,
                 cell_id,
                 duration_ms,
                 memory_delta_mb,
                 lineage_to_runtime_ratio
-            FROM vw_performance_metrics 
+            FROM vw_performance_metrics
             WHERE duration_ms > 1000
-            ORDER BY duration_ms DESC 
+            ORDER BY duration_ms DESC
             LIMIT 10
             """,
         },
@@ -217,15 +216,15 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Error Analysis",
             "description": "Find runtime errors and their details",
             "query": """
-            SELECT 
+            SELECT
                 execution_id,
                 cell_id,
                 event_type,
                 error_info,
                 timestamp
-            FROM runtime_events 
+            FROM runtime_events
             WHERE error_info IS NOT NULL
-            ORDER BY timestamp DESC 
+            ORDER BY timestamp DESC
             LIMIT 10
             """,
         },
@@ -233,17 +232,17 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Memory Usage Trends",
             "description": "Analyze memory usage patterns across executions",
             "query": """
-            SELECT 
+            SELECT
                 execution_id,
                 start_memory_mb,
                 end_memory_mb,
                 (end_memory_mb - start_memory_mb) as memory_delta_mb,
                 duration_ms,
                 timestamp
-            FROM runtime_events 
-            WHERE start_memory_mb IS NOT NULL 
+            FROM runtime_events
+            WHERE start_memory_mb IS NOT NULL
                 AND end_memory_mb IS NOT NULL
-            ORDER BY timestamp DESC 
+            ORDER BY timestamp DESC
             LIMIT 20
             """,
         },
@@ -251,7 +250,7 @@ def get_query_examples() -> list[dict[str, str]]:
             "name": "Session Overview",
             "description": "Get summary statistics by session",
             "query": """
-            SELECT 
+            SELECT
                 session_id,
                 COUNT(*) as total_events,
                 COUNT(DISTINCT execution_id) as unique_executions,
@@ -259,9 +258,9 @@ def get_query_examples() -> list[dict[str, str]]:
                 MAX(duration_ms) as max_duration_ms,
                 MIN(timestamp) as session_start,
                 MAX(timestamp) as session_end
-            FROM runtime_events 
+            FROM runtime_events
             WHERE duration_ms IS NOT NULL
-            GROUP BY session_id 
+            GROUP BY session_id
             ORDER BY session_start DESC
             """,
         },

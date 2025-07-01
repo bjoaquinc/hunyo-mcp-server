@@ -1,123 +1,235 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+import time
 
 import pytest
 
-from test.mocks import MockLightweightRuntimeTracker as LightweightRuntimeTracker
+from src.capture.lightweight_runtime_tracker import LightweightRuntimeTracker
 
 
 class TestLightweightRuntimeTracker:
-    """Tests for LightweightRuntimeTracker following marimo patterns"""
+    """Tests for LightweightRuntimeTracker - focused on cell execution events only"""
 
-    def test_tracker_initialization(self, config_with_temp_dir):
+    @pytest.fixture(autouse=True)
+    def setup_clean_tracker_state(self):
+        """Ensure clean global tracker state before and after each test"""
+        from src.capture.lightweight_runtime_tracker import disable_runtime_tracking
+
+        # Clean up before test
+        disable_runtime_tracking()
+
+        yield
+
+        # Clean up after test
+        disable_runtime_tracking()
+
+    def test_tracker_initialization(self, tmp_path):
         """Test tracker initializes with proper configuration"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
 
-        assert tracker.config == config_with_temp_dir
-        assert tracker.config.events_dir.exists()
-        assert tracker.config.db_dir.exists()
+        assert not tracker.is_active
+        assert tracker.output_file == output_file
+        assert tracker.session_id is not None
 
-    def test_dataframe_operation_tracking(
-        self, config_with_temp_dir, sample_dataframe_operations, capture_event_file
-    ):
-        """Test tracking of DataFrame operations"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+    def test_cell_execution_start_tracking(self, tmp_path):
+        """Test tracking of cell execution start events"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
 
-        # Mock the event logging
-        with patch.object(tracker, "_log_event") as mock_log:
-            for operation in sample_dataframe_operations:
-                tracker.track_dataframe_operation(
-                    operation["df_name"],
-                    operation["operation"],
-                    operation["code"],
-                    operation["shape"],
-                    operation["columns"],
-                )
+        cell_id = "test_cell_1"
+        cell_source = "x = 1 + 2"
 
-        assert mock_log.call_count == len(sample_dataframe_operations)
+        execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
 
-        # Verify the logged events
-        for i, operation in enumerate(sample_dataframe_operations):
-            call_args = mock_log.call_args_list[i]
-            event = call_args[0][0]
+        assert execution_id is not None
+        assert len(execution_id) > 0
 
-            assert event["df_name"] == operation["df_name"]
-            assert event["operation"] == operation["operation"]
-            assert event["code"] == operation["code"]
+        # Check event was added
+        assert len(tracker.events) > 0
 
-    def test_execution_context_tracking(
-        self, config_with_temp_dir, mock_marimo_session
-    ):
-        """Test execution context is properly tracked"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+        # Find the cell execution start event
+        start_event = None
+        for event in tracker.events:
+            if event.get("event_type") == "cell_execution_start":
+                start_event = event
+                break
 
-        with patch.object(
-            tracker, "_get_marimo_session", return_value=mock_marimo_session
-        ):
-            context = tracker._get_execution_context()
+        assert start_event is not None
+        assert start_event["cell_id"] == cell_id
+        assert start_event["cell_source"] == cell_source
+        assert start_event["execution_id"] == execution_id
 
-            assert context["session_id"] == mock_marimo_session.session_id
-            assert context["file_path"] == mock_marimo_session.app_file_path
+    def test_cell_execution_end_tracking(self, tmp_path):
+        """Test tracking of cell execution end events"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
 
-    def test_event_file_writing(self, config_with_temp_dir, capture_event_file):
+        cell_id = "test_cell_1"
+        cell_source = "x = 1 + 2"
+        execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
+
+        start_time = time.time()
+        tracker.track_cell_execution_end(execution_id, cell_id, cell_source, start_time)
+
+        # Find the cell execution end event
+        end_event = None
+        for event in tracker.events:
+            if event.get("event_type") == "cell_execution_end":
+                end_event = event
+                break
+
+        assert end_event is not None
+        assert end_event["cell_id"] == cell_id
+        assert end_event["execution_id"] == execution_id
+        assert "duration_ms" in end_event
+        assert end_event["duration_ms"] >= 0
+
+    def test_cell_execution_error_tracking(self, tmp_path):
+        """Test tracking of cell execution error events"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
+
+        cell_id = "test_cell_1"
+        cell_source = "x = 1 / 0"  # Division by zero
+        execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
+
+        start_time = time.time()
+        error = ZeroDivisionError("division by zero")
+        traceback_str = 'Traceback (most recent call last):\n  File "<string>", line 1, in <module>\nZeroDivisionError: division by zero'
+
+        tracker.track_cell_execution_error(execution_id, cell_id, cell_source, start_time, error, traceback_str)
+
+        # Find the cell execution error event
+        error_event = None
+        for event in tracker.events:
+            if event.get("event_type") == "cell_execution_error":
+                error_event = event
+                break
+
+        assert error_event is not None
+        assert error_event["cell_id"] == cell_id
+        assert error_event["execution_id"] == execution_id
+        assert "error_info" in error_event
+        assert error_event["error_info"]["error_type"] == "ZeroDivisionError"
+        assert error_event["error_info"]["error_message"] == "division by zero"
+
+    def test_event_file_writing(self, tmp_path):
         """Test events are properly written to JSONL file"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
 
-        test_event = {
-            "timestamp": "2024-01-01T00:00:00Z",
-            "event_type": "dataframe_operation",
-            "df_name": "test_df",
-            "operation": "create",
-        }
+        cell_id = "test_cell_1"
+        cell_source = "x = 1 + 2"
+        tracker.track_cell_execution_start(cell_id, cell_source)
 
-        tracker._log_event(test_event)
+        # Flush events to file
+        tracker.flush_events()
 
-        # Verify event was written
-        assert capture_event_file.exists()
+        # Verify events were written
+        assert output_file.exists()
 
-        with open(capture_event_file) as f:
-            written_event = json.loads(f.readline().strip())
+        with open(output_file) as f:
+            lines = f.readlines()
 
-        assert written_event["df_name"] == test_event["df_name"]
-        assert written_event["operation"] == test_event["operation"]
+        assert len(lines) >= 1  # cell_execution_start (session events removed for schema compliance)
 
-    def test_error_handling_on_invalid_operation(self, config_with_temp_dir):
-        """Test error handling for invalid DataFrame operations"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+        # Parse and verify at least one event
+        event = json.loads(lines[-1].strip())
+        assert "event_type" in event
+        assert "timestamp" in event
+        assert "session_id" in event
 
-        # Should not raise exception, should handle gracefully
-        try:
-            tracker.track_dataframe_operation(
-                df_name=None,  # Invalid name
-                operation="invalid_op",
-                code="",
-                shape=None,
-                columns=None,
-            )
-        except Exception as e:
-            pytest.fail(
-                f"Tracker should handle invalid operations gracefully, but raised: {e}"
-            )
+    def test_schema_compliance(self, tmp_path):
+        """Test that generated events comply with the runtime events schema"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
 
-    @pytest.mark.parametrize(
-        "operation_type", ["create", "transform", "filter", "merge", "group"]
-    )
-    def test_different_operation_types(self, config_with_temp_dir, operation_type):
-        """Test tracking different types of DataFrame operations"""
-        tracker = LightweightRuntimeTracker(config_with_temp_dir)
+        cell_id = "test_cell_1"
+        cell_source = "x = 1 + 2"
+        execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
 
-        with patch.object(tracker, "_log_event") as mock_log:
-            tracker.track_dataframe_operation(
-                df_name=f"df_{operation_type}",
-                operation=operation_type,
-                code=f"df_{operation_type} = df.{operation_type}()",
-                shape=(10, 5),
-                columns=["col1", "col2", "col3", "col4", "col5"],
-            )
+        start_time = time.time()
+        tracker.track_cell_execution_end(execution_id, cell_id, cell_source, start_time)
 
-        mock_log.assert_called_once()
-        event = mock_log.call_args[0][0]
-        assert event["operation"] == operation_type
+        # Check that all events have required schema fields
+        for event in tracker.events:
+            event_type = event.get("event_type")
+
+            # All events should have these basic fields
+            assert "timestamp" in event
+            assert "session_id" in event
+            assert "event_type" in event
+
+            # Cell execution events should have specific fields
+            if event_type in ["cell_execution_start", "cell_execution_end", "cell_execution_error"]:
+                assert "cell_id" in event
+                assert "cell_source" in event
+                if "execution_id" in event:  # Not all events might have this
+                    assert isinstance(event["execution_id"], str)
+
+    def test_session_summary(self, tmp_path):
+        """Test session summary functionality"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file)
+        tracker.start_tracking()
+
+        # Add some events
+        tracker.track_cell_execution_start("cell_1", "x = 1")
+        tracker.track_cell_execution_start("cell_2", "y = 2")
+
+        summary = tracker.get_session_summary()
+
+        assert "session_id" in summary
+        assert "events_captured" in summary
+        assert "is_active" in summary
+        assert summary["events_captured"] >= 2  # At least the events we added
+        assert summary["is_active"] is True
+
+    def test_error_handling_on_tracking_disabled(self, tmp_path):
+        """Test graceful handling when tracking is not enabled"""
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = LightweightRuntimeTracker(output_file=output_file, enable_tracking=False)
+
+        # Should not crash when tracking is disabled
+        execution_id = tracker.track_cell_execution_start("test_cell", "x = 1")
+        assert execution_id is not None  # Should still return an ID for compatibility
+
+    def test_context_manager_functionality(self, tmp_path):
+        """Test the track_cell_execution context manager"""
+        from src.capture.lightweight_runtime_tracker import (
+            disable_runtime_tracking,
+            enable_runtime_tracking,
+            track_cell_execution,
+        )
+
+        # Clean up any existing global tracker
+        disable_runtime_tracking()
+
+        output_file = tmp_path / "runtime_events.jsonl"
+        tracker = enable_runtime_tracking(output_file=output_file)
+
+        # Verify tracker is active
+        assert tracker.is_active, "Tracker should be active after enable_runtime_tracking"
+
+        cell_source = "result = 1 + 1"
+
+        with track_cell_execution(cell_source) as ctx:
+            assert ctx.execution_id is not None
+            ctx.set_result(2)
+
+        # Should have generated start and end events
+        start_events = [e for e in tracker.events if e.get("event_type") == "cell_execution_start"]
+        end_events = [e for e in tracker.events if e.get("event_type") == "cell_execution_end"]
+
+        assert len(start_events) >= 1, f"Expected at least 1 start event, got {len(start_events)}"
+        assert len(end_events) >= 1, f"Expected at least 1 end event, got {len(end_events)}"
+
+        # Clean up
+        disable_runtime_tracking()

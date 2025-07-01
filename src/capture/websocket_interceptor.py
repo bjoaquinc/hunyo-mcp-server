@@ -12,15 +12,13 @@ import json
 import threading
 import time
 import uuid
-from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
 
 import websockets
 
 # Import the logger
-from .logger import get_logger
+from capture.logger import get_logger
 
 # Module logger
 ws_logger = get_logger("hunyo.websocket")

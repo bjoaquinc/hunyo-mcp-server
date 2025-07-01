@@ -45,6 +45,11 @@ class HunyoLogger:
 
     def _setup_handlers(self) -> None:
         """Setup console handler with emoji formatting"""
+        # Detect marimo context and avoid logging conflicts
+        if self._is_marimo_context():
+            # Don't add handlers in marimo - use direct print instead
+            return
+
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
 
@@ -56,10 +61,24 @@ class HunyoLogger:
 
         self.logger.addHandler(console_handler)
 
+    def _is_marimo_context(self) -> bool:
+        """Check if we're running inside a marimo notebook"""
+        try:
+            import sys
+            # Check if marimo is in the call stack
+            frame = sys._getframe()
+            while frame:
+                if "marimo" in str(frame.f_code.co_filename):
+                    return True
+                frame = frame.f_back
+            return False
+        except:
+            return False
+
     def setup_file_logging(self, log_file: Path | None = None) -> Path:
         """Add file logging for debugging"""
         if log_file is None:
-            from . import get_user_data_dir
+            from capture import get_user_data_dir
 
             log_dir = Path(get_user_data_dir()) / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
@@ -78,62 +97,71 @@ class HunyoLogger:
         self.logger.addHandler(file_handler)
         return log_file
 
+    def _safe_log(self, level: str, message: str) -> None:
+        """Safely log messages, using print in marimo context"""
+        if self._is_marimo_context():
+            # Use print for marimo to avoid stream conflicts
+            print(message)  # noqa: T201
+        else:
+            # Use regular logging outside marimo
+            getattr(self.logger, level)(message)
+
     # Convenience methods with emoji themes
     def startup(self, message: str) -> None:
         """Log startup messages with rocket emoji"""
-        self.logger.info(f"🚀 {message}")
+        self._safe_log("info", f"🚀 {message}")
 
     def success(self, message: str) -> None:
         """Log success messages with checkmark emoji"""
-        self.logger.info(f"✅ {message}")
+        self._safe_log("info", f"✅ {message}")
 
     def status(self, message: str) -> None:
         """Log status messages with target emoji"""
-        self.logger.info(f"🎯 {message}")
+        self._safe_log("info", f"🎯 {message}")
 
     def tracking(self, message: str) -> None:
         """Log tracking messages with magnifying glass emoji"""
-        self.logger.info(f"🔍 {message}")
+        self._safe_log("info", f"🔍 {message}")
 
     def notebook(self, message: str) -> None:
         """Log notebook-related messages with notebook emoji"""
-        self.logger.info(f"📝 {message}")
+        self._safe_log("info", f"📝 {message}")
 
     def lineage(self, message: str) -> None:
         """Log lineage messages with link emoji"""
-        self.logger.info(f"🔗 {message}")
+        self._safe_log("info", f"🔗 {message}")
 
     def runtime(self, message: str) -> None:
         """Log runtime messages with stopwatch emoji"""
-        self.logger.info(f"⏱️ {message}")
+        self._safe_log("info", f"⏱️ {message}")
 
     def config(self, message: str) -> None:
         """Log configuration messages with gear emoji"""
-        self.logger.info(f"🔧 {message}")
+        self._safe_log("info", f"🔧 {message}")
 
     def file_op(self, message: str) -> None:
         """Log file operations with folder emoji"""
-        self.logger.info(f"📁 {message}")
+        self._safe_log("info", f"📁 {message}")
 
     def warning(self, message: str) -> None:
         """Log warnings"""
-        self.logger.warning(message)
+        self._safe_log("warning", f"⚠️ {message}")
 
     def error(self, message: str) -> None:
         """Log errors"""
-        self.logger.error(message)
+        self._safe_log("error", f"❌ {message}")
 
     def info(self, message: str) -> None:
         """Log info messages"""
-        self.logger.info(message)
+        self._safe_log("info", message)
 
     def debug(self, message: str) -> None:
         """Log debug messages"""
-        self.logger.debug(f"🔍 {message}")
+        self._safe_log("debug", f"🔍 {message}")
 
     def critical(self, message: str) -> None:
         """Log critical messages"""
-        self.logger.critical(message)
+        self._safe_log("critical", f"🚨 {message}")
 
 
 # Global logger instances for different modules

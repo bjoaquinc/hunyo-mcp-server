@@ -58,6 +58,7 @@ dev = [
     "types-click",
     "marimo>=0.8.0",
     "tox>=4.0.0",
+    "jsonschema>=4.0.0",
 ]
 
 [project.urls]
@@ -82,6 +83,7 @@ dependencies = [
     "mypy",
     "types-click",
     "marimo>=0.8.0",
+    "jsonschema>=4.0.0",
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -114,6 +116,7 @@ dependencies = [
     "pytest-timeout>=2.1.0",
     "pytest-cov>=4.0.0",
     "marimo>=0.8.0",
+    "jsonschema>=4.0.0",
 ]
 
 [tool.hatch.envs.test.scripts]
@@ -211,6 +214,10 @@ lint.ignore = [
     "S105", "S106", "S107",
     # Ignore complexity
     "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+    # Allow imports not at top-level (useful for conditional imports, lazy loading)
+    "E402", "PLC0415",
+    # Allow longer lines (usefule for logs and test asserts)
+    "E501",
 ]
 lint.unfixable = [
     # Don't touch unused imports

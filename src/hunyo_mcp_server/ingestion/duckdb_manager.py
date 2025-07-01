@@ -8,40 +8,17 @@ for the Hunyo MCP Server ingestion pipeline.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import duckdb
 
 # Import project paths
-from ..config import get_repository_root
+from hunyo_mcp_server.config import get_repository_root
 
 # Import logging utility
-try:
-    from ...capture.logger import get_logger
+from ...capture.logger import get_logger
 
-    db_logger = get_logger("hunyo.duckdb")
-except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def status(self, msg):
-            print(f"[STATUS] {msg}")
-
-        def success(self, msg):
-            print(f"[SUCCESS] {msg}")
-
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-        def config(self, msg):
-            print(f"[CONFIG] {msg}")
-
-        def startup(self, msg):
-            print(f"[STARTUP] {msg}")
-
-    db_logger = SimpleLogger()
+db_logger = get_logger("hunyo.duckdb")
 
 
 class DuckDBManager:
@@ -110,7 +87,8 @@ class DuckDBManager:
         schema_dir = project_root / "schemas" / "sql"
 
         if not schema_dir.exists():
-            raise FileNotFoundError(f"Schema directory not found: {schema_dir}")
+            msg = f"Schema directory not found: {schema_dir}"
+            raise FileNotFoundError(msg)
 
         # Execute main initialization script
         init_script = schema_dir / "init_database.sql"
@@ -165,7 +143,8 @@ class DuckDBManager:
         # Check tables
         for table in required_tables:
             try:
-                result = self.connection.execute(
+                # Check if table exists by running a simple query
+                self.connection.execute(
                     f"SELECT COUNT(*) FROM {table}"
                 ).fetchone()
                 db_logger.success(f"✓ Table '{table}' exists and accessible")
@@ -176,7 +155,8 @@ class DuckDBManager:
         # Check views (optional - they might not all exist yet)
         for view in required_views:
             try:
-                result = self.connection.execute(
+                # Check if view exists by running a simple query
+                self.connection.execute(
                     f"SELECT COUNT(*) FROM {view}"
                 ).fetchone()
                 db_logger.success(f"✓ View '{view}' exists and accessible")
@@ -213,7 +193,7 @@ class DuckDBManager:
         query = """
         INSERT INTO runtime_events (
             event_type, execution_id, cell_id, cell_source, cell_source_lines,
-            start_memory_mb, end_memory_mb, duration_ms, timestamp, 
+            start_memory_mb, end_memory_mb, duration_ms, timestamp,
             session_id, emitted_at, error_info
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """

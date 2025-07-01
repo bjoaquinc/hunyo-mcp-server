@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 from unittest.mock import MagicMock
 
 # Import websockets at module level so tests can patch it properly
@@ -17,21 +17,40 @@ class MockLightweightRuntimeTracker:
         self.config = config
         self.tracked_operations = []
 
-    def track_dataframe_operation(
-        self, df_name: str, operation: str, code: str, shape: tuple, columns: list
-    ):
-        """Mock tracking of DataFrame operations"""
-        # Always call _get_execution_context to match expected behavior
-        context = self._get_execution_context()
+    # NOTE: DataFrame operations should be tracked by MockLiveLineageInterceptor, not here!
+    # This runtime tracker mock only handles cell execution events per runtime_events_schema.json
 
+    def track_cell_execution_start(self, cell_id: str, cell_source: str, execution_id: str | None = None):
+        """Mock cell execution start tracking"""
         event = {
-            "df_name": df_name,
-            "operation": operation,
-            "code": code,
-            "shape": shape,
-            "columns": columns,
+            "event_type": "cell_execution_start",
+            "execution_id": execution_id or "12345678",
+            "cell_id": cell_id,
+            "cell_source": cell_source,
+            "cell_source_lines": len(cell_source.splitlines()),
+            "start_memory_mb": 100.0,
             "timestamp": "2024-01-01T00:00:00Z",
-            "context": context,
+            "session_id": "5e551234",
+            "emitted_at": "2024-01-01T00:00:00Z"
+        }
+        self.tracked_operations.append(event)
+        self._log_event(event)
+        return execution_id or "12345678"
+
+    def track_cell_execution_end(self, execution_id: str, cell_id: str, cell_source: str, start_time: float):
+        """Mock cell execution end tracking"""
+        event = {
+            "event_type": "cell_execution_end",
+            "execution_id": execution_id,
+            "cell_id": cell_id,
+            "cell_source": cell_source,
+            "cell_source_lines": len(cell_source.splitlines()),
+            "start_memory_mb": 100.0,
+            "end_memory_mb": 105.0,
+            "duration_ms": 50.0,
+            "timestamp": "2024-01-01T00:00:01Z",
+            "session_id": "5e551234",
+            "emitted_at": "2024-01-01T00:00:01Z"
         }
         self.tracked_operations.append(event)
         self._log_event(event)
@@ -43,19 +62,6 @@ class MockLightweightRuntimeTracker:
         events_file = self.config.events_dir / "runtime_events.jsonl"
         with open(events_file, "a") as f:
             f.write(json.dumps(event) + "\n")
-
-    def _get_marimo_session(self):
-        """Mock marimo session retrieval"""
-        return MagicMock()
-
-    def _get_execution_context(self):
-        """Mock execution context"""
-        return {
-            "session_id": "test-session-123",
-            "file_path": "/path/to/test_notebook.py",
-            "cell_id": "cell-1",
-            "execution_count": 1,
-        }
 
 
 class MockLiveLineageInterceptor:
@@ -89,6 +95,20 @@ class MockLiveLineageInterceptor:
         if isinstance(obj, pd.DataFrame):
             self._create_dataframe_summary(obj)
 
+    def track_dataframe_operation(self, df_name: str, operation: str, code: str, shape: tuple, columns: list):
+        """Mock DataFrame operation tracking (properly belongs in lineage interceptor)"""
+        event = {
+            "event_type": "dataframe_operation",
+            "df_name": df_name,
+            "operation": operation,
+            "code": code,
+            "shape": shape,
+            "columns": columns,
+            "timestamp": "2024-01-01T00:00:00Z",
+            "session_id": "test-session-123",
+        }
+        self._log_lineage_event(event)
+
     def _track_dataframe_lineage(self, name: str, df: Any):
         """Mock lineage tracking"""
         import pandas as pd
@@ -110,7 +130,14 @@ class MockLiveLineageInterceptor:
 
     def _log_lineage_event(self, event: dict):
         """Mock lineage event logging"""
-        pass
+        import json
+
+        # Write to the expected runtime events file for capture integration tests
+        events_file = self.config.events_dir / "runtime_events.jsonl"
+        events_file.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(events_file, "a") as f:
+            f.write(json.dumps(event) + "\n")
 
     def _detect_lineage_relationship(self, _obj: Any) -> list[str]:
         """Mock lineage relationship detection"""
@@ -166,11 +193,13 @@ class MockNativeHooksInterceptor:
         __builtins__["__import__"] = self.original_import
         self.hooked_modules.clear()
 
-    def _hooked_import(self, name, globals=None, locals=None, fromlist=(), level=0):
+    def _hooked_import(
+        self, name, global_dict=None, local_dict=None, fromlist=(), level=0
+    ):
         """Mock import hook"""
         # Fix level parameter to be >= 0 for Python 3 compatibility
         level = max(level, 0)
-        return self.original_import(name, globals, locals, fromlist, level)
+        return self.original_import(name, global_dict, local_dict, fromlist, level)
 
     def _wrap_pandas_methods(self, pandas_module):
         """Mock pandas method wrapping"""
@@ -194,7 +223,7 @@ class MockNativeHooksInterceptor:
                     original_method, method_name, dataframe_class
                 )
 
-    def _create_tracked_method(self, original_method, method_name, class_type):
+    def _create_tracked_method(self, original_method, method_name, _class_type):
         """Mock tracked method creation"""
 
         def wrapped_method(*args, **kwargs):
@@ -282,7 +311,8 @@ class MockWebSocketInterceptor:
                     or hasattr(self.connect, "_mock_name")
                 ):
                     # We're in a reconnection test - simulate connection error
-                    raise ConnectionError("Simulated connection lost for test")
+                    error_message = "Simulated connection lost for test"
+                    raise ConnectionError(error_message)
 
                 # Check if the connection.send method has a side_effect (indicates error simulation)
                 if (

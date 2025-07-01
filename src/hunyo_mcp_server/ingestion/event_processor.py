@@ -7,37 +7,16 @@ from both runtime and lineage JSONL files into DuckDB.
 """
 
 import json
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-from .duckdb_manager import DuckDBManager
+from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 
 # Import logging utility
-try:
-    from ...capture.logger import get_logger
+from ...capture.logger import get_logger
 
-    processor_logger = get_logger("hunyo.processor")
-except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def status(self, msg):
-            print(f"[STATUS] {msg}")
-
-        def success(self, msg):
-            print(f"[SUCCESS] {msg}")
-
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-        def info(self, msg):
-            print(f"[INFO] {msg}")
-
-    processor_logger = SimpleLogger()
+processor_logger = get_logger("hunyo.processor")
 
 
 class EventProcessor:
@@ -205,7 +184,8 @@ class EventProcessor:
         required_fields = ["event_type", "session_id", "emitted_at"]
         for field in required_fields:
             if field not in event:
-                raise ValueError(f"Missing required field: {field}")
+                msg = f"Missing required field: {field}"
+                raise ValueError(msg)
 
         # Transform event to match database schema
         transformed = {

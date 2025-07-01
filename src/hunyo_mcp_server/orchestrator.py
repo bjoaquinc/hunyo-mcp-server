@@ -12,40 +12,20 @@ Manages the startup, coordination, and shutdown of all system components:
 import asyncio
 import threading
 from pathlib import Path
-from typing import Optional
 
-from .config import get_database_path, get_event_directories, get_hunyo_data_dir
-from .ingestion.duckdb_manager import DuckDBManager
-from .ingestion.event_processor import EventProcessor
-from .ingestion.file_watcher import FileWatcher
+from hunyo_mcp_server.config import (
+    get_database_path,
+    get_event_directories,
+    get_hunyo_data_dir,
+)
+from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
+from hunyo_mcp_server.ingestion.event_processor import EventProcessor
+from hunyo_mcp_server.ingestion.file_watcher import FileWatcher
 
 # Import logging utility
-try:
-    from ..capture.logger import get_logger
+from ..capture.logger import get_logger
 
-    orchestrator_logger = get_logger("hunyo.orchestrator")
-except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def status(self, msg):
-            print(f"[STATUS] {msg}")
-
-        def success(self, msg):
-            print(f"[SUCCESS] {msg}")
-
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-        def config(self, msg):
-            print(f"[CONFIG] {msg}")
-
-        def startup(self, msg):
-            print(f"[STARTUP] {msg}")
-
-    orchestrator_logger = SimpleLogger()
+orchestrator_logger = get_logger("hunyo.orchestrator")
 
 
 class HunyoOrchestrator:
@@ -147,7 +127,8 @@ class HunyoOrchestrator:
     def get_db_manager(self) -> DuckDBManager:
         """Get the database manager instance for MCP tools."""
         if not self.db_manager:
-            raise RuntimeError("Database manager not initialized")
+            msg = "Database manager not initialized"
+            raise RuntimeError(msg)
         return self.db_manager
 
     def _start_database(self) -> None:
@@ -164,8 +145,9 @@ class HunyoOrchestrator:
         orchestrator_logger.startup("⚙️ Initializing event processor...")
 
         if not self.db_manager:
+            msg = "Database manager must be started before event processor"
             raise RuntimeError(
-                "Database manager must be started before event processor"
+                msg
             )
 
         self.event_processor = EventProcessor(self.db_manager)
@@ -176,7 +158,8 @@ class HunyoOrchestrator:
         orchestrator_logger.startup("👁️ Starting file watcher...")
 
         if not self.event_processor:
-            raise RuntimeError("Event processor must be started before file watcher")
+            msg = "Event processor must be started before file watcher"
+            raise RuntimeError(msg)
 
         self.file_watcher = FileWatcher(
             runtime_dir=self.runtime_dir,
@@ -240,7 +223,8 @@ _global_orchestrator: HunyoOrchestrator | None = None
 def get_global_orchestrator() -> HunyoOrchestrator:
     """Get the global orchestrator instance for MCP tools."""
     if _global_orchestrator is None:
-        raise RuntimeError("Orchestrator not started. Run hunyo-mcp-server first.")
+        msg = "Orchestrator not started. Run hunyo-mcp-server first."
+        raise RuntimeError(msg)
     return _global_orchestrator
 
 

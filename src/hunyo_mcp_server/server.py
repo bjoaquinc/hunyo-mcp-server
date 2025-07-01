@@ -13,11 +13,11 @@ from pathlib import Path
 import click
 from mcp.server.fastmcp import FastMCP
 
-from .config import ensure_directory_structure, get_hunyo_data_dir
-from .orchestrator import HunyoOrchestrator, set_global_orchestrator
+from hunyo_mcp_server.config import ensure_directory_structure, get_hunyo_data_dir
+from hunyo_mcp_server.orchestrator import HunyoOrchestrator, set_global_orchestrator
 
 # Import tools so they get registered with the MCP server
-from .tools import lineage_tool, query_tool, schema_tool
+from hunyo_mcp_server.tools import lineage_tool, query_tool, schema_tool  # noqa: F401
 
 # Create the FastMCP server instance
 mcp = FastMCP(

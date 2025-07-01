@@ -10,40 +10,16 @@ import asyncio
 import time
 from pathlib import Path
 from threading import Lock
-from typing import Dict, Optional, Set
 
-from watchdog.events import FileCreatedEvent, FileModifiedEvent, FileSystemEventHandler
+from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
-from .event_processor import EventProcessor
+from hunyo_mcp_server.ingestion.event_processor import EventProcessor
 
 # Import logging utility
-try:
-    from ...capture.logger import get_logger
+from ...capture.logger import get_logger
 
-    watcher_logger = get_logger("hunyo.watcher")
-except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def status(self, msg):
-            print(f"[STATUS] {msg}")
-
-        def success(self, msg):
-            print(f"[SUCCESS] {msg}")
-
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-        def info(self, msg):
-            print(f"[INFO] {msg}")
-
-        def tracking(self, msg):
-            print(f"[TRACKING] {msg}")
-
-    watcher_logger = SimpleLogger()
+watcher_logger = get_logger("hunyo.watcher")
 
 
 class JSONLFileHandler(FileSystemEventHandler):
@@ -317,7 +293,8 @@ class FileWatcher:
         elif file_path.parent == self.lineage_dir:
             event_type = "lineage"
         else:
-            raise ValueError(f"File not in watched directories: {file_path}")
+            msg = f"File not in watched directories: {file_path}"
+            raise ValueError(msg)
 
         await self._process_file(file_path, event_type)
         return self.event_processor.process_jsonl_file(file_path, event_type)

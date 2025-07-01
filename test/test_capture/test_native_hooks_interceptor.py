@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import sys
-from types import ModuleType
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -52,7 +50,7 @@ class TestNativeHooksInterceptor:
                 mock_pandas.__name__ = "pandas"
 
                 # Call the hooked import directly
-                result = interceptor._hooked_import("pandas", {}, {}, [], -1)
+                _result = interceptor._hooked_import("pandas", {}, {}, [], -1)
 
                 # Should attempt to wrap pandas methods
                 if mock_wrap.called:
@@ -96,7 +94,7 @@ class TestNativeHooksInterceptor:
             )
 
             # Call the tracked method
-            result = tracked_method(mock_df, right=mock_df, on="key")
+            _result = tracked_method(mock_df, right=mock_df, on="key")
 
             # Should log the method call
             mock_log.assert_called_once()
@@ -117,7 +115,7 @@ class TestNativeHooksInterceptor:
 
             mock_stack.return_value = [None, mock_frame]
 
-            with patch.object(interceptor, "_log_method_call") as mock_log:
+            with patch.object(interceptor, "_log_method_call"):
                 context = interceptor._capture_execution_context()
 
                 assert context["filename"] == "test_notebook.py"
@@ -172,17 +170,17 @@ class TestNativeHooksInterceptor:
         interceptor = NativeHooksInterceptor(config_with_temp_dir)
 
         # Mock a simple method
-        def simple_method(self, x):
+        def simple_method(x):
             return x * 2
 
         # Time the original method using more precise timing
         import time
 
         iterations = 10000  # Increase iterations for better timing resolution
-        
+
         start_time = time.perf_counter()
         for _ in range(iterations):
-            simple_method(None, 5)
+            simple_method(5)
         original_time = time.perf_counter() - start_time
 
         # Time the wrapped method
@@ -193,16 +191,16 @@ class TestNativeHooksInterceptor:
         with patch.object(interceptor, "_log_method_call"):
             start_time = time.perf_counter()
             for _ in range(iterations):
-                wrapped_method(None, 5)
+                wrapped_method(5)
             wrapped_time = time.perf_counter() - start_time
 
         # Handle edge case where timing is too precise (both times very small)
         min_time_threshold = 0.001  # 1ms minimum threshold
-        
+
         if original_time < min_time_threshold and wrapped_time < min_time_threshold:
             # Both operations are too fast to measure accurately - consider test passed
             pytest.skip("Operations too fast to measure timing impact accurately")
-        
+
         # Overhead should be reasonable (less than 10x slower)
         # But ensure original_time is not zero to avoid division issues
         if original_time > 0:
@@ -217,14 +215,21 @@ class TestNativeHooksInterceptor:
 
         original_import = __builtins__["__import__"]
 
+        class TestError(Exception):
+            """Specific test exception for controlled error simulation"""
+
+            pass
+
         try:
             interceptor.install_hooks()
 
             # Simulate an error during operation
-            with pytest.raises(Exception):
-                raise Exception("Simulated error")
+            error_message = "Simulated error for testing hook cleanup"
+            with pytest.raises(TestError):
+                raise TestError(error_message)
 
-        except Exception:
+        except TestError:
+            # Expected test exception - cleanup should still work despite this error
             pass
         finally:
             # Cleanup should still work

@@ -6,36 +6,21 @@ Provides information about database tables, columns, views, and relationships
 to help LLMs understand the data structure for query construction.
 """
 
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from ..orchestrator import get_global_orchestrator
+from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
-try:
-    from ...capture.logger import get_logger
+from ...capture.logger import get_logger
 
-    tool_logger = get_logger("hunyo.tools.schema")
-except ImportError:
-    # Fallback for testing
-    class SimpleLogger:
-        def info(self, msg):
-            print(f"[INFO] {msg}")
-
-        def warning(self, msg):
-            print(f"[WARNING] {msg}")
-
-        def error(self, msg):
-            print(f"[ERROR] {msg}")
-
-    tool_logger = SimpleLogger()
+tool_logger = get_logger("hunyo.tools.schema")
 
 
 # Get the FastMCP instance from server.py
 try:
-    from ..server import mcp
+    from hunyo_mcp_server.server import mcp
 except ImportError:
     # Fallback for testing - create a minimal MCP instance
     mcp = FastMCP("hunyo-test")
@@ -282,7 +267,7 @@ def get_column_info(
         sample_query = f"SELECT {column_name or '*'} FROM {table_name} WHERE {column_name or 'TRUE'} IS NOT NULL LIMIT 5"
         try:
             sample_data = db_manager.execute_query(sample_query)
-        except:
+        except Exception:
             sample_data = []
 
         return {

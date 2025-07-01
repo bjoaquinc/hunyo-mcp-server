@@ -9,7 +9,7 @@ import hashlib
 import os
 from pathlib import Path
 
-from .logger import (
+from capture.logger import (
     capture_logger,
     get_logger,
     hooks_logger,
@@ -94,7 +94,7 @@ def get_user_data_dir() -> str:
     else:
         # Method 2: Auto-detect based on development indicators
         current_dir = Path.cwd()
-        for parent in [current_dir] + list(current_dir.parents):
+        for parent in [current_dir, *list(current_dir.parents)]:
             # Check for common development indicators
             dev_markers = [
                 ".git",  # Git repository
@@ -118,7 +118,7 @@ def get_user_data_dir() -> str:
 
         # Look for project markers going up the directory tree
         markers = [".git", "requirements.txt", "pyproject.toml", "setup.py", "src"]
-        for parent in [current_dir] + list(current_dir.parents):
+        for parent in [current_dir, *list(current_dir.parents)]:
             if any((parent / marker).exists() for marker in markers):
                 project_root = parent
                 break

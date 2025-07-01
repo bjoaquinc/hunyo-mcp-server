@@ -10,6 +10,7 @@ execution lifecycle using PRE_EXECUTION_HOOKS, POST_EXECUTION_HOOKS, and ON_FINI
 import hashlib
 import json
 import os
+import sys
 import threading
 import time
 import uuid
@@ -20,7 +21,7 @@ from typing import Any
 
 # Runtime tracking integration
 try:
-    from marimo_lightweight_runtime_tracker import enable_runtime_tracking
+    from capture.lightweight_runtime_tracker import enable_runtime_tracking
 
     RUNTIME_TRACKING_AVAILABLE = True
 except ImportError:
@@ -32,8 +33,16 @@ _global_native_interceptor = None
 _pandas_intercepted = False
 
 # Import the new logger
-from .logger import hooks_logger
+from capture.logger import get_logger
 
+# Initialize logger
+hooks_logger = get_logger("hunyo.hooks.native")
+
+# Constants for data capture limits
+MAX_OBJECT_SIZE = 1000  # Maximum object size in bytes to store
+MAX_COLLECTION_SIZE = 10  # Maximum collection items to store
+MAX_DICT_SIZE = 5  # Maximum dictionary items to store
+MAX_HASH_LENGTH = 8  # Length of code hash
 
 class MarimoNativeHooksInterceptor:
     """
@@ -114,7 +123,7 @@ class MarimoNativeHooksInterceptor:
 
     def _install_pandas_interception(self):
         """Install pandas method interception for OpenLineage tracking"""
-        global _pandas_intercepted
+        global _pandas_intercepted  # noqa: PLW0603
 
         if _pandas_intercepted:
             return
@@ -483,7 +492,7 @@ class MarimoNativeHooksInterceptor:
             if hasattr(value, "shape") and hasattr(value, "columns"):
                 dataset = self._dataframe_to_openlineage_dataset(value, f"input_{key}")
                 datasets.append(dataset)
-            elif isinstance(value, (list, tuple)):
+            elif isinstance(value, list | tuple):
                 # Check for DataFrames in collections
                 for j, item in enumerate(value):
                     if hasattr(item, "shape") and hasattr(item, "columns"):
@@ -497,7 +506,7 @@ class MarimoNativeHooksInterceptor:
     def _extract_output_datasets(
         self,
         result: Any,
-        source_path: str = None,
+        source_path: str | None = None,
         column_lineage: dict | None = None,
     ) -> list[dict]:
         """Extract output DataFrames and convert to OpenLineage dataset format"""
@@ -509,7 +518,7 @@ class MarimoNativeHooksInterceptor:
                 result, "output", source_path, column_lineage
             )
             datasets.append(dataset)
-        elif isinstance(result, (list, tuple)):
+        elif isinstance(result, list | tuple):
             # Multiple DataFrames
             for i, item in enumerate(result):
                 if hasattr(item, "shape") and hasattr(item, "columns"):
@@ -532,7 +541,7 @@ class MarimoNativeHooksInterceptor:
         self,
         df,
         name_suffix: str = "",
-        source_path: str = None,
+        source_path: str | None = None,
         column_lineage: dict | None = None,
     ) -> dict:
         """Convert a DataFrame to OpenLineage dataset format"""
@@ -647,14 +656,14 @@ class MarimoNativeHooksInterceptor:
         inputs: list[dict],
         outputs: list[dict],
         execution_id: str | None = None,
-        duration: float = None,
-        error: str = None,
+        duration: float | None = None,
+        error: str | None = None,
     ):
         """Emit an OpenLineage-compliant event"""
 
         event = {
             "eventType": event_type,
-                            "eventTime": datetime.now(timezone.utc).isoformat(),
+            "eventTime": datetime.now(timezone.utc).isoformat(),
             "run": {"runId": run_id, "facets": {}},
             "job": {"namespace": "marimo", "name": job_name, "facets": {}},
             "inputs": inputs,
@@ -689,29 +698,44 @@ class MarimoNativeHooksInterceptor:
         # Emit the event
         self._emit_lineage_event(event)
 
-        hooks_logger.info(
-            f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})"
-        )
+        # Use marimo-aware logger that handles context properly
+        hooks_logger.info(f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})")
 
     def _create_pre_execution_hook(self):
         """Create pre-execution hook function with correct signature"""
 
-        def pre_execution_hook(cell, runner):
+        def pre_execution_hook(cell, _runner):
             """Called before each cell execution"""
             try:
-                # Extract cell information - using the tested working approach
-                cell_id = cell.cell_id
-                cell_code = cell.code
+                # Extract REAL cell information from marimo
+                cell_id = cell.cell_id  # REAL marimo cell ID
+                cell_code = cell.code   # REAL cell source code
+
+                # Generate execution ID for this cell run
+                execution_id = str(uuid.uuid4())[:8]
+
+                # Emit REAL cell execution start event
+                self._emit_real_cell_event({
+                    "event_type": "cell_execution_start",
+                    "execution_id": execution_id,
+                    "cell_id": cell_id,
+                    "cell_source": cell_code,
+                    "cell_source_lines": len(cell_code.split("\n")) if cell_code else 0,
+                    "start_memory_mb": self._get_memory_usage(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "session_id": self.session_id,
+                    "emitted_at": datetime.now(timezone.utc).isoformat()
+                })
 
                 # Start runtime tracking if available (non-blocking)
-                execution_id = None
                 if self.runtime_tracker:
                     try:
-                        execution_id = self.runtime_tracker.start_cell_execution(
+                        execution_id = self.runtime_tracker.track_cell_execution_start(
                             cell_id, cell_code
                         )
                     except Exception as rt_error:
-                        hooks_logger.warning(f"⚠️  Runtime tracking error: {rt_error}")
+                        # Logger handles marimo context automatically
+                        hooks_logger.warning(f"Runtime tracking error: {rt_error}")
 
                 # Store execution context for post-hook using multiple keys for safety
                 if not hasattr(self, "_execution_contexts"):
@@ -730,106 +754,167 @@ class MarimoNativeHooksInterceptor:
                 # Also store by code hash as backup
                 if cell_code:
                     try:
-                        code_hash = str(hash(cell_code))[:8]
+                        code_hash = str(hash(cell_code))[:MAX_HASH_LENGTH]
                         self._execution_contexts[f"code_{code_hash}"] = context_data
-                    except:
-                        pass
+                    except Exception as e:
+                        hooks_logger.error(f"Failed to store execution context: {e}")
 
                 # Note: Runtime tracking handles execution events, we focus on lineage
 
             except Exception as e:
                 # Non-blocking error handling - don't let hook errors break cell execution
                 try:
-                    hooks_logger.warning(f"⚠️  Error in pre-execution hook: {e}")
-                except:
-                    pass  # Even print might fail in some contexts
+                    # Logger handles marimo context automatically
+                    hooks_logger.error(f"Error in pre-execution hook: {e}")
+                except Exception as log_error:
+                    # Even logging might fail in some contexts - use fallback
+                    print(f"Hook error (logging failed): {e}, {log_error}")  # noqa: T201
 
         return pre_execution_hook
 
     def _create_post_execution_hook(self):
         """Create post-execution hook function with correct signature"""
 
-        def post_execution_hook(cell, runner, run_result):
+        def post_execution_hook(cell, _runner, run_result):
             """Called after each cell execution"""
             try:
-                # Extract cell information - using the tested working approach
-                cell_id = cell.cell_id
-                cell_code = cell.code
+                # Extract REAL cell information from marimo
+                cell_id = cell.cell_id  # REAL marimo cell ID
+                cell_code = cell.code   # REAL cell source code
 
                 # Extract run result information safely
-                success = True
                 error = None
                 output = None
 
                 try:
-                    success = (
-                        not hasattr(run_result, "exception")
-                        or run_result.exception is None
-                    )
+                    # Try to call success() method if it exists, otherwise check for exception
+                    success_method = getattr(run_result, "success", None)
+                    if callable(success_method):
+                        success_method()
+                    else:
+                        pass  # Default to true
+
                     error = getattr(run_result, "exception", None)
                     output = getattr(run_result, "output", None)
-                except:
-                    pass  # Use defaults
+                except AttributeError:
+                    # Use defaults if attributes don't exist
+                    hooks_logger.warning("run_result object missing expected attributes")
 
                 # Get execution context
                 execution_id = None
+                start_time = time.time()
                 if hasattr(self, "_execution_contexts"):
                     # Try direct cell_id lookup first
                     try:
                         if cell_id and cell_id in self._execution_contexts:
                             ctx = self._execution_contexts[cell_id]
                             execution_id = ctx.get("execution_id")
+                            start_time = ctx.get("start_time", start_time)
                             del self._execution_contexts[cell_id]
 
                         # Try code hash lookup as backup
                         elif cell_code:
-                            code_hash = str(hash(cell_code))[:8]
+                            code_hash = str(hash(cell_code))[:MAX_HASH_LENGTH]
                             code_key = f"code_{code_hash}"
                             if code_key in self._execution_contexts:
                                 ctx = self._execution_contexts[code_key]
                                 execution_id = ctx.get("execution_id")
+                                start_time = ctx.get("start_time", start_time)
                                 del self._execution_contexts[code_key]
-                    except:
-                        pass  # Context lookup failed, but continue
+                    except (KeyError, AttributeError) as e:
+                        # Context lookup failed, but continue
+                        hooks_logger.warning(f"Context lookup failed: {e}")
+
+                # Calculate duration
+                duration_ms = (time.time() - start_time) * 1000
+
+                # Emit REAL cell execution end event
+                if execution_id:
+                    event_type = "cell_execution_error" if error else "cell_execution_end"
+                    event_data = {
+                        "event_type": event_type,
+                        "execution_id": execution_id,
+                        "cell_id": cell_id,
+                        "cell_source": cell_code,
+                        "cell_source_lines": len(cell_code.split("\n")) if cell_code else 0,
+                        "start_memory_mb": self._get_memory_usage(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "session_id": self.session_id,
+                        "emitted_at": datetime.now(timezone.utc).isoformat(),
+                        "duration_ms": duration_ms
+                    }
+
+                    if error:
+                        event_data["error"] = str(error)
+
+                    self._emit_real_cell_event(event_data)
 
                 # Capture result safely (non-blocking)
                 if output is not None:
                     try:
                         # Capture result info for potential future use
                         self._capture_result_safely(output)
-                    except Exception:
+                    except Exception as e:
                         # Capture failed, but don't break execution
-                        pass
+                        hooks_logger.error(f"Result capture failed: {e}")
 
                 # End runtime tracking if available (non-blocking)
-                if self.runtime_tracker and execution_id:
-                    try:
-                        self.runtime_tracker.end_cell_execution(
-                            execution_id, success=success, error=error, result=output
-                        )
-                    except Exception as rt_error:
-                        hooks_logger.warning(
-                            f"⚠️  Runtime tracking end error: {rt_error}"
-                        )
+                try:
+                    from capture.lightweight_runtime_tracker import get_runtime_tracker
+
+                    tracker = get_runtime_tracker()
+                    if tracker and execution_id:
+                        # End tracking with context
+                        if error:
+                            tracker.track_cell_execution_error(
+                                execution_id, cell_id, cell_code, start_time, error
+                            )
+                        else:
+                            tracker.track_cell_execution_end(
+                                execution_id, cell_id, cell_code, start_time
+                            )
+                except Exception as e:
+                    hooks_logger.error(f"Runtime tracker end failed: {e}")
 
                 # Note: DataFrame operations are tracked via pandas interception
 
             except Exception as e:
-                # Non-blocking error handling
+                # Top-level error handling
                 try:
-                    hooks_logger.warning(f"⚠️  Error in post-execution hook: {e}")
-                except:
-                    pass  # Even print might fail in some contexts
+                    hooks_logger.error(f"Error in post-execution hook: {e}")
+                except Exception as log_error:
+                    # Even logging might fail in some contexts - use fallback
+                    print(f"Post-hook error (logging failed): {e}, {log_error}")  # noqa: T201
 
         return post_execution_hook
+
+    def _emit_real_cell_event(self, event_data):
+        """Emit real cell execution events directly to file (bypass logging)"""
+        try:
+            # Write directly to a separate real cell events file
+            real_cell_file = self.lineage_file.parent / "marimo_real_cell_events.jsonl"
+            with open(real_cell_file, "a") as f:
+                f.write(json.dumps(event_data, default=str) + "\n")
+        except Exception as e:
+            # Fallback to logger if file write fails
+            hooks_logger.error(f"Failed to emit real cell event: {e}")
+
+    def _get_memory_usage(self):
+        """Get current memory usage in MB"""
+        try:
+            import psutil
+            process = psutil.Process()
+            return process.memory_info().rss / 1024 / 1024
+        except Exception:
+            return 0.0
 
     def _create_finish_hook(self):
         """Create finish hook for cleanup"""
 
-        def finish_hook(runner):
+        def finish_hook(_runner):
             """Called when marimo session ends"""
             try:
-                # Emit session finish as OpenLineage event
+                # Emit session finish as OpenLineage event (avoid logging in marimo)
                 self._emit_openlineage_event(
                     "COMPLETE",
                     f"session_{self.session_id}",
@@ -839,6 +924,7 @@ class MarimoNativeHooksInterceptor:
                     execution_id=None,
                 )
             except Exception as e:
+                # Use marimo-aware logger that handles context properly
                 hooks_logger.warning(f"⚠️  Error in finish hook: {e}")
 
         return finish_hook
@@ -846,8 +932,6 @@ class MarimoNativeHooksInterceptor:
     def _capture_result_safely(self, result: Any) -> dict:
         """Safely capture information about cell execution result"""
         try:
-            import sys
-
             # Handle None result
             if result is None:
                 return {"type": "NoneType", "value": None}
@@ -875,9 +959,9 @@ class MarimoNativeHooksInterceptor:
             obj_size = sys.getsizeof(result)
 
             # Handle different result types with memory awareness
-            if isinstance(result, (str, int, float, bool)):
+            if isinstance(result, str | int | float | bool):
                 # Small primitive values - store completely
-                if obj_size < 1000:  # Less than 1KB
+                if obj_size < MAX_OBJECT_SIZE:  # Less than 1KB
                     return {
                         "type": result_type,
                         "value": result,
@@ -890,9 +974,9 @@ class MarimoNativeHooksInterceptor:
                         "size_bytes": obj_size,
                     }
 
-            elif isinstance(result, (list, tuple)):
+            elif isinstance(result, list | tuple):
                 # Collections - describe if large
-                if len(result) <= 10 and obj_size < 1000:
+                if len(result) <= MAX_COLLECTION_SIZE and obj_size < MAX_OBJECT_SIZE:
                     return {
                         "type": result_type,
                         "value": result,
@@ -909,7 +993,7 @@ class MarimoNativeHooksInterceptor:
 
             elif isinstance(result, dict):
                 # Dictionaries - describe if large
-                if len(result) <= 5 and obj_size < 1000:
+                if len(result) <= MAX_DICT_SIZE and obj_size < MAX_OBJECT_SIZE:
                     return {
                         "type": result_type,
                         "value": result,
@@ -950,6 +1034,7 @@ class MarimoNativeHooksInterceptor:
                 with open(self.lineage_file, "a") as f:
                     f.write(json.dumps(event, default=str) + "\n")
         except Exception as e:
+            # Use marimo-aware logger that handles context properly
             hooks_logger.warning(f"⚠️  Failed to emit lineage event: {e}")
 
     def uninstall(self):
@@ -991,7 +1076,7 @@ class MarimoNativeHooksInterceptor:
 
     def _restore_pandas_methods(self):
         """Restore original pandas methods"""
-        global _pandas_intercepted
+        global _pandas_intercepted  # noqa: PLW0603
 
         if not hasattr(self, "_original_methods") or not _pandas_intercepted:
             return
@@ -1033,7 +1118,7 @@ class MarimoNativeHooksInterceptor:
 
 def enable_native_hook_tracking(lineage_file: str = "marimo_lineage_events.jsonl"):
     """Enable native marimo hook-based tracking"""
-    global _global_native_interceptor
+    global _global_native_interceptor  # noqa: PLW0603
 
     if _global_native_interceptor is not None:
         hooks_logger.warning(
@@ -1049,7 +1134,7 @@ def enable_native_hook_tracking(lineage_file: str = "marimo_lineage_events.jsonl
 
 def disable_native_hook_tracking():
     """Disable native hook tracking"""
-    global _global_native_interceptor
+    global _global_native_interceptor  # noqa: PLW0603
 
     if _global_native_interceptor is not None:
         _global_native_interceptor.uninstall()

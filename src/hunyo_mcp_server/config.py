@@ -107,7 +107,7 @@ def get_repository_root() -> Path:
     current = Path(__file__).resolve()
 
     # Walk up the directory tree
-    for parent in [current] + list(current.parents):
+    for parent in [current, *list(current.parents)]:
         if (parent / ".git").exists() or (parent / "pyproject.toml").exists():
             return parent
 
@@ -116,8 +116,9 @@ def get_repository_root() -> Path:
     if (cwd / ".git").exists() or (cwd / "pyproject.toml").exists():
         return cwd
 
+    msg = "Could not find repository root (no .git or pyproject.toml found)"
     raise RuntimeError(
-        "Could not find repository root (no .git or pyproject.toml found)"
+        msg
     )
 
 
@@ -204,8 +205,9 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
         ValueError: If event_type is not 'runtime' or 'lineage'
     """
     if event_type not in ("runtime", "lineage"):
+        msg = f"event_type must be 'runtime' or 'lineage', got: {event_type}"
         raise ValueError(
-            f"event_type must be 'runtime' or 'lineage', got: {event_type}"
+            msg
         )
 
     data_dir = get_hunyo_data_dir()
@@ -256,7 +258,7 @@ def get_environment_info() -> dict[str, Any]:
 class HunyoConfig:
     """
     Centralized configuration management for Hunyo MCP Server.
-    
+
     Provides easy access to all configuration settings and paths.
     """
 

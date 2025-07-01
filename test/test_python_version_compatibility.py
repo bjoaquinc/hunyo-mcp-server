@@ -1,5 +1,6 @@
 """Python version compatibility tests."""
 
+import importlib.util
 import sys
 
 import pytest
@@ -16,17 +17,26 @@ def test_core_dependencies_importable():
     import click
     import duckdb
     import mcp
-    import openlineage
-    import pandas
+    import pandas as pd
     import pydantic
-    import watchdog
     import websockets
 
     # Verify we can create basic objects
     assert hasattr(mcp, "server")
-    assert hasattr(pandas, "DataFrame")
+    assert hasattr(pd, "DataFrame")
     assert hasattr(duckdb, "connect")
     assert hasattr(pydantic, "BaseModel")
+
+    # Verify the other core dependencies have expected attributes or can import submodules
+    assert hasattr(click, "command")
+    assert hasattr(websockets, "serve")
+
+    # Test that key submodules can be imported for package-based dependencies
+    openlineage_spec = importlib.util.find_spec("openlineage.client")
+    assert openlineage_spec is not None, "openlineage.client should be importable"
+
+    watchdog_spec = importlib.util.find_spec("watchdog.observers")
+    assert watchdog_spec is not None, "watchdog.observers should be importable"
 
 
 def test_capture_modules_importable():
@@ -61,6 +71,7 @@ def test_project_structure():
 
     # Test config module
     from hunyo_mcp_server import config
+
     assert hasattr(config, "get_hunyo_data_dir")
     assert hasattr(config, "get_database_path")
     assert hasattr(config, "is_development_mode")

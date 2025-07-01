@@ -15,23 +15,23 @@ import uuid
 import weakref
 from collections.abc import Generator
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 # Import runtime tracker, utilities, and logger
 try:
-    from . import (
+    from capture import (
         get_event_filenames,
         get_notebook_file_hash,
         get_notebook_name,
         get_user_data_dir,
     )
-    from .lightweight_runtime_tracker import (
+    from capture.lightweight_runtime_tracker import (
         enable_runtime_tracking,
         track_cell_execution,
     )
-    from .logger import lineage_logger
+    from capture.logger import lineage_logger
 
     RUNTIME_TRACKING_AVAILABLE = True
     lineage_logger.lineage("Runtime tracking integration enabled")
@@ -88,6 +88,12 @@ _tracked_dataframes: weakref.WeakKeyDictionary[Any, dict[str, Any]] = (
 _cell_execution_context: dict[str, Any] = {}
 _global_interceptor: "MarimoLiveInterceptor | None" = None
 
+# Constants for validation
+MIN_SOURCE_LENGTH = 5
+MAX_SOURCE_LENGTH = 50000
+MAX_SOURCE_LINES = 500
+MIN_GLOBALS_COUNT = 10
+MAX_GLOBALS_DISPLAY = 50
 
 class MarimoLiveInterceptor:
     """
@@ -99,6 +105,7 @@ class MarimoLiveInterceptor:
         self,
         notebook_path: str | None = None,
         output_file: str | None = None,
+        *,
         enable_runtime_debug: bool = True,
     ) -> None:
         # Determine notebook path and create unique file names
@@ -160,7 +167,13 @@ class MarimoLiveInterceptor:
         lineage_logger.config(f"Session: {self.session_id}")
 
         if self.enable_runtime_debug:
-            self.runtime_tracker = enable_runtime_tracking(notebook_path=notebook_path)
+            # Create runtime events file path based on notebook path
+            runtime_output_file = None
+            if notebook_path and RUNTIME_TRACKING_AVAILABLE:
+                runtime_events_file, _ = get_event_filenames(notebook_path, self.data_dir)
+                runtime_output_file = runtime_events_file
+
+            self.runtime_tracker = enable_runtime_tracking(output_file=runtime_output_file)
             lineage_logger.tracking("Runtime debugging enabled")
 
     def _detect_notebook_path(self) -> str:
@@ -240,15 +253,15 @@ class MarimoLiveInterceptor:
                 is_internal = any(pattern in source for pattern in exclude_patterns)
 
                 # Much more permissive user code detection
-                has_reasonable_size = 5 <= len(source) <= 50000  # Very wide range
-                has_reasonable_lines = len(source.split("\n")) <= 500
+                has_reasonable_size = MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH
+                has_reasonable_lines = len(source.split("\n")) <= MAX_SOURCE_LINES
                 not_just_whitespace = source.strip() != ""
 
                 # Check if this looks like a cell execution context
                 has_marimo_context = (
                     globals_dict
                     and any(key.startswith("__") for key in globals_dict.keys())
-                    and len(globals_dict) > 10  # Typical marimo cell has many builtins
+                    and len(globals_dict) > MIN_GLOBALS_COUNT  # Typical marimo cell has many builtins
                 )
 
                 # Determine if this is user code - much more permissive
@@ -266,7 +279,7 @@ class MarimoLiveInterceptor:
                 and globals_dict is not None
                 and len(source.strip()) > 0
             ):
-                source_preview = source[:80].replace("\n", "\\n")
+                source_preview = source[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
                 globals_count = len(globals_dict) if globals_dict else 0
 
                 if is_user_code:
@@ -281,9 +294,9 @@ class MarimoLiveInterceptor:
                         for pattern in ["__dataclass_", "def __create_fn__"]
                     ):
                         rejection_reasons.append("internal_pattern")
-                    if not (5 <= len(source) <= 50000):
+                    if not (MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH):
                         rejection_reasons.append(f"size_{len(source)}")
-                    if not globals_dict or len(globals_dict) <= 10:
+                    if not globals_dict or len(globals_dict) <= MIN_GLOBALS_COUNT:
                         rejection_reasons.append(f"context_{globals_count}")
 
                     lineage_logger.debug(
@@ -298,10 +311,10 @@ class MarimoLiveInterceptor:
                     {
                         "cell_id": cell_id,
                         "source": source,
-                        "timestamp": datetime.now().isoformat(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
                         "globals_keys": (
                             list(globals_dict.keys())
-                            if len(globals_dict) < 50
+                            if len(globals_dict) < MAX_GLOBALS_DISPLAY
                             else f"<{len(globals_dict)} variables>"
                         ),
                     }
@@ -355,7 +368,7 @@ class MarimoLiveInterceptor:
         ):
             # Debug compile calls
             if isinstance(source, str) and len(source.strip()) > 0:
-                source_preview = source[:50].replace("\n", "\\n")
+                source_preview = source[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
                 lineage_logger.debug(
                     f"COMPILE: {source_preview}... (filename: {filename}, mode: {mode})"
                 )
@@ -374,7 +387,7 @@ class MarimoLiveInterceptor:
         def monitored_eval(expression, globals_dict=None, locals_dict=None):
             # Debug eval calls
             if isinstance(expression, str):
-                expr_preview = expression[:50].replace("\n", "\\n")
+                expr_preview = expression[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
                 globals_count = len(globals_dict) if globals_dict else 0
                 lineage_logger.debug(
                     f"EVAL: {expr_preview}... (globals: {globals_count})"
@@ -532,7 +545,12 @@ class MarimoLiveInterceptor:
             lineage_logger.warning(f"Error discovering DataFrames: {e}")
 
     def _track_dataframe_creation(
-        self, df: Any, operation: str, args: Any = None, kwargs: Any = None, name: str | None = None
+        self,
+        df: Any,
+        operation: str,
+        args: Any = None,
+        kwargs: Any = None,
+        name: str | None = None,
     ) -> None:
         """Track creation of a new DataFrame"""
         try:
@@ -543,7 +561,7 @@ class MarimoLiveInterceptor:
                 _tracked_dataframes[df] = {
                     "id": df_id,
                     "operation": operation,
-                    "created_at": datetime.now(),
+                    "created_at": datetime.now(timezone.utc),
                     "name": name,
                 }
             except (TypeError, ValueError):
@@ -568,7 +586,7 @@ class MarimoLiveInterceptor:
             event = {
                 "event_id": str(uuid.uuid4()),
                 "session_id": self.session_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "event_type": "dataframe_created",
                 "operation": operation,
                 "dataframe_id": df_id,
@@ -599,7 +617,12 @@ class MarimoLiveInterceptor:
             lineage_logger.warning(f"Error tracking DataFrame creation: {e}")
 
     def _track_dataframe_transformation(
-        self, input_df: Any, output_df: Any, operation: str, args: Any = None, kwargs: Any = None
+        self,
+        input_df: Any,
+        output_df: Any,
+        operation: str,
+        args: Any = None,
+        kwargs: Any = None,
     ) -> None:
         """Track transformation from one DataFrame to another"""
         try:
@@ -611,7 +634,7 @@ class MarimoLiveInterceptor:
                 _tracked_dataframes[output_df] = {
                     "id": output_id,
                     "operation": operation,
-                    "created_at": datetime.now(),
+                    "created_at": datetime.now(timezone.utc),
                     "parent_id": input_id,
                 }
             except (TypeError, ValueError):
@@ -622,7 +645,7 @@ class MarimoLiveInterceptor:
             event = {
                 "event_id": str(uuid.uuid4()),
                 "session_id": self.session_id,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "event_type": "dataframe_transformed",
                 "operation": operation,
                 "input_dataframe_id": input_id,
@@ -679,13 +702,13 @@ class MarimoLiveInterceptor:
                             "columns": list(arg.columns),
                         }
                     )
-                elif isinstance(arg, (str, int, float, bool, type(None))):
+                elif isinstance(arg, str | int | float | bool | type(None)):
                     sanitized.append(arg)
-                elif isinstance(arg, (list, tuple)):
+                elif isinstance(arg, list | tuple):
                     sanitized.append(f"<{type(arg).__name__} with {len(arg)} items>")
                 else:
                     sanitized.append(f"<{type(arg).__name__}>")
-            except:
+            except (TypeError, ValueError, AttributeError):
                 sanitized.append("<unparseable>")
         return sanitized
 
@@ -784,6 +807,7 @@ class MarimoLiveInterceptor:
 def enable_live_tracking(
     notebook_path: str | None = None,
     output_file: str | None = None,
+    *,
     enable_runtime_debug: bool = True,
 ) -> MarimoLiveInterceptor:
     """Enable live DataFrame tracking for Marimo notebooks
@@ -793,14 +817,14 @@ def enable_live_tracking(
         output_file: Custom output file path (auto-generated if None)
         enable_runtime_debug: Whether to enable runtime performance tracking
     """
-    global _global_interceptor
+    global _global_interceptor  # noqa: PLW0603
 
     if _global_interceptor is not None:
         lineage_logger.warning("Live tracking already enabled")
         return _global_interceptor
 
     _global_interceptor = MarimoLiveInterceptor(
-        notebook_path, output_file, enable_runtime_debug
+        notebook_path, output_file, enable_runtime_debug=enable_runtime_debug
     )
     _global_interceptor.install()
     return _global_interceptor
@@ -808,7 +832,7 @@ def enable_live_tracking(
 
 def disable_live_tracking() -> None:
     """Disable live DataFrame tracking"""
-    global _global_interceptor
+    global _global_interceptor  # noqa: PLW0603
 
     if _global_interceptor is not None:
         _global_interceptor.uninstall()
@@ -816,7 +840,7 @@ def disable_live_tracking() -> None:
         # Disable runtime tracking if enabled
         if _global_interceptor.enable_runtime_debug:
             try:
-                from .lightweight_runtime_tracker import disable_runtime_tracking
+                from capture.lightweight_runtime_tracker import disable_runtime_tracking
 
                 disable_runtime_tracking()
             except ImportError:
@@ -849,7 +873,9 @@ def get_current_runtime_tracker() -> Any:
 
 
 @contextmanager
-def runtime_debugging_context(cell_source: str, globals_dict: dict[str, Any] | None = None) -> Generator[Any, None, None]:
+def runtime_debugging_context(
+    cell_source: str, globals_dict: dict[str, Any] | None = None
+) -> Generator[Any, None, None]:
     """
     Context manager for manual runtime debugging of specific code blocks
 

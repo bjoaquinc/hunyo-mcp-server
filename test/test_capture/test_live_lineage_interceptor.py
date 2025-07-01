@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -131,7 +130,7 @@ class TestLiveLineageInterceptor:
         with patch.object(interceptor, "_detect_circular_reference") as mock_detect:
             mock_detect.return_value = True
 
-            with patch.object(interceptor, "_log_lineage_event") as mock_log:
+            with patch.object(interceptor, "_log_lineage_event"):
                 interceptor.track_object("df1", df1)
                 interceptor.track_object("df2", df2)
 
