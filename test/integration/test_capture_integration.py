@@ -116,7 +116,10 @@ class TestCaptureIntegration:
 
         # Complete cell execution
         import time
-        runtime_tracker.track_cell_execution_end(execution_id, cell_id, cell_source, time.time())
+
+        runtime_tracker.track_cell_execution_end(
+            execution_id, cell_id, cell_source, time.time()
+        )
 
         # Verify both trackers captured their respective events
         assert len(runtime_tracker.tracked_operations) >= 2  # start + end events
@@ -178,7 +181,9 @@ class TestCaptureIntegration:
     def test_multi_dataframe_lineage_tracking(self, config_with_temp_dir):
         """Test complex lineage tracking with multiple DataFrames"""
         lineage_interceptor = LiveLineageInterceptor(config_with_temp_dir)
-        _runtime_tracker = LightweightRuntimeTracker(config_with_temp_dir)  # Used for setup
+        _runtime_tracker = LightweightRuntimeTracker(
+            config_with_temp_dir
+        )  # Used for setup
 
         # Create a complex DataFrame transformation pipeline
         df_raw = pd.DataFrame(
@@ -293,9 +298,10 @@ class TestCaptureIntegration:
             try:
                 lineage_interceptor.track_dataframe_operation(**operation)
                 successful_operations += 1
-            except Exception:
+            except Exception as e:
                 # Should not raise exceptions, but if it does, continue
-                pass
+                # Log the exception for debugging but don't fail the test
+                print(f"Operation failed as expected: {e}")  # noqa: T201
 
         # At least the valid operation should succeed
         assert successful_operations >= 1

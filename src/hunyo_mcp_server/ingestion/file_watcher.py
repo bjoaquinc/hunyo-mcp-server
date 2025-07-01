@@ -69,7 +69,9 @@ class JSONLFileHandler(FileSystemEventHandler):
             self._last_processed[file_path] = time.time()
 
         # Trigger processing in the file watcher
-        asyncio.create_task(self.file_watcher._process_pending_files())
+        task = asyncio.create_task(self.file_watcher._process_pending_files())
+        self.file_watcher._background_tasks.add(task)
+        task.add_done_callback(self.file_watcher._background_tasks.discard)
 
     def get_pending_files(self) -> set[Path]:
         """Get and clear pending files."""
@@ -96,6 +98,7 @@ class FileWatcher:
         runtime_dir: Path,
         lineage_dir: Path,
         event_processor: EventProcessor,
+        *,
         verbose: bool = False,
     ):
         self.runtime_dir = Path(runtime_dir)
@@ -111,6 +114,7 @@ class FileWatcher:
         # Processing state
         self._processing_queue = asyncio.Queue()
         self._processing_task: asyncio.Task | None = None
+        self._background_tasks: set[asyncio.Task] = set()
 
         # Statistics
         self.files_processed = 0

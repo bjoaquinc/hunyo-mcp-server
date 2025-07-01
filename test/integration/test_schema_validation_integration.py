@@ -9,6 +9,7 @@ the JSON schemas in /schemas/json.
 
 import json
 import os
+import platform
 import subprocess
 import sys
 import time
@@ -23,6 +24,7 @@ from src.capture.logger import get_logger
 
 # Create test logger instance
 test_logger = get_logger("hunyo.test.schema_validation")
+
 
 class TestSchemaValidationIntegration:
     """Integration tests for schema validation with real marimo notebook execution"""
@@ -166,7 +168,9 @@ if __name__ == "__main__":
         events_file.parent.mkdir(parents=True, exist_ok=True)
         return events_file
 
-    def validate_event_against_schema(self, event: dict[str, Any], schema: dict[str, Any]) -> tuple[bool, str | None]:
+    def validate_event_against_schema(
+        self, event: dict[str, Any], schema: dict[str, Any]
+    ) -> tuple[bool, str | None]:
         """Validate a single event against a JSON schema"""
         try:
             jsonschema.validate(event, schema)
@@ -179,13 +183,12 @@ if __name__ == "__main__":
         temp_notebook_file,
         runtime_events_file,
         runtime_events_schema,
-        config_with_temp_dir
+        config_with_temp_dir,
     ):
         """Test runtime tracker generates schema-compliant events"""
         # Initialize runtime tracker
         tracker = LightweightRuntimeTracker(
-            output_file=runtime_events_file,
-            enable_tracking=True
+            output_file=runtime_events_file, enable_tracking=True
         )
 
         # Start tracking
@@ -196,18 +199,18 @@ if __name__ == "__main__":
             {
                 "cell_id": "cell_1_imports",
                 "cell_source": "import pandas as pd\nimport numpy as np",
-                "execution_id": "abcd1234"
+                "execution_id": "abcd1234",
             },
             {
                 "cell_id": "cell_2_dataframes",
                 "cell_source": "df1 = pd.DataFrame({'id': [1,2,3], 'name': ['A','B','C']})",
-                "execution_id": "def67800"
+                "execution_id": "def67800",
             },
             {
                 "cell_id": "cell_3_operations",
                 "cell_source": "df_result = df1.merge(df2, on='id')",
-                "execution_id": "abc13400"
-            }
+                "execution_id": "abc13400",
+            },
         ]
 
         # Track each cell execution
@@ -218,7 +221,7 @@ if __name__ == "__main__":
                 cell_id=cell_exec["cell_id"],
                 cell_source=cell_exec["cell_source"],
                 execution_id=cell_exec["execution_id"],
-                start_memory_mb=150.5
+                start_memory_mb=150.5,
             )
 
             end_event = tracker.generate_schema_compliant_event(
@@ -228,7 +231,7 @@ if __name__ == "__main__":
                 execution_id=cell_exec["execution_id"],
                 start_memory_mb=150.5,
                 end_memory_mb=155.2,
-                duration_ms=45.7
+                duration_ms=45.7,
             )
 
             # Add events to tracker
@@ -257,7 +260,9 @@ if __name__ == "__main__":
         validation_errors = []
 
         for i, event in enumerate(events):
-            is_valid, error = self.validate_event_against_schema(event, runtime_events_schema)
+            is_valid, error = self.validate_event_against_schema(
+                event, runtime_events_schema
+            )
 
             if is_valid:
                 valid_count += 1
@@ -278,23 +283,23 @@ if __name__ == "__main__":
 
         # Should have high compliance rate
         compliance_rate = valid_count / len(events) * 100
-        assert compliance_rate >= 80, f"Runtime events compliance rate too low: {compliance_rate:.1f}%"
+        assert (
+            compliance_rate >= 80
+        ), f"Runtime events compliance rate too low: {compliance_rate:.1f}%"
 
     def test_lineage_interceptor_schema_compliance(
         self,
         temp_notebook_file,
         lineage_events_file,
         openlineage_events_schema,
-        config_with_temp_dir
+        config_with_temp_dir,
     ):
         """Test lineage interceptor generates schema-compliant OpenLineage events"""
         # Import the correct interceptor for OpenLineage events
         from src.capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
 
         # Initialize native hooks interceptor for OpenLineage events
-        MarimoNativeHooksInterceptor(
-            lineage_file=str(lineage_events_file)
-        )
+        MarimoNativeHooksInterceptor(lineage_file=str(lineage_events_file))
 
         # Install lineage tracking (native hooks interceptor is auto-installed)
 
@@ -303,15 +308,9 @@ if __name__ == "__main__":
             import pandas as pd
 
             # Create test DataFrames
-            df1 = pd.DataFrame({
-                "id": [1, 2, 3],
-                "name": ["Alice", "Bob", "Charlie"]
-            })
+            df1 = pd.DataFrame({"id": [1, 2, 3], "name": ["Alice", "Bob", "Charlie"]})
 
-            df2 = pd.DataFrame({
-                "id": [1, 2, 3],
-                "salary": [50000, 60000, 70000]
-            })
+            df2 = pd.DataFrame({"id": [1, 2, 3], "salary": [50000, 60000, 70000]})
 
             # Perform operations that should generate lineage events
             df_merged = df1.merge(df2, on="id")
@@ -327,7 +326,9 @@ if __name__ == "__main__":
 
         # Check if events were generated
         if not lineage_events_file.exists() or lineage_events_file.stat().st_size == 0:
-            pytest.skip("No lineage events generated - interceptor may need marimo environment")
+            pytest.skip(
+                "No lineage events generated - interceptor may need marimo environment"
+            )
             return
 
         # Load and validate OpenLineage events
@@ -351,7 +352,9 @@ if __name__ == "__main__":
         validation_errors = []
 
         for i, event in enumerate(events):
-            is_valid, error = self.validate_event_against_schema(event, openlineage_events_schema)
+            is_valid, error = self.validate_event_against_schema(
+                event, openlineage_events_schema
+            )
 
             if is_valid:
                 valid_count += 1
@@ -381,16 +384,17 @@ if __name__ == "__main__":
         lineage_events_file,
         runtime_events_schema,
         openlineage_events_schema,
-        temp_hunyo_dir
+        temp_hunyo_dir,
     ):
         """Test with actual marimo process execution (requires marimo installed)"""
         # Check if marimo is available
         try:
             result = subprocess.run(
                 ["marimo", "--version"],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             if result.returncode != 0:
                 pytest.skip("marimo not available or not working")
@@ -402,7 +406,7 @@ if __name__ == "__main__":
             **dict(subprocess.os.environ),
             "MARIMO_NOTEBOOK_PATH": str(temp_notebook_file),
             "HUNYO_EVENTS_DIR": str(temp_hunyo_dir),
-            "HUNYO_ENABLE_CAPTURE": "true"
+            "HUNYO_ENABLE_CAPTURE": "true",
         }
 
         # Create a script that runs the notebook programmatically
@@ -412,7 +416,8 @@ if __name__ == "__main__":
         current_project_root = Path.cwd()
         src_path = current_project_root / "src"
 
-        runner_script.write_text(f"""
+        runner_script.write_text(
+            f"""
 import sys
 import os
 from pathlib import Path
@@ -492,11 +497,11 @@ except ImportError as e:
     # Create mock events to test schema validation
     import json
     from pathlib import Path
-    
+
     # Ensure the runtime events file directory exists
     runtime_file_path = Path(r"{runtime_events_file}")
     runtime_file_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Create a valid mock event that complies with the schema
     mock_event = {{
         "event_type": "cell_execution_start",
@@ -523,17 +528,19 @@ except Exception as e:
     print(f"Unexpected error: {{e}}")
     import traceback
     traceback.print_exc()
-""")
+"""
+        )
 
         # Run the notebook with tracking
         try:
             result = subprocess.run(
                 [sys.executable, str(runner_script)],
-                check=False, cwd=str(Path.cwd()),
+                check=False,
+                cwd=str(Path.cwd()),
                 capture_output=True,
                 text=True,
                 timeout=30,
-                env=env
+                env=env,
             )
 
             test_logger.debug("Notebook execution output:")
@@ -550,15 +557,19 @@ except Exception as e:
         # Validate generated events if they exist
         validation_results = {
             "runtime_events": {"valid": 0, "invalid": 0, "total": 0},
-            "lineage_events": {"valid": 0, "invalid": 0, "total": 0}
+            "lineage_events": {"valid": 0, "invalid": 0, "total": 0},
         }
 
         # Debug: Check if files exist and their sizes
         test_logger.debug("Checking event files:")
         test_logger.debug(f"  Runtime file exists: {runtime_events_file.exists()}")
-        test_logger.debug(f"  Runtime file size: {runtime_events_file.stat().st_size if runtime_events_file.exists() else 'N/A'}")
+        test_logger.debug(
+            f"  Runtime file size: {runtime_events_file.stat().st_size if runtime_events_file.exists() else 'N/A'}"
+        )
         test_logger.debug(f"  Lineage file exists: {lineage_events_file.exists()}")
-        test_logger.debug(f"  Lineage file size: {lineage_events_file.stat().st_size if lineage_events_file.exists() else 'N/A'}")
+        test_logger.debug(
+            f"  Lineage file size: {lineage_events_file.stat().st_size if lineage_events_file.exists() else 'N/A'}"
+        )
 
         # Check runtime events
         if runtime_events_file.exists() and runtime_events_file.stat().st_size > 0:
@@ -569,7 +580,9 @@ except Exception as e:
                             event = json.loads(line)
                             validation_results["runtime_events"]["total"] += 1
 
-                            is_valid, _ = self.validate_event_against_schema(event, runtime_events_schema)
+                            is_valid, _ = self.validate_event_against_schema(
+                                event, runtime_events_schema
+                            )
                             if is_valid:
                                 validation_results["runtime_events"]["valid"] += 1
                             else:
@@ -586,7 +599,9 @@ except Exception as e:
                             event = json.loads(line)
                             validation_results["lineage_events"]["total"] += 1
 
-                            is_valid, _ = self.validate_event_against_schema(event, openlineage_events_schema)
+                            is_valid, _ = self.validate_event_against_schema(
+                                event, openlineage_events_schema
+                            )
                             if is_valid:
                                 validation_results["lineage_events"]["valid"] += 1
                             else:
@@ -596,37 +611,56 @@ except Exception as e:
 
         # Report results
         test_logger.status("=== FULL INTEGRATION TEST RESULTS ===")
-        test_logger.success(f"Runtime Events: {validation_results['runtime_events']['valid']}/{validation_results['runtime_events']['total']} valid")
-        test_logger.success(f"Lineage Events: {validation_results['lineage_events']['valid']}/{validation_results['lineage_events']['total']} valid")
+        test_logger.success(
+            f"Runtime Events: {validation_results['runtime_events']['valid']}/{validation_results['runtime_events']['total']} valid"
+        )
+        test_logger.success(
+            f"Lineage Events: {validation_results['lineage_events']['valid']}/{validation_results['lineage_events']['total']} valid"
+        )
 
         # Should have captured some events
-        total_events = validation_results["runtime_events"]["total"] + validation_results["lineage_events"]["total"]
+        total_events = (
+            validation_results["runtime_events"]["total"]
+            + validation_results["lineage_events"]["total"]
+        )
 
         # Provide better error messaging for Windows CI debugging
         if total_events == 0:
             error_info = []
             error_info.append(f"Subprocess return code: {result.returncode}")
-            error_info.append(f"Subprocess stdout: {result.stdout[:500]}...")  # Truncate for readability
+            error_info.append(
+                f"Subprocess stdout: {result.stdout[:500]}..."
+            )  # Truncate for readability
             if result.stderr:
                 error_info.append(f"Subprocess stderr: {result.stderr[:500]}...")
 
             # Check if this is Windows CI
             if platform.system() == "Windows":
-                error_info.append("Running on Windows - this may be a platform-specific issue")
-                error_info.append("Consider checking path separators and subprocess environment")
+                error_info.append(
+                    "Running on Windows - this may be a platform-specific issue"
+                )
+                error_info.append(
+                    "Consider checking path separators and subprocess environment"
+                )
 
             # For now, make this a warning instead of a hard failure on Windows to unblock CI
             if platform.system() == "Windows" and "CI" in os.environ:
-                test_logger.warning("No events captured on Windows CI - this is a known issue being investigated")
+                test_logger.warning(
+                    "No events captured on Windows CI - this is a known issue being investigated"
+                )
                 test_logger.warning("\n".join(error_info))
-                pytest.skip("Skipping Windows CI event capture test due to known platform-specific issues")
+                pytest.skip(
+                    "Skipping Windows CI event capture test due to known platform-specific issues"
+                )
             else:
-                assert total_events > 0, "No events were captured during notebook execution.\n" + "\n".join(error_info)
+                assert (
+                    total_events > 0
+                ), "No events were captured during notebook execution.\n" + "\n".join(
+                    error_info
+                )
 
     def test_schema_validation_utility_integration(
-        self,
-        runtime_events_file,
-        runtime_events_schema
+        self, runtime_events_file, runtime_events_schema
     ):
         """Test integration with the schema validation utility"""
         # Create sample events file
@@ -640,7 +674,7 @@ except Exception as e:
                 "start_memory_mb": 100.5,
                 "timestamp": "2024-01-01T12:00:00Z",
                 "session_id": "5e555678",
-                "emitted_at": "2024-01-01T12:00:00Z"
+                "emitted_at": "2024-01-01T12:00:00Z",
             },
             {
                 "event_type": "cell_execution_end",
@@ -653,8 +687,8 @@ except Exception as e:
                 "duration_ms": 250.0,
                 "timestamp": "2024-01-01T12:00:00Z",
                 "session_id": "5e555678",
-                "emitted_at": "2024-01-01T12:00:00Z"
-            }
+                "emitted_at": "2024-01-01T12:00:00Z",
+            },
         ]
 
         # Write sample events
@@ -670,7 +704,9 @@ except Exception as e:
             for line in f:
                 if line.strip():
                     event = json.loads(line)
-                    is_valid, _ = self.validate_event_against_schema(event, runtime_events_schema)
+                    is_valid, _ = self.validate_event_against_schema(
+                        event, runtime_events_schema
+                    )
 
                     if is_valid:
                         valid_count += 1

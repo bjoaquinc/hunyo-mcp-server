@@ -29,6 +29,7 @@ except ImportError:
 @mcp.tool("inspect_schema")
 def schema_tool(
     table_name: str | None = None,
+    *,
     include_views: bool = True,
     include_samples: bool = False,
 ) -> dict[str, Any]:
@@ -226,9 +227,7 @@ def get_table_relationships() -> dict[str, Any]:
 
 
 @mcp.tool("get_column_info")
-def get_column_info(
-    table_name: str, column_name: str | None = None
-) -> dict[str, Any]:
+def get_column_info(table_name: str, column_name: str | None = None) -> dict[str, Any]:
     """
     Get detailed information about specific columns in a table.
 

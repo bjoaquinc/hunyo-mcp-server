@@ -5,7 +5,7 @@ Provides structured logging with emoji-rich user feedback
 
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import ClassVar
 
@@ -15,7 +15,7 @@ class EmojiFormatter(logging.Formatter):
 
     EMOJI_MAP: ClassVar[dict[int, str]] = {
         logging.DEBUG: "🔍",
-        logging.INFO: "ℹ️",
+        logging.INFO: "💡",  # Changed from ambiguous info symbol to light bulb
         logging.WARNING: "⚠️",
         logging.ERROR: "❌",
         logging.CRITICAL: "🚨",
@@ -65,6 +65,7 @@ class HunyoLogger:
         """Check if we're running inside a marimo notebook"""
         try:
             import sys
+
             # Check if marimo is in the call stack
             frame = sys._getframe()
             while frame:
@@ -72,7 +73,7 @@ class HunyoLogger:
                     return True
                 frame = frame.f_back
             return False
-        except:
+        except (AttributeError, ValueError):  # Specific exceptions for frame inspection
             return False
 
     def setup_file_logging(self, log_file: Path | None = None) -> Path:
@@ -82,7 +83,9 @@ class HunyoLogger:
 
             log_dir = Path(get_user_data_dir()) / "logs"
             log_dir.mkdir(parents=True, exist_ok=True)
-            log_file = log_dir / f"hunyo_{datetime.now().strftime('%Y%m%d')}.log"
+            log_file = (
+                log_dir / f"hunyo_{datetime.now(timezone.utc).strftime('%Y%m%d')}.log"
+            )
 
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.DEBUG)

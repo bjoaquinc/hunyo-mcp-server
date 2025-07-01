@@ -38,16 +38,27 @@ class TestRoadmapValidation:
         """Test that research phase is properly marked as complete"""
         # Look for the research phase completion markers
         assert "✅ **Research Phase Complete**" in roadmap_content
-        assert "Comprehensive analysis of MCP implementation patterns" in roadmap_content
+        assert (
+            "Comprehensive analysis of MCP implementation patterns" in roadmap_content
+        )
         assert "✅ **Architecture Research**" in roadmap_content
-        assert "FastMCP framework patterns, CLI design, tool registration" in roadmap_content
+        assert (
+            "FastMCP framework patterns, CLI design, tool registration"
+            in roadmap_content
+        )
 
     def test_integration_analysis_documented(self, roadmap_content: str):
         """Test that integration analysis is documented"""
         assert "✅ **Integration Analysis**" in roadmap_content
-        assert "Capture layer architecture, event generation, DuckDB schema" in roadmap_content
+        assert (
+            "Capture layer architecture, event generation, DuckDB schema"
+            in roadmap_content
+        )
         assert "✅ **Component Mapping**" in roadmap_content
-        assert "Configuration system, data paths, testing infrastructure" in roadmap_content
+        assert (
+            "Configuration system, data paths, testing infrastructure"
+            in roadmap_content
+        )
 
     def test_next_steps_updated(self, roadmap_content: str):
         """Test that next steps section is properly updated"""
@@ -63,7 +74,10 @@ class TestRoadmapValidation:
         """Test that Phase 1 progress tracking is updated"""
         # Should still show 3/4 complete but with updated current task
         assert "Phase 1 Progress: ✅ **3/4 items complete**" in roadmap_content
-        assert "server.py research complete ✅, beginning CLI implementation" in roadmap_content
+        assert (
+            "server.py research complete ✅, beginning CLI implementation"
+            in roadmap_content
+        )
 
     def test_roadmap_structure_preserved(self, roadmap_content: str):
         """Test that overall roadmap structure is preserved"""
@@ -80,18 +94,23 @@ class TestRoadmapValidation:
         assert "✅ **70/70 tests passing** (100% success rate)" in roadmap_content
         assert "✅ **EXCELLENT QUALITY**" in roadmap_content
 
-    @pytest.mark.parametrize("phase_item", [
-        "✅ **Create `pyproject.toml`**",
-        "✅ **Implement `config.py`**",
-        "✅ **Create basic project structure**",
-        "🚧 **IN PROGRESS - Create `src/hunyo_mcp_server/server.py`**"
-    ])
+    @pytest.mark.parametrize(
+        "phase_item",
+        [
+            "✅ **Create `pyproject.toml`**",
+            "✅ **Implement `config.py`**",
+            "✅ **Create basic project structure**",
+            "🚧 **IN PROGRESS - Create `src/hunyo_mcp_server/server.py`**",
+        ],
+    )
     def test_phase_1_items_properly_marked(self, roadmap_content: str, phase_item: str):
         """Test that Phase 1 items have correct completion status"""
         if phase_item not in roadmap_content:
             # Better error message for debugging
-            pytest.fail(f"Phase item '{phase_item}' not found in roadmap content. "
-                       f"First 500 chars of content:\n{roadmap_content[:500]}")
+            pytest.fail(
+                f"Phase item '{phase_item}' not found in roadmap content. "
+                f"First 500 chars of content:\n{roadmap_content[:500]}"
+            )
         assert phase_item in roadmap_content
 
     def test_last_updated_date_present(self, roadmap_content: str):
@@ -141,7 +160,9 @@ class TestServerImplementationPreparation:
             assert MarimoWebSocketProxy is not None
 
         except ImportError as e:
-            pytest.fail(f"Capture layer should be importable for server integration: {e}")
+            pytest.fail(
+                f"Capture layer should be importable for server integration: {e}"
+            )
         finally:
             # Clean up path
             if src_path in sys.path:
@@ -197,11 +218,13 @@ class TestServerImplementationPreparation:
             "click",
             "duckdb",
             "pandas",
-            "watchdog"  # for file watching
+            "watchdog",  # for file watching
         ]
 
         for dep in required_deps:
-            assert dep in content, f"Required dependency {dep} should be in pyproject.toml"
+            assert (
+                dep in content
+            ), f"Required dependency {dep} should be in pyproject.toml"
 
     def test_schemas_available_for_server(self):
         """Test that database schemas are available for server initialization"""

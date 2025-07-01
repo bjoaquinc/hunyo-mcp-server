@@ -144,9 +144,7 @@ class DuckDBManager:
         for table in required_tables:
             try:
                 # Check if table exists by running a simple query
-                self.connection.execute(
-                    f"SELECT COUNT(*) FROM {table}"
-                ).fetchone()
+                self.connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
                 db_logger.success(f"✓ Table '{table}' exists and accessible")
             except Exception as e:
                 db_logger.error(f"✗ Table '{table}' verification failed: {e}")
@@ -156,9 +154,7 @@ class DuckDBManager:
         for view in required_views:
             try:
                 # Check if view exists by running a simple query
-                self.connection.execute(
-                    f"SELECT COUNT(*) FROM {view}"
-                ).fetchone()
+                self.connection.execute(f"SELECT COUNT(*) FROM {view}").fetchone()
                 db_logger.success(f"✓ View '{view}' exists and accessible")
             except Exception:
                 db_logger.warning(f"⚠ View '{view}' not found (may be created later)")

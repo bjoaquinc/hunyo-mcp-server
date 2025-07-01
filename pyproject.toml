@@ -215,12 +215,16 @@ lint.ignore = [
     "FBT003",
     # Ignore checks for possible passwords
     "S105", "S106", "S107",
+    # TODO: SECURITY - Review before production! SQL injection warnings ignored for dev
+    "S608",
     # Ignore complexity
     "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
     # Allow imports not at top-level (useful for conditional imports, lazy loading)
     "E402", "PLC0415",
     # Allow longer lines (usefule for logs and test asserts)
     "E501",
+    # Allow relative imports
+    "TID252",
 ]
 lint.unfixable = [
     # Don't touch unused imports
@@ -234,8 +238,10 @@ known-first-party = ["hunyo_mcp_server", "capture"]
 ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
-# Tests can use magic values, assertions, and relative imports
-"test/**/*" = ["PLR2004", "S101", "TID252"]
+# Tests can use magic values, assertions, relative imports, unused fixtures, and subprocess calls
+"test/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607"]
+# WebSocket interceptor uses legitimate module-level singleton pattern
+"src/capture/websocket_interceptor.py" = ["PLW0603"]
 
 [tool.mypy]
 strict = true

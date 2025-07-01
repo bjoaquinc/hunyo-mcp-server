@@ -44,6 +44,7 @@ MAX_COLLECTION_SIZE = 10  # Maximum collection items to store
 MAX_DICT_SIZE = 5  # Maximum dictionary items to store
 MAX_HASH_LENGTH = 8  # Length of code hash
 
+
 class MarimoNativeHooksInterceptor:
     """
     Native marimo hook-based interceptor for complete cell execution monitoring
@@ -699,7 +700,9 @@ class MarimoNativeHooksInterceptor:
         self._emit_lineage_event(event)
 
         # Use marimo-aware logger that handles context properly
-        hooks_logger.info(f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})")
+        hooks_logger.info(
+            f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})"
+        )
 
     def _create_pre_execution_hook(self):
         """Create pre-execution hook function with correct signature"""
@@ -709,23 +712,27 @@ class MarimoNativeHooksInterceptor:
             try:
                 # Extract REAL cell information from marimo
                 cell_id = cell.cell_id  # REAL marimo cell ID
-                cell_code = cell.code   # REAL cell source code
+                cell_code = cell.code  # REAL cell source code
 
                 # Generate execution ID for this cell run
                 execution_id = str(uuid.uuid4())[:8]
 
                 # Emit REAL cell execution start event
-                self._emit_real_cell_event({
-                    "event_type": "cell_execution_start",
-                    "execution_id": execution_id,
-                    "cell_id": cell_id,
-                    "cell_source": cell_code,
-                    "cell_source_lines": len(cell_code.split("\n")) if cell_code else 0,
-                    "start_memory_mb": self._get_memory_usage(),
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "session_id": self.session_id,
-                    "emitted_at": datetime.now(timezone.utc).isoformat()
-                })
+                self._emit_real_cell_event(
+                    {
+                        "event_type": "cell_execution_start",
+                        "execution_id": execution_id,
+                        "cell_id": cell_id,
+                        "cell_source": cell_code,
+                        "cell_source_lines": (
+                            len(cell_code.split("\n")) if cell_code else 0
+                        ),
+                        "start_memory_mb": self._get_memory_usage(),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "session_id": self.session_id,
+                        "emitted_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
 
                 # Start runtime tracking if available (non-blocking)
                 if self.runtime_tracker:
@@ -768,7 +775,9 @@ class MarimoNativeHooksInterceptor:
                     hooks_logger.error(f"Error in pre-execution hook: {e}")
                 except Exception as log_error:
                     # Even logging might fail in some contexts - use fallback
-                    print(f"Hook error (logging failed): {e}, {log_error}")  # noqa: T201
+                    print(  # noqa: T201
+                        f"Hook error (logging failed): {e}, {log_error}"
+                    )
 
         return pre_execution_hook
 
@@ -780,7 +789,7 @@ class MarimoNativeHooksInterceptor:
             try:
                 # Extract REAL cell information from marimo
                 cell_id = cell.cell_id  # REAL marimo cell ID
-                cell_code = cell.code   # REAL cell source code
+                cell_code = cell.code  # REAL cell source code
 
                 # Extract run result information safely
                 error = None
@@ -798,7 +807,9 @@ class MarimoNativeHooksInterceptor:
                     output = getattr(run_result, "output", None)
                 except AttributeError:
                     # Use defaults if attributes don't exist
-                    hooks_logger.warning("run_result object missing expected attributes")
+                    hooks_logger.warning(
+                        "run_result object missing expected attributes"
+                    )
 
                 # Get execution context
                 execution_id = None
@@ -830,18 +841,22 @@ class MarimoNativeHooksInterceptor:
 
                 # Emit REAL cell execution end event
                 if execution_id:
-                    event_type = "cell_execution_error" if error else "cell_execution_end"
+                    event_type = (
+                        "cell_execution_error" if error else "cell_execution_end"
+                    )
                     event_data = {
                         "event_type": event_type,
                         "execution_id": execution_id,
                         "cell_id": cell_id,
                         "cell_source": cell_code,
-                        "cell_source_lines": len(cell_code.split("\n")) if cell_code else 0,
+                        "cell_source_lines": (
+                            len(cell_code.split("\n")) if cell_code else 0
+                        ),
                         "start_memory_mb": self._get_memory_usage(),
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                         "session_id": self.session_id,
                         "emitted_at": datetime.now(timezone.utc).isoformat(),
-                        "duration_ms": duration_ms
+                        "duration_ms": duration_ms,
                     }
 
                     if error:
@@ -884,7 +899,9 @@ class MarimoNativeHooksInterceptor:
                     hooks_logger.error(f"Error in post-execution hook: {e}")
                 except Exception as log_error:
                     # Even logging might fail in some contexts - use fallback
-                    print(f"Post-hook error (logging failed): {e}, {log_error}")  # noqa: T201
+                    print(  # noqa: T201
+                        f"Post-hook error (logging failed): {e}, {log_error}"
+                    )
 
         return post_execution_hook
 
@@ -903,6 +920,7 @@ class MarimoNativeHooksInterceptor:
         """Get current memory usage in MB"""
         try:
             import psutil
+
             process = psutil.Process()
             return process.memory_info().rss / 1024 / 1024
         except Exception:

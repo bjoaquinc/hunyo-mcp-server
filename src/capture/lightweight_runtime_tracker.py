@@ -28,6 +28,7 @@ ARG_PREVIEW_SIZE = 200
 VAR_PREVIEW_SIZE = 100
 MAX_PREVIEW_VARS = 5
 
+
 class LightweightRuntimeTracker:
     """
     Lightweight runtime tracker for monitoring code execution.
@@ -137,9 +138,7 @@ class LightweightRuntimeTracker:
             "Session events are not supported by runtime_events_schema.json. "
             "Use only cell_execution_start, cell_execution_end, cell_execution_error events."
         )
-        raise NotImplementedError(
-            msg
-        )
+        raise NotImplementedError(msg)
 
     def _create_session_end_event(self, end_time: float) -> dict[str, Any]:
         """
@@ -152,9 +151,7 @@ class LightweightRuntimeTracker:
             "Session events are not supported by runtime_events_schema.json. "
             "Use only cell_execution_start, cell_execution_end, cell_execution_error events."
         )
-        raise NotImplementedError(
-            msg
-        )
+        raise NotImplementedError(msg)
 
     def _add_event(self, event: dict[str, Any]) -> None:
         """Add an event to the buffer."""
@@ -184,41 +181,14 @@ class LightweightRuntimeTracker:
             # Update counters
             events_flushed = len(self.events)
             self.total_events_processed += events_flushed
-            tracker_logger.info(f"Flushed {events_flushed} events to {self.output_file}")
+            tracker_logger.info(
+                f"Flushed {events_flushed} events to {self.output_file}"
+            )
             self.events.clear()
             self.last_flush_time = time.time()
 
         except Exception as e:
             tracker_logger.error(f"Failed to flush events: {e}")
-
-    def track_function_call(
-        self,
-        func_name: str,
-        args: tuple = (),
-        kwargs: dict | None = None,
-        *,
-        capture_args: bool = False
-    ) -> dict[str, Any]:
-        """
-        DEPRECATED: Function call events don't comply with runtime_events_schema.json
-
-        The runtime schema only allows: cell_execution_start, cell_execution_end, cell_execution_error
-        Function call tracking should be handled by the lineage interceptors or a separate event stream.
-
-        Args:
-            func_name: Name of the function being called
-            args: Function arguments
-            kwargs: Function keyword arguments
-            capture_args: Whether to capture argument values
-
-        Returns:
-            Empty dict (no event created)
-        """
-        tracker_logger.warning(
-            f"Function call tracking for '{func_name}' is not supported by runtime_events_schema.json. "
-            "Use lineage interceptors for tracking function calls."
-        )
-        return {}
 
     def get_session_summary(self) -> dict[str, Any]:
         """Get summary of current tracking session."""
@@ -231,7 +201,8 @@ class LightweightRuntimeTracker:
             "session_id": self.session_id,
             "is_active": self.is_active,
             "duration_seconds": round(duration, 3),
-            "events_captured": self.total_events_processed + len(self.events),  # Include both flushed and pending
+            "events_captured": self.total_events_processed
+            + len(self.events),  # Include both flushed and pending
             "output_file": str(self.output_file) if self.output_file else None,
             "last_flush_time": self.last_flush_time,
         }
@@ -275,6 +246,7 @@ class LightweightRuntimeTracker:
         if start_memory_mb is None:
             try:
                 import psutil
+
                 process = psutil.Process()
                 start_memory_mb = process.memory_info().rss / 1024 / 1024
             except (ImportError, Exception):
@@ -422,6 +394,7 @@ class LightweightRuntimeTracker:
         # This could be enhanced to track active execution state
         return None
 
+
 # Global runtime tracker instance
 _runtime_tracker: LightweightRuntimeTracker | None = None
 
@@ -430,7 +403,7 @@ def enable_runtime_tracking(
     output_file: str | Path | None = None,
     *,
     enable_tracking: bool = True,
-    buffer_size: int = DEFAULT_BUFFER_SIZE
+    buffer_size: int = DEFAULT_BUFFER_SIZE,
 ) -> LightweightRuntimeTracker:
     """
     Enable lightweight runtime tracking.
@@ -446,7 +419,7 @@ def enable_runtime_tracking(
         _runtime_tracker = LightweightRuntimeTracker(
             output_file=output_file,
             enable_tracking=enable_tracking,
-            buffer_size=buffer_size
+            buffer_size=buffer_size,
         )
         _runtime_tracker.start_tracking()
 
@@ -494,8 +467,13 @@ def track_cell_execution(cell_source: str, cell_id: str | None = None):
         class DummyContext:
             def __init__(self):
                 self.execution_id = f"{int(time.time() * 1000) % 0xFFFFFFFF:08x}"
-            def set_result(self, result): pass
-            def snapshot(self, name): pass
+
+            def set_result(self, result):
+                pass
+
+            def snapshot(self, name):
+                pass
+
         yield DummyContext()
         return
 
@@ -528,6 +506,7 @@ def track_cell_execution(cell_source: str, cell_id: str | None = None):
     except Exception as e:
         # Cell execution failed
         import traceback
+
         tracker.track_cell_execution_error(
             execution_id, cell_id, cell_source, start_time, e, traceback.format_exc()
         )
@@ -566,11 +545,14 @@ def track_execution_context(context_name: str, *, capture_vars: bool = False):
             frame = inspect.currentframe().f_back
             if frame:
                 local_vars = {
-                    k: str(v)[:VAR_PREVIEW_SIZE] for k, v in frame.f_locals.items()
+                    k: str(v)[:VAR_PREVIEW_SIZE]
+                    for k, v in frame.f_locals.items()
                     if not k.startswith("_") and len(str(v)) < MAX_VAR_SIZE
                 }
                 start_event["local_vars_count"] = len(local_vars)
-                start_event["local_vars_preview"] = dict(list(local_vars.items())[:MAX_PREVIEW_VARS])
+                start_event["local_vars_preview"] = dict(
+                    list(local_vars.items())[:MAX_PREVIEW_VARS]
+                )
         except Exception as e:
             tracker_logger.warning(f"Failed to capture context variables: {e}")
 

@@ -151,13 +151,13 @@ class EventProcessor:
             with open(file_path) as f:
                 for line in f:
                     line_number += 1
-                    line = line.strip()
+                    stripped_line = line.strip()
 
-                    if not line:
+                    if not stripped_line:
                         continue
 
                     try:
-                        event = json.loads(line)
+                        event = json.loads(stripped_line)
                         events.append(event)
                     except json.JSONDecodeError as e:
                         processor_logger.warning(
@@ -253,9 +253,7 @@ class EventProcessor:
 
         return transformed
 
-    def _parse_timestamp(
-        self, timestamp: str | datetime | None
-    ) -> datetime | None:
+    def _parse_timestamp(self, timestamp: str | datetime | None) -> datetime | None:
         """Parse timestamp from various formats."""
         if timestamp is None:
             return None
@@ -282,9 +280,7 @@ class EventProcessor:
 
         return None
 
-    def _extract_column_lineage(
-        self, event: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    def _extract_column_lineage(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Extract column lineage information from event."""
         # Look for column lineage in outputs
         outputs = event.get("outputs", [])
@@ -297,9 +293,7 @@ class EventProcessor:
 
         return column_lineage if column_lineage else None
 
-    def _extract_column_metrics(
-        self, event: dict[str, Any]
-    ) -> dict[str, Any] | None:
+    def _extract_column_metrics(self, event: dict[str, Any]) -> dict[str, Any] | None:
         """Extract column metrics from event."""
         # Look for data quality metrics in outputs
         outputs = event.get("outputs", [])

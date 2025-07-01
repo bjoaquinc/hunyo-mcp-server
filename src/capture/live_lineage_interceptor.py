@@ -95,6 +95,7 @@ MAX_SOURCE_LINES = 500
 MIN_GLOBALS_COUNT = 10
 MAX_GLOBALS_DISPLAY = 50
 
+
 class MarimoLiveInterceptor:
     """
     Live interceptor for Marimo notebook execution
@@ -170,10 +171,14 @@ class MarimoLiveInterceptor:
             # Create runtime events file path based on notebook path
             runtime_output_file = None
             if notebook_path and RUNTIME_TRACKING_AVAILABLE:
-                runtime_events_file, _ = get_event_filenames(notebook_path, self.data_dir)
+                runtime_events_file, _ = get_event_filenames(
+                    notebook_path, self.data_dir
+                )
                 runtime_output_file = runtime_events_file
 
-            self.runtime_tracker = enable_runtime_tracking(output_file=runtime_output_file)
+            self.runtime_tracker = enable_runtime_tracking(
+                output_file=runtime_output_file
+            )
             lineage_logger.tracking("Runtime debugging enabled")
 
     def _detect_notebook_path(self) -> str:
@@ -253,7 +258,9 @@ class MarimoLiveInterceptor:
                 is_internal = any(pattern in source for pattern in exclude_patterns)
 
                 # Much more permissive user code detection
-                has_reasonable_size = MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH
+                has_reasonable_size = (
+                    MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH
+                )
                 has_reasonable_lines = len(source.split("\n")) <= MAX_SOURCE_LINES
                 not_just_whitespace = source.strip() != ""
 
@@ -261,7 +268,8 @@ class MarimoLiveInterceptor:
                 has_marimo_context = (
                     globals_dict
                     and any(key.startswith("__") for key in globals_dict.keys())
-                    and len(globals_dict) > MIN_GLOBALS_COUNT  # Typical marimo cell has many builtins
+                    and len(globals_dict)
+                    > MIN_GLOBALS_COUNT  # Typical marimo cell has many builtins
                 )
 
                 # Determine if this is user code - much more permissive
@@ -364,7 +372,14 @@ class MarimoLiveInterceptor:
         original_compile = builtins.compile
 
         def monitored_compile(
-            source, filename, mode, flags=0, dont_inherit=False, optimize=-1, **kwargs
+            source,
+            filename,
+            mode,
+            flags=0,
+            *,
+            dont_inherit=False,
+            optimize=-1,
+            **kwargs,
         ):
             # Debug compile calls
             if isinstance(source, str) and len(source.strip()) > 0:

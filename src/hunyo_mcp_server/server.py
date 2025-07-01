@@ -37,7 +37,7 @@ mcp = FastMCP(
     "--dev-mode", is_flag=True, help="Force development mode (use .hunyo in repo root)"
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-def main(notebook: Path, dev_mode: bool, verbose: bool):
+def main(notebook: Path, *, dev_mode: bool, verbose: bool):
     """
     Hunyo MCP Server - Zero-touch notebook instrumentation for DataFrame lineage tracking.
 

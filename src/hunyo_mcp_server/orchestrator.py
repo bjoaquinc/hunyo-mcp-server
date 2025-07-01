@@ -39,7 +39,7 @@ class HunyoOrchestrator:
     - Component lifecycle and shutdown
     """
 
-    def __init__(self, notebook_path: Path, verbose: bool = False):
+    def __init__(self, notebook_path: Path, *, verbose: bool = False):
         self.notebook_path = notebook_path
         self.verbose = verbose
         self.running = False
@@ -146,9 +146,7 @@ class HunyoOrchestrator:
 
         if not self.db_manager:
             msg = "Database manager must be started before event processor"
-            raise RuntimeError(
-                msg
-            )
+            raise RuntimeError(msg)
 
         self.event_processor = EventProcessor(self.db_manager)
         orchestrator_logger.success("Event processor initialized")
@@ -230,5 +228,5 @@ def get_global_orchestrator() -> HunyoOrchestrator:
 
 def set_global_orchestrator(orchestrator: HunyoOrchestrator) -> None:
     """Set the global orchestrator instance."""
-    global _global_orchestrator
+    global _global_orchestrator  # noqa: PLW0603
     _global_orchestrator = orchestrator

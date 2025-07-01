@@ -38,6 +38,7 @@ except ImportError:
 DEFAULT_QUERY_LIMIT = 100
 MAX_PLACEHOLDERS = 1000
 
+
 # Tool function
 @mcp.tool("analyze_lineage")
 def analyze_lineage_tool(
@@ -102,7 +103,13 @@ def analyze_lineage_tool(
         else:
             return {
                 "error": f"Unknown analysis type: {analysis_type}",
-                "valid_types": ["overview", "dependencies", "impact", "flow", "patterns"],
+                "valid_types": [
+                    "overview",
+                    "dependencies",
+                    "impact",
+                    "flow",
+                    "patterns",
+                ],
             }
 
         # Add metadata to result
@@ -121,7 +128,10 @@ def analyze_lineage_tool(
     except Exception as e:
         error_msg = f"Failed to analyze lineage: {e!s}"
         tool_logger.error(error_msg)
-        return {"error": error_msg, "suggestion": "Check database connectivity and data availability"}
+        return {
+            "error": error_msg,
+            "suggestion": "Check database connectivity and data availability",
+        }
 
 
 def _get_lineage_overview(db_manager, *, include_metrics: bool) -> dict[str, Any]:
@@ -586,7 +596,7 @@ def _analyze_patterns(db_manager, *, include_metrics: bool) -> dict[str, Any]:
         patterns = db_manager.execute_query(pattern_query)
         result["transformation_patterns"] = {
             "common_patterns": [dict(row) for row in patterns],
-            "description": "Most frequently used input/output transformation patterns"
+            "description": "Most frequently used input/output transformation patterns",
         }
 
         # Find potential bottleneck datasets (high reuse)
@@ -615,7 +625,7 @@ def _analyze_patterns(db_manager, *, include_metrics: bool) -> dict[str, Any]:
         bottlenecks = db_manager.execute_query(bottleneck_query)
         result["bottleneck_analysis"] = {
             "high_reuse_datasets": [dict(row) for row in bottlenecks],
-            "description": "Datasets that are heavily reused across multiple jobs"
+            "description": "Datasets that are heavily reused across multiple jobs",
         }
 
         # Find unusual patterns (very high input/output ratios)
@@ -638,7 +648,7 @@ def _analyze_patterns(db_manager, *, include_metrics: bool) -> dict[str, Any]:
         unusual = db_manager.execute_query(unusual_query)
         result["unusual_patterns"] = {
             "atypical_transformations": [dict(row) for row in unusual],
-            "description": "Jobs with unusual input/output ratios (may indicate inefficiencies)"
+            "description": "Jobs with unusual input/output ratios (may indicate inefficiencies)",
         }
 
         if include_metrics:
@@ -662,6 +672,7 @@ def _analyze_patterns(db_manager, *, include_metrics: bool) -> dict[str, Any]:
         return {"error": str(e), "analysis_type": "patterns"}
 
     return result
+
 
 # Alias for backward compatibility
 lineage_tool = analyze_lineage_tool

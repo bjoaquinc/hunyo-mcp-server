@@ -12,7 +12,7 @@ import json
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import websockets
@@ -22,6 +22,9 @@ from capture.logger import get_logger
 
 # Module logger
 ws_logger = get_logger("hunyo.websocket")
+
+# Constants
+MAX_MESSAGE_HISTORY = 1000  # Maximum number of messages to keep in memory
 
 # Global tracking state
 _proxy_server = None
@@ -85,7 +88,7 @@ class MarimoWebSocketProxy:
             ws_logger.error(f"Failed to start proxy server: {e}")
             raise
 
-    async def _handle_proxy_connection(self, websocket, path):
+    async def _handle_proxy_connection(self, websocket, _path):
         """Handle incoming proxy connections"""
         connection_id = str(uuid.uuid4())[:8]
         ws_logger.tracking(f"New connection: {connection_id}")
@@ -100,7 +103,7 @@ class MarimoWebSocketProxy:
                 _active_connections[connection_id] = {
                     "frontend": websocket,
                     "backend": backend_ws,
-                    "connected_at": datetime.now().isoformat(),
+                    "connected_at": datetime.now(timezone.utc).isoformat(),
                 }
 
                 # Start bidirectional forwarding
@@ -167,7 +170,7 @@ class MarimoWebSocketProxy:
 
             # Create event record
             event = {
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 "session_id": self.session_id,
                 "connection_id": connection_id,
                 "direction": direction,
@@ -178,7 +181,7 @@ class MarimoWebSocketProxy:
 
             # Add to memory history
             _message_history.append(event)
-            if len(_message_history) > 1000:  # Keep last 1000 messages
+            if len(_message_history) > MAX_MESSAGE_HISTORY:
                 _message_history.pop(0)
 
             # Write to file
@@ -226,7 +229,7 @@ def start_websocket_proxy(
     output_file: str = "marimo_websocket_events.jsonl",
 ):
     """Start the global WebSocket proxy"""
-    global _proxy_server
+    global _proxy_server  # Module-level singleton pattern
 
     if _proxy_server and _proxy_server.running:
         ws_logger.warning("WebSocket proxy already running")
@@ -258,7 +261,7 @@ def start_websocket_proxy(
 
 def stop_websocket_proxy():
     """Stop the global WebSocket proxy"""
-    global _proxy_server
+    global _proxy_server  # Module-level singleton pattern
 
     if _proxy_server:
         asyncio.run(_proxy_server.stop_proxy())

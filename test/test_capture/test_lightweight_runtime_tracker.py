@@ -102,7 +102,9 @@ class TestLightweightRuntimeTracker:
         error = ZeroDivisionError("division by zero")
         traceback_str = 'Traceback (most recent call last):\n  File "<string>", line 1, in <module>\nZeroDivisionError: division by zero'
 
-        tracker.track_cell_execution_error(execution_id, cell_id, cell_source, start_time, error, traceback_str)
+        tracker.track_cell_execution_error(
+            execution_id, cell_id, cell_source, start_time, error, traceback_str
+        )
 
         # Find the cell execution error event
         error_event = None
@@ -137,7 +139,9 @@ class TestLightweightRuntimeTracker:
         with open(output_file) as f:
             lines = f.readlines()
 
-        assert len(lines) >= 1  # cell_execution_start (session events removed for schema compliance)
+        assert (
+            len(lines) >= 1
+        )  # cell_execution_start (session events removed for schema compliance)
 
         # Parse and verify at least one event
         event = json.loads(lines[-1].strip())
@@ -168,7 +172,11 @@ class TestLightweightRuntimeTracker:
             assert "event_type" in event
 
             # Cell execution events should have specific fields
-            if event_type in ["cell_execution_start", "cell_execution_end", "cell_execution_error"]:
+            if event_type in [
+                "cell_execution_start",
+                "cell_execution_end",
+                "cell_execution_error",
+            ]:
                 assert "cell_id" in event
                 assert "cell_source" in event
                 if "execution_id" in event:  # Not all events might have this
@@ -195,7 +203,9 @@ class TestLightweightRuntimeTracker:
     def test_error_handling_on_tracking_disabled(self, tmp_path):
         """Test graceful handling when tracking is not enabled"""
         output_file = tmp_path / "runtime_events.jsonl"
-        tracker = LightweightRuntimeTracker(output_file=output_file, enable_tracking=False)
+        tracker = LightweightRuntimeTracker(
+            output_file=output_file, enable_tracking=False
+        )
 
         # Should not crash when tracking is disabled
         execution_id = tracker.track_cell_execution_start("test_cell", "x = 1")
@@ -216,7 +226,9 @@ class TestLightweightRuntimeTracker:
         tracker = enable_runtime_tracking(output_file=output_file)
 
         # Verify tracker is active
-        assert tracker.is_active, "Tracker should be active after enable_runtime_tracking"
+        assert (
+            tracker.is_active
+        ), "Tracker should be active after enable_runtime_tracking"
 
         cell_source = "result = 1 + 1"
 
@@ -225,11 +237,19 @@ class TestLightweightRuntimeTracker:
             ctx.set_result(2)
 
         # Should have generated start and end events
-        start_events = [e for e in tracker.events if e.get("event_type") == "cell_execution_start"]
-        end_events = [e for e in tracker.events if e.get("event_type") == "cell_execution_end"]
+        start_events = [
+            e for e in tracker.events if e.get("event_type") == "cell_execution_start"
+        ]
+        end_events = [
+            e for e in tracker.events if e.get("event_type") == "cell_execution_end"
+        ]
 
-        assert len(start_events) >= 1, f"Expected at least 1 start event, got {len(start_events)}"
-        assert len(end_events) >= 1, f"Expected at least 1 end event, got {len(end_events)}"
+        assert (
+            len(start_events) >= 1
+        ), f"Expected at least 1 start event, got {len(start_events)}"
+        assert (
+            len(end_events) >= 1
+        ), f"Expected at least 1 end event, got {len(end_events)}"
 
         # Clean up
         disable_runtime_tracking()

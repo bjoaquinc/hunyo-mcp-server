@@ -170,12 +170,6 @@ jobs:
         PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         hatch run test test/integration/ -v --timeout=60
-        
-    - name: Run capture integration tests  
-      env:
-        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
-      run: |
-        hatch run test test/test_capture_integration.py -v
 
   # Generate final coverage report
   coverage-report:

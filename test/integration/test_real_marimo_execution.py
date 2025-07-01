@@ -35,7 +35,9 @@ class TestRealMarimoExecution:
         with open(schema_path) as f:
             return json.load(f)
 
-    def validate_event_against_schema(self, event: dict[str, Any], schema: dict[str, Any]) -> tuple[bool, str | None]:
+    def validate_event_against_schema(
+        self, event: dict[str, Any], schema: dict[str, Any]
+    ) -> tuple[bool, str | None]:
         """Validate a single event against a JSON schema"""
         try:
             jsonschema.validate(event, schema)
@@ -45,9 +47,7 @@ class TestRealMarimoExecution:
 
     @pytest.mark.integration
     def test_real_tracker_detects_implementation_changes(
-        self,
-        temp_hunyo_dir,
-        runtime_events_schema
+        self, temp_hunyo_dir, runtime_events_schema
     ):
         """Test that fails if LightweightRuntimeTracker implementation breaks schema compliance"""
 
@@ -55,8 +55,7 @@ class TestRealMarimoExecution:
 
         # Use REAL tracker (this is the key difference!)
         tracker = LightweightRuntimeTracker(
-            output_file=events_file,
-            enable_tracking=True
+            output_file=events_file, enable_tracking=True
         )
 
         tracker.start_tracking()
@@ -65,7 +64,7 @@ class TestRealMarimoExecution:
             # Test cell execution tracking (the main feature)
             execution_id = tracker.track_cell_execution_start(
                 cell_id="test-cell-123",
-                cell_source="df = pd.DataFrame({'test': [1,2,3]})"
+                cell_source="df = pd.DataFrame({'test': [1,2,3]})",
             )
 
             # Simulate cell execution
@@ -76,7 +75,7 @@ class TestRealMarimoExecution:
                 execution_id=execution_id,
                 cell_id="test-cell-123",
                 cell_source="df = pd.DataFrame({'test': [1,2,3]})",
-                start_time=start_time
+                start_time=start_time,
             )
 
             # Stop and flush
@@ -89,18 +88,28 @@ class TestRealMarimoExecution:
                 events = [json.loads(line.strip()) for line in f if line.strip()]
 
             # Focus on cell execution events (not session events)
-            cell_events = [e for e in events if e.get("event_type", "").startswith("cell_execution")]
+            cell_events = [
+                e
+                for e in events
+                if e.get("event_type", "").startswith("cell_execution")
+            ]
 
             assert len(cell_events) >= 2, "Should have cell start and end events"
 
             # Validate each cell execution event
             for event in cell_events:
-                is_valid, error = self.validate_event_against_schema(event, runtime_events_schema)
+                is_valid, error = self.validate_event_against_schema(
+                    event, runtime_events_schema
+                )
 
                 # This test SHOULD FAIL if implementation changes break schema compliance
-                assert is_valid, f"Real tracker implementation generates non-compliant events: {error}\nEvent: {json.dumps(event, indent=2)}"
+                assert (
+                    is_valid
+                ), f"Real tracker implementation generates non-compliant events: {error}\nEvent: {json.dumps(event, indent=2)}"
 
-            test_logger.success(f"Real tracker implementation generates {len(cell_events)} schema-compliant cell execution events")
+            test_logger.success(
+                f"Real tracker implementation generates {len(cell_events)} schema-compliant cell execution events"
+            )
 
         finally:
             if tracker.is_active:
@@ -201,10 +210,7 @@ if __name__ == "__main__":
 
     @pytest.mark.integration
     def test_programmatic_marimo_session_with_hooks(
-        self,
-        simple_marimo_notebook,
-        temp_hunyo_dir,
-        runtime_events_schema
+        self, simple_marimo_notebook, temp_hunyo_dir, runtime_events_schema
     ):
         """Test marimo execution using CLI with session TTL - fires hooks with auto-shutdown"""
 
@@ -212,9 +218,10 @@ if __name__ == "__main__":
         try:
             result = subprocess.run(
                 ["marimo", "--version"],
-                check=False, capture_output=True,
+                check=False,
+                capture_output=True,
                 text=True,
-                timeout=10
+                timeout=10,
             )
             if result.returncode != 0:
                 pytest.skip("marimo not available")
@@ -232,13 +239,19 @@ if __name__ == "__main__":
         env = {
             **dict(os.environ),
             "HUNYO_DATA_DIR": str(temp_hunyo_dir),
-            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path,
+            "PYTHONPATH": (
+                f"{src_path}{pythonpath_sep}{current_pythonpath}"
+                if current_pythonpath
+                else src_path
+            ),
             # Fix Windows Unicode encoding issues
             "PYTHONIOENCODING": "utf-8",
-            "PYTHONUTF8": "1"
+            "PYTHONUTF8": "1",
         }
 
-        test_logger.startup(f"Running marimo with session TTL: {simple_marimo_notebook}")
+        test_logger.startup(
+            f"Running marimo with session TTL: {simple_marimo_notebook}"
+        )
         test_logger.debug(f"Environment PYTHONPATH: {env['PYTHONPATH']}")
         test_logger.debug(f"Platform: {platform.system()}")
 
@@ -246,16 +259,20 @@ if __name__ == "__main__":
             # Use marimo run with session TTL for auto-shutdown
             result = subprocess.run(
                 [
-                    "marimo", "run", str(simple_marimo_notebook),
+                    "marimo",
+                    "run",
+                    str(simple_marimo_notebook),
                     "--headless",
-                    "--no-token",     # Skip auth prompt
-                    "--session-ttl", "3"  # Kill session 3s after no client connects
+                    "--no-token",  # Skip auth prompt
+                    "--session-ttl",
+                    "3",  # Kill session 3s after no client connects
                 ],
-                check=False, env=env,
+                check=False,
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=10,  # TTL + buffer
-                cwd=str(Path.cwd())
+                cwd=str(Path.cwd()),
             )
 
             test_logger.debug(f"Exit code: {result.returncode}")
@@ -267,34 +284,50 @@ if __name__ == "__main__":
             runtime_events = []
             if runtime_events_file.exists():
                 with open(runtime_events_file) as f:
-                    runtime_events = [json.loads(line.strip()) for line in f if line.strip()]
+                    runtime_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             # Check for lineage events (DataFrame operations)
             lineage_events = []
             if lineage_events_file.exists():
                 with open(lineage_events_file) as f:
-                    lineage_events = [json.loads(line.strip()) for line in f if line.strip()]
+                    lineage_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             total_events = len(runtime_events) + len(lineage_events)
-            test_logger.status(f"Captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events")
+            test_logger.status(
+                f"Captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events"
+            )
 
             # This should now capture BOTH runtime and lineage events!
             if total_events == 0:
                 # Provide better debugging for Windows CI
                 if platform.system() == "Windows" and "CI" in os.environ:
-                    test_logger.warning("No events captured on Windows CI - known platform issue")
-                    test_logger.debug(f"Files exist - Runtime: {runtime_events_file.exists()}, Lineage: {lineage_events_file.exists()}")
+                    test_logger.warning(
+                        "No events captured on Windows CI - known platform issue"
+                    )
+                    test_logger.debug(
+                        f"Files exist - Runtime: {runtime_events_file.exists()}, Lineage: {lineage_events_file.exists()}"
+                    )
                     test_logger.debug(f"Marimo result: {result.returncode}")
-                    pytest.skip("No events captured with session TTL approach on Windows CI")
+                    pytest.skip(
+                        "No events captured with session TTL approach on Windows CI"
+                    )
                 else:
-                    test_logger.warning("No events captured - session TTL approach may need longer TTL or different configuration")
+                    test_logger.warning(
+                        "No events captured - session TTL approach may need longer TTL or different configuration"
+                    )
                     pytest.skip("No events captured with session TTL approach")
 
             # Validate runtime events if they exist
             if runtime_events:
                 runtime_valid = 0
                 for event in runtime_events:
-                    is_valid, error = self.validate_event_against_schema(event, runtime_events_schema)
+                    is_valid, error = self.validate_event_against_schema(
+                        event, runtime_events_schema
+                    )
                     if is_valid:
                         runtime_valid += 1
                     else:
@@ -302,28 +335,44 @@ if __name__ == "__main__":
                         test_logger.debug(f"Event: {json.dumps(event, indent=2)}")
 
                 runtime_compliance = runtime_valid / len(runtime_events)
-                test_logger.status(f"Runtime events compliance: {runtime_compliance:.2%} ({runtime_valid}/{len(runtime_events)})")
+                test_logger.status(
+                    f"Runtime events compliance: {runtime_compliance:.2%} ({runtime_valid}/{len(runtime_events)})"
+                )
 
-                assert runtime_compliance >= 0.8, f"Runtime events compliance too low: {runtime_compliance:.2%}"
+                assert (
+                    runtime_compliance >= 0.8
+                ), f"Runtime events compliance too low: {runtime_compliance:.2%}"
 
                 # Should have captured cell execution events from marimo hooks
-                cell_events = [e for e in runtime_events if e.get("event_type", "").startswith("cell_execution")]
+                cell_events = [
+                    e
+                    for e in runtime_events
+                    if e.get("event_type", "").startswith("cell_execution")
+                ]
                 test_logger.notebook(f"Cell execution events: {len(cell_events)}")
 
                 # With 4 @app.cell decorators, we should get at least 4 start events
-                assert len(cell_events) >= 4, f"Expected at least 4 cell execution events, got {len(cell_events)}"
+                assert (
+                    len(cell_events) >= 4
+                ), f"Expected at least 4 cell execution events, got {len(cell_events)}"
 
             # Should have lineage events from pandas interception
             if lineage_events:
-                test_logger.success(f"Pandas interception works: {len(lineage_events)} lineage events")
+                test_logger.success(
+                    f"Pandas interception works: {len(lineage_events)} lineage events"
+                )
 
             test_logger.success("Marimo session TTL validation passed!")
 
         except subprocess.TimeoutExpired:
-            test_logger.warning("Marimo execution timed out - may need longer session TTL")
+            test_logger.warning(
+                "Marimo execution timed out - may need longer session TTL"
+            )
             # On Windows CI, timeouts might be more common due to slower execution
             if platform.system() == "Windows" and "CI" in os.environ:
-                pytest.skip("Marimo execution timed out on Windows CI - expected due to slower CI environment")
+                pytest.skip(
+                    "Marimo execution timed out on Windows CI - expected due to slower CI environment"
+                )
             else:
                 pytest.skip("Marimo execution timed out with session TTL")
         except Exception as e:
@@ -374,7 +423,7 @@ if __name__ == "__main__":
             for hook_list, hook_name in [
                 (PRE_EXECUTION_HOOKS, "pre_execution_hook"),
                 (POST_EXECUTION_HOOKS, "post_execution_hook"),
-                (ON_FINISH_HOOKS, "finish_hook")
+                (ON_FINISH_HOOKS, "finish_hook"),
             ]:
                 for hook in hook_list:
                     if hasattr(hook, "__name__") and hook_name in hook.__name__:
@@ -382,7 +431,9 @@ if __name__ == "__main__":
                         test_logger.success(f"Found our {hook_name} in hook list")
                         break
 
-            test_logger.status(f"Found {our_hooks_found}/3 of our hooks in marimo's hook lists")
+            test_logger.status(
+                f"Found {our_hooks_found}/3 of our hooks in marimo's hook lists"
+            )
 
             # Test cleanup
             interceptor.uninstall()
@@ -406,10 +457,7 @@ if __name__ == "__main__":
     @pytest.mark.integration
     @pytest.mark.slow
     def test_fallback_direct_python_execution(
-        self,
-        simple_marimo_notebook,
-        temp_hunyo_dir,
-        runtime_events_schema
+        self, simple_marimo_notebook, temp_hunyo_dir, runtime_events_schema
     ):
         """Fallback test: Direct Python execution (validates pandas interception only)"""
 
@@ -421,28 +469,35 @@ if __name__ == "__main__":
         env = {
             **dict(os.environ),
             "HUNYO_DATA_DIR": str(temp_hunyo_dir),
-            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path,
+            "PYTHONPATH": (
+                f"{src_path}{pythonpath_sep}{current_pythonpath}"
+                if current_pythonpath
+                else src_path
+            ),
             # Fix Windows Unicode encoding issues
             "PYTHONIOENCODING": "utf-8",
-            "PYTHONUTF8": "1"
+            "PYTHONUTF8": "1",
         }
 
         runtime_events_file = temp_hunyo_dir / "runtime_events.jsonl"
         lineage_events_file = temp_hunyo_dir / "lineage_events.jsonl"
 
         try:
-            test_logger.startup(f"Running as direct Python execution: {simple_marimo_notebook}")
+            test_logger.startup(
+                f"Running as direct Python execution: {simple_marimo_notebook}"
+            )
             test_logger.debug(f"Environment PYTHONPATH: {env['PYTHONPATH']}")
             test_logger.debug(f"Platform: {platform.system()}")
 
             # Execute marimo notebook directly as Python (no hooks fire)
             result = subprocess.run(
                 [sys.executable, str(simple_marimo_notebook)],
-                check=False, env=env,
+                check=False,
+                env=env,
                 capture_output=True,
                 text=True,
                 timeout=15,  # Direct execution should be fast
-                cwd=str(Path.cwd())
+                cwd=str(Path.cwd()),
             )
 
             test_logger.debug(f"Exit code: {result.returncode}")
@@ -454,41 +509,63 @@ if __name__ == "__main__":
             runtime_events = []
             if runtime_events_file.exists():
                 with open(runtime_events_file) as f:
-                    runtime_events = [json.loads(line.strip()) for line in f if line.strip()]
+                    runtime_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             # Check for lineage events (DataFrame operations should work)
             lineage_events = []
             if lineage_events_file.exists():
                 with open(lineage_events_file) as f:
-                    lineage_events = [json.loads(line.strip()) for line in f if line.strip()]
+                    lineage_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             total_events = len(runtime_events) + len(lineage_events)
-            test_logger.status(f"Captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events")
+            test_logger.status(
+                f"Captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events"
+            )
 
             # This test validates that pandas interception works even without marimo hooks
             if not lineage_events:
                 # Handle Windows CI case where pandas interception might not work in subprocess
                 if platform.system() == "Windows" and "CI" in os.environ:
-                    test_logger.warning("No lineage events captured on Windows CI - known platform issue with subprocess pandas interception")
+                    test_logger.warning(
+                        "No lineage events captured on Windows CI - known platform issue with subprocess pandas interception"
+                    )
                     test_logger.debug(f"Subprocess exit code: {result.returncode}")
-                    test_logger.debug(f"Files exist - Runtime: {runtime_events_file.exists()}, Lineage: {lineage_events_file.exists()}")
-                    pytest.skip("Pandas interception not working in Windows CI subprocess environment")
+                    test_logger.debug(
+                        f"Files exist - Runtime: {runtime_events_file.exists()}, Lineage: {lineage_events_file.exists()}"
+                    )
+                    pytest.skip(
+                        "Pandas interception not working in Windows CI subprocess environment"
+                    )
                 else:
-                    assert lineage_events, "Should capture some DataFrame lineage events"
+                    assert (
+                        lineage_events
+                    ), "Should capture some DataFrame lineage events"
             else:
-                test_logger.success(f"Pandas interception works: {len(lineage_events)} lineage events")
+                test_logger.success(
+                    f"Pandas interception works: {len(lineage_events)} lineage events"
+                )
 
             # Runtime events should be 0 (expected - no hooks fire in direct execution)
-            test_logger.warning(f"Runtime events: {len(runtime_events)} (expected 0 - no marimo hooks in direct execution)")
+            test_logger.warning(
+                f"Runtime events: {len(runtime_events)} (expected 0 - no marimo hooks in direct execution)"
+            )
 
         except subprocess.TimeoutExpired:
             if platform.system() == "Windows" and "CI" in os.environ:
-                pytest.skip("Direct Python execution timed out on Windows CI - slower CI environment")
+                pytest.skip(
+                    "Direct Python execution timed out on Windows CI - slower CI environment"
+                )
             else:
                 pytest.skip("Direct Python execution timed out")
         except Exception as e:
             if platform.system() == "Windows" and "CI" in os.environ:
-                test_logger.warning(f"Direct Python execution failed on Windows CI: {e}")
+                test_logger.warning(
+                    f"Direct Python execution failed on Windows CI: {e}"
+                )
                 pytest.skip(f"Direct Python execution failed on Windows CI: {e}")
             else:
                 pytest.skip(f"Direct Python execution failed: {e}")
@@ -544,12 +621,18 @@ if __name__ == "__main__":
                 our_post_hook = None
 
                 for hook in PRE_EXECUTION_HOOKS:
-                    if hasattr(hook, "__name__") and "pre_execution_hook" in hook.__name__:
+                    if (
+                        hasattr(hook, "__name__")
+                        and "pre_execution_hook" in hook.__name__
+                    ):
                         our_pre_hook = hook
                         break
 
                 for hook in POST_EXECUTION_HOOKS:
-                    if hasattr(hook, "__name__") and "post_execution_hook" in hook.__name__:
+                    if (
+                        hasattr(hook, "__name__")
+                        and "post_execution_hook" in hook.__name__
+                    ):
                         our_post_hook = hook
                         break
 
@@ -577,44 +660,64 @@ if __name__ == "__main__":
 
                 if interceptor.runtime_tracker.output_file.exists():
                     with open(interceptor.runtime_tracker.output_file) as f:
-                        runtime_events = [json.loads(line.strip()) for line in f if line.strip()]
+                        runtime_events = [
+                            json.loads(line.strip()) for line in f if line.strip()
+                        ]
 
             lineage_events = []
             if lineage_file.exists():
                 with open(lineage_file) as f:
-                    lineage_events = [json.loads(line.strip()) for line in f if line.strip()]
+                    lineage_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             total_events = len(runtime_events) + len(lineage_events)
-            test_logger.status(f"Simulation captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events")
+            test_logger.status(
+                f"Simulation captured {len(runtime_events)} runtime + {len(lineage_events)} lineage = {total_events} total events"
+            )
 
             # Validate events
             if runtime_events:
                 test_logger.tracking("Validating runtime events...")
                 valid_runtime = 0
                 for event in runtime_events:
-                    is_valid, error = self.validate_event_against_schema(event, runtime_events_schema)
+                    is_valid, error = self.validate_event_against_schema(
+                        event, runtime_events_schema
+                    )
                     if is_valid:
                         valid_runtime += 1
                     else:
                         test_logger.error(f"Invalid: {error}")
 
                 runtime_compliance = valid_runtime / len(runtime_events)
-                test_logger.success(f"Runtime compliance: {runtime_compliance:.2%} ({valid_runtime}/{len(runtime_events)})")
-                assert runtime_compliance >= 0.8, f"Runtime compliance too low: {runtime_compliance:.2%}"
+                test_logger.success(
+                    f"Runtime compliance: {runtime_compliance:.2%} ({valid_runtime}/{len(runtime_events)})"
+                )
+                assert (
+                    runtime_compliance >= 0.8
+                ), f"Runtime compliance too low: {runtime_compliance:.2%}"
 
             if lineage_events:
                 test_logger.success(f"Lineage events captured: {len(lineage_events)}")
 
             # Verify we captured the expected types of events
-            cell_events = [e for e in runtime_events if e.get("event_type", "").startswith("cell_execution")]
+            cell_events = [
+                e
+                for e in runtime_events
+                if e.get("event_type", "").startswith("cell_execution")
+            ]
             test_logger.notebook(f"Cell execution events: {len(cell_events)}")
 
             if total_events > 0:
                 test_logger.success("Manual hook simulation validation passed!")
-                test_logger.status("This proves our hook system works correctly when marimo hooks fire")
+                test_logger.status(
+                    "This proves our hook system works correctly when marimo hooks fire"
+                )
             else:
                 test_logger.warning("No events captured in simulation")
-                pytest.skip("Hook simulation didn't capture events - may need investigation")
+                pytest.skip(
+                    "Hook simulation didn't capture events - may need investigation"
+                )
 
         finally:
             # Cleanup interceptor
@@ -629,9 +732,11 @@ if __name__ == "__main__":
                     lineage_file.unlink()
 
                 # Also clean up any runtime tracker output file if it exists
-                if (interceptor.runtime_tracker and
-                    interceptor.runtime_tracker.output_file and
-                    interceptor.runtime_tracker.output_file.exists()):
+                if (
+                    interceptor.runtime_tracker
+                    and interceptor.runtime_tracker.output_file
+                    and interceptor.runtime_tracker.output_file.exists()
+                ):
                     interceptor.runtime_tracker.output_file.unlink()
 
                 # Clean up any stray marimo_runtime.jsonl in project root

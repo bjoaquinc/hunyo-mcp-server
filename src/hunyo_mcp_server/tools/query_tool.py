@@ -32,6 +32,10 @@ except ImportError:
     tool_logger = SimpleLogger()
 
 
+# Constants
+MAX_QUERY_LIMIT = 1000  # Maximum number of rows that can be returned by a query
+QUERY_LOG_TRUNCATE_LENGTH = 100  # Maximum length for query logging
+
 # Get the FastMCP instance from server.py
 try:
     from hunyo_mcp_server.server import mcp
@@ -42,7 +46,7 @@ except ImportError:
 
 @mcp.tool("query_database")
 def query_tool(
-    sql_query: str, limit: int | None = 100, safe_mode: bool = True
+    sql_query: str, limit: int | None = 100, *, safe_mode: bool = True
 ) -> dict[str, Any]:
     """
     Execute SQL queries on the captured notebook execution data.
@@ -107,16 +111,16 @@ def query_tool(
         # Apply limit constraints
         if limit is None:
             limit = 100
-        elif limit > 1000:
-            limit = 1000
-            tool_logger.warning("Query limit capped at 1000 rows")
+        elif limit > MAX_QUERY_LIMIT:
+            limit = MAX_QUERY_LIMIT
+            tool_logger.warning(f"Query limit capped at {MAX_QUERY_LIMIT} rows")
 
         # Add LIMIT clause if not present
         if "limit" not in sql_query.lower() and limit > 0:
             sql_query = f"{sql_query.rstrip(';')} LIMIT {limit}"
 
         tool_logger.info(
-            f"Executing query: {sql_query[:100]}{'...' if len(sql_query) > 100 else ''}"
+            f"Executing query: {sql_query[:QUERY_LOG_TRUNCATE_LENGTH]}{'...' if len(sql_query) > QUERY_LOG_TRUNCATE_LENGTH else ''}"
         )
 
         # Execute query

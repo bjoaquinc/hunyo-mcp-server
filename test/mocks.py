@@ -20,7 +20,9 @@ class MockLightweightRuntimeTracker:
     # NOTE: DataFrame operations should be tracked by MockLiveLineageInterceptor, not here!
     # This runtime tracker mock only handles cell execution events per runtime_events_schema.json
 
-    def track_cell_execution_start(self, cell_id: str, cell_source: str, execution_id: str | None = None):
+    def track_cell_execution_start(
+        self, cell_id: str, cell_source: str, execution_id: str | None = None
+    ):
         """Mock cell execution start tracking"""
         event = {
             "event_type": "cell_execution_start",
@@ -31,13 +33,15 @@ class MockLightweightRuntimeTracker:
             "start_memory_mb": 100.0,
             "timestamp": "2024-01-01T00:00:00Z",
             "session_id": "5e551234",
-            "emitted_at": "2024-01-01T00:00:00Z"
+            "emitted_at": "2024-01-01T00:00:00Z",
         }
         self.tracked_operations.append(event)
         self._log_event(event)
         return execution_id or "12345678"
 
-    def track_cell_execution_end(self, execution_id: str, cell_id: str, cell_source: str, start_time: float):
+    def track_cell_execution_end(
+        self, execution_id: str, cell_id: str, cell_source: str, start_time: float
+    ):
         """Mock cell execution end tracking"""
         event = {
             "event_type": "cell_execution_end",
@@ -50,7 +54,7 @@ class MockLightweightRuntimeTracker:
             "duration_ms": 50.0,
             "timestamp": "2024-01-01T00:00:01Z",
             "session_id": "5e551234",
-            "emitted_at": "2024-01-01T00:00:01Z"
+            "emitted_at": "2024-01-01T00:00:01Z",
         }
         self.tracked_operations.append(event)
         self._log_event(event)
@@ -95,7 +99,9 @@ class MockLiveLineageInterceptor:
         if isinstance(obj, pd.DataFrame):
             self._create_dataframe_summary(obj)
 
-    def track_dataframe_operation(self, df_name: str, operation: str, code: str, shape: tuple, columns: list):
+    def track_dataframe_operation(
+        self, df_name: str, operation: str, code: str, shape: tuple, columns: list
+    ):
         """Mock DataFrame operation tracking (properly belongs in lineage interceptor)"""
         event = {
             "event_type": "dataframe_operation",

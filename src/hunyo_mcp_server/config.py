@@ -117,9 +117,7 @@ def get_repository_root() -> Path:
         return cwd
 
     msg = "Could not find repository root (no .git or pyproject.toml found)"
-    raise RuntimeError(
-        msg
-    )
+    raise RuntimeError(msg)
 
 
 def get_event_directories() -> tuple[Path, Path]:
@@ -206,9 +204,7 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
     """
     if event_type not in ("runtime", "lineage"):
         msg = f"event_type must be 'runtime' or 'lineage', got: {event_type}"
-        raise ValueError(
-            msg
-        )
+        raise ValueError(msg)
 
     data_dir = get_hunyo_data_dir()
     events_dir = data_dir / "events" / event_type
@@ -305,7 +301,9 @@ class HunyoConfig:
         _, lineage_dir = get_event_directories()
         return lineage_dir
 
-    def get_event_file_path(self, event_type: str, notebook_path: str | None = None) -> Path:
+    def get_event_file_path(
+        self, event_type: str, notebook_path: str | None = None
+    ) -> Path:
         """Get the full path for an event file."""
         return get_event_file_path(event_type, notebook_path)
 

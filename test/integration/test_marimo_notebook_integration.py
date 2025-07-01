@@ -49,7 +49,9 @@ class TestMarimoNotebookIntegration:
         with open(schema_path) as f:
             return json.load(f)
 
-    def validate_event_against_schema(self, event: dict[str, Any], schema: dict[str, Any]) -> tuple[bool, str | None]:
+    def validate_event_against_schema(
+        self, event: dict[str, Any], schema: dict[str, Any]
+    ) -> tuple[bool, str | None]:
         """Validate a single event against a JSON schema"""
         try:
             jsonschema.validate(event, schema)
@@ -274,7 +276,7 @@ if __name__ == "__main__":
             # Simulate execution context
             exec_globals = {
                 "pd": type("MockPandas", (), {"DataFrame": mock_df_class})(),
-                "print": lambda *args: None,  # Suppress output
+                "print": lambda *_args: None,  # Suppress output
             }
 
             # Should be able to execute key sections without errors
@@ -293,7 +295,7 @@ df2 = pd.DataFrame({
     'bonus': [5000, 3000, 7000, 4000, 6000]
 })
 """
-                exec(creation_code, exec_globals)
+                exec(creation_code, exec_globals)  # noqa: S102
 
                 # Should have created DataFrame variables
                 assert "df1" in exec_globals
@@ -359,6 +361,7 @@ df2 = pd.DataFrame({
 
         # Create lineage interceptor for DataFrame operations (correct architecture)
         from test.mocks import MockLiveLineageInterceptor as LiveLineageInterceptor
+
         lineage_interceptor = LiveLineageInterceptor(config_with_temp_dir)
 
         # Track DataFrame operations via lineage interceptor (not runtime tracker)
@@ -370,7 +373,9 @@ df2 = pd.DataFrame({
             cell_id = f"cell-{i}"
             cell_source = operation["code"]
             execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
-            tracker.track_cell_execution_end(execution_id, cell_id, cell_source, time.time())
+            tracker.track_cell_execution_end(
+                execution_id, cell_id, cell_source, time.time()
+            )
 
         # Verify runtime events were captured (cell execution only)
         events_file = config_with_temp_dir.events_dir / "runtime_events.jsonl"
@@ -398,7 +403,7 @@ df2 = pd.DataFrame({
         marimo_notebook_content,
         temp_hunyo_dir,
         config_with_temp_dir,
-        runtime_events_schema
+        runtime_events_schema,
     ):
         """Test schema validation with actual marimo notebook execution"""
         from test.mocks import (
@@ -428,7 +433,7 @@ df2 = pd.DataFrame({
                 "code": "df_merged = df1.merge(df2, on='id')",
                 "shape": (5, 6),
                 "columns": ["id", "name", "age", "department", "salary", "bonus"],
-            }
+            },
         ]
 
         # Generate and validate events
@@ -458,30 +463,33 @@ df2 = pd.DataFrame({
                 "cell_source_lines": len(operation["code"].splitlines()),
                 "start_memory_mb": 150.5,
                 "timestamp": "2024-01-01T00:00:00Z",
-                "emitted_at": "2024-01-01T00:00:00Z"
+                "emitted_at": "2024-01-01T00:00:00Z",
             }
 
             # Validate against schema
-            is_valid, error = self.validate_event_against_schema(event, runtime_events_schema)
+            is_valid, error = self.validate_event_against_schema(
+                event, runtime_events_schema
+            )
 
             if is_valid:
                 valid_count += 1
             else:
-                test_logger.error(f"Schema validation error for {operation['df_name']}: {error}")
+                test_logger.error(
+                    f"Schema validation error for {operation['df_name']}: {error}"
+                )
 
             total_count += 1
 
         # Assert schema compliance
         compliance_rate = valid_count / total_count if total_count > 0 else 0
-        assert compliance_rate >= 0.8, f"Schema compliance too low: {compliance_rate:.2%}"
+        assert (
+            compliance_rate >= 0.8
+        ), f"Schema compliance too low: {compliance_rate:.2%}"
 
     @pytest.mark.integration
     @pytest.mark.slow
     def test_real_marimo_process_with_schema_validation(
-        self,
-        marimo_notebook_content,
-        temp_hunyo_dir,
-        runtime_events_schema
+        self, marimo_notebook_content, temp_hunyo_dir, runtime_events_schema
     ):
         """Test actual marimo process execution with schema validation"""
 
@@ -499,13 +507,18 @@ df2 = pd.DataFrame({
                 **dict(os.environ),
                 "HUNYO_DATA_DIR": str(temp_hunyo_dir),
                 "HUNYO_ENABLE_CAPTURE": "true",
-                "PYTHONPATH": str(Path.cwd() / "src") + ":" + os.environ.get("PYTHONPATH", "")
+                "PYTHONPATH": str(Path.cwd() / "src")
+                + ":"
+                + os.environ.get("PYTHONPATH", ""),
             }
 
             # Run marimo in non-interactive mode if available
             try:
                 result = subprocess.run(
-                    [sys.executable, "-c", """
+                    [
+                        sys.executable,
+                        "-c",
+                        """
 import sys
 sys.path.insert(0, 'src')
 try:
@@ -514,12 +527,14 @@ try:
     print("Marimo execution simulated successfully")
 except ImportError:
     print("Marimo not available, skipping")
-                    """],
-                    check=False, env=env,
+                    """,
+                    ],
+                    check=False,
+                    env=env,
                     capture_output=True,
                     text=True,
                     timeout=30,
-                    cwd=str(Path.cwd())
+                    cwd=str(Path.cwd()),
                 )
 
                 # If marimo isn't available, skip test
@@ -542,7 +557,7 @@ except ImportError:
                         "cell_source_lines": 1,
                         "start_memory_mb": 128.0,
                         "timestamp": "2024-01-01T00:00:00Z",
-                        "emitted_at": "2024-01-01T00:00:00Z"
+                        "emitted_at": "2024-01-01T00:00:00Z",
                     }
                 ]
 
@@ -557,13 +572,17 @@ except ImportError:
 
                 valid_count = 0
                 for event in events:
-                    is_valid, _ = self.validate_event_against_schema(event, runtime_events_schema)
+                    is_valid, _ = self.validate_event_against_schema(
+                        event, runtime_events_schema
+                    )
                     if is_valid:
                         valid_count += 1
 
                 if events:
                     compliance_rate = valid_count / len(events)
-                    assert compliance_rate >= 0.7, f"Real process events schema compliance too low: {compliance_rate:.2%}"
+                    assert (
+                        compliance_rate >= 0.7
+                    ), f"Real process events schema compliance too low: {compliance_rate:.2%}"
 
         except Exception as e:
             # If test setup fails, verify our validation logic works
@@ -571,10 +590,7 @@ except ImportError:
 
     @pytest.mark.integration
     def test_comprehensive_dataframe_tracking_with_validation(
-        self,
-        temp_hunyo_dir,
-        config_with_temp_dir,
-        runtime_events_schema
+        self, temp_hunyo_dir, config_with_temp_dir, runtime_events_schema
     ):
         """Test comprehensive DataFrame tracking with schema validation"""
         from test.mocks import (
@@ -593,29 +609,62 @@ except ImportError:
                 "operation": "create",
                 "code": "raw_data = pd.read_csv('data.csv')",
                 "shape": (1000, 10),
-                "columns": ["id", "name", "email", "age", "department", "salary", "hire_date", "manager", "location", "status"]
+                "columns": [
+                    "id",
+                    "name",
+                    "email",
+                    "age",
+                    "department",
+                    "salary",
+                    "hire_date",
+                    "manager",
+                    "location",
+                    "status",
+                ],
             },
             {
                 "df_name": "cleaned_data",
                 "operation": "transform",
                 "code": "cleaned_data = raw_data.dropna().reset_index(drop=True)",
                 "shape": (950, 10),
-                "columns": ["id", "name", "email", "age", "department", "salary", "hire_date", "manager", "location", "status"]
+                "columns": [
+                    "id",
+                    "name",
+                    "email",
+                    "age",
+                    "department",
+                    "salary",
+                    "hire_date",
+                    "manager",
+                    "location",
+                    "status",
+                ],
             },
             {
                 "df_name": "active_employees",
                 "operation": "filter",
                 "code": "active_employees = cleaned_data[cleaned_data['status'] == 'active']",
                 "shape": (800, 10),
-                "columns": ["id", "name", "email", "age", "department", "salary", "hire_date", "manager", "location", "status"]
+                "columns": [
+                    "id",
+                    "name",
+                    "email",
+                    "age",
+                    "department",
+                    "salary",
+                    "hire_date",
+                    "manager",
+                    "location",
+                    "status",
+                ],
             },
             {
                 "df_name": "dept_summary",
                 "operation": "aggregate",
                 "code": "dept_summary = active_employees.groupby('department').agg({'salary': ['mean', 'count'], 'age': 'mean'})",
                 "shape": (5, 3),
-                "columns": ["department", "salary_mean", "salary_count", "age_mean"]
-            }
+                "columns": ["department", "salary_mean", "salary_count", "age_mean"],
+            },
         ]
 
         # Track operations and validate schema compliance
@@ -625,10 +674,10 @@ except ImportError:
         # Map DataFrame operations to realistic marimo cells
         # In real usage, multiple operations often happen in the same cell
         operation_to_cell = {
-            "raw_data": "cell_data",      # Data loading cell
+            "raw_data": "cell_data",  # Data loading cell
             "cleaned_data": "cell_data",  # Same cell as loading (chained operations)
-            "active_employees": "cell_filter", # Filtering cell
-            "dept_summary": "cell_analysis"     # Analysis cell
+            "active_employees": "cell_filter",  # Filtering cell
+            "dept_summary": "cell_analysis",  # Analysis cell
         }
 
         for i, operation in enumerate(operations_sequence):
@@ -640,7 +689,9 @@ except ImportError:
             cell_id = operation_to_cell.get(operation["df_name"], f"cell_{i:04x}")
             cell_source = operation["code"]
             execution_id = tracker.track_cell_execution_start(cell_id, cell_source)
-            tracker.track_cell_execution_end(execution_id, cell_id, cell_source, time.time())
+            tracker.track_cell_execution_end(
+                execution_id, cell_id, cell_source, time.time()
+            )
 
             # Create schema-compliant event for validation
             test_event = {
@@ -652,23 +703,29 @@ except ImportError:
                 "cell_source_lines": len(operation["code"].splitlines()),
                 "start_memory_mb": 200.0 + (total_events * 10),
                 "timestamp": "2024-01-01T00:00:00Z",
-                "emitted_at": "2024-01-01T00:00:00Z"
+                "emitted_at": "2024-01-01T00:00:00Z",
             }
 
             # Validate against schema
-            is_valid, error = self.validate_event_against_schema(test_event, runtime_events_schema)
+            is_valid, error = self.validate_event_against_schema(
+                test_event, runtime_events_schema
+            )
 
             if is_valid:
                 valid_events += 1
             else:
-                test_logger.error(f"Validation failed for {operation['df_name']}: {error}")
+                test_logger.error(
+                    f"Validation failed for {operation['df_name']}: {error}"
+                )
 
             total_events += 1
 
         # Assert comprehensive tracking with schema compliance
         assert total_events == len(operations_sequence), "Should track all operations"
         compliance_rate = valid_events / total_events
-        assert compliance_rate >= 0.9, f"Schema compliance should be high: {compliance_rate:.2%}"
+        assert (
+            compliance_rate >= 0.9
+        ), f"Schema compliance should be high: {compliance_rate:.2%}"
 
         # Verify events file exists and has content
         events_file = config_with_temp_dir.events_dir / "runtime_events.jsonl"
