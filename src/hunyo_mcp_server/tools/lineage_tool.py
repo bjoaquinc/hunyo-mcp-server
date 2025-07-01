@@ -15,7 +15,7 @@ from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
 try:
-    from ...capture.logger import get_logger
+    from capture.logger import get_logger
 
     tool_logger = get_logger("hunyo.tools.lineage")
 except ImportError:

@@ -11,7 +11,7 @@ from typing import Any
 
 # Import logging utility
 try:
-    from ..capture.logger import get_logger
+    from capture.logger import get_logger
 
     mcp_logger = get_logger("hunyo.mcp")
 except ImportError:

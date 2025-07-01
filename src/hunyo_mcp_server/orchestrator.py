@@ -13,6 +13,8 @@ import asyncio
 import threading
 from pathlib import Path
 
+# Import logging utility
+from capture.logger import get_logger
 from hunyo_mcp_server.config import (
     get_database_path,
     get_event_directories,
@@ -21,9 +23,6 @@ from hunyo_mcp_server.config import (
 from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 from hunyo_mcp_server.ingestion.event_processor import EventProcessor
 from hunyo_mcp_server.ingestion.file_watcher import FileWatcher
-
-# Import logging utility
-from ..capture.logger import get_logger
 
 orchestrator_logger = get_logger("hunyo.orchestrator")
 

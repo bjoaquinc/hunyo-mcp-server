@@ -10,10 +10,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from hunyo_mcp_server.orchestrator import get_global_orchestrator
-
 # Import logging utility
-from ...capture.logger import get_logger
+from capture.logger import get_logger
+from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 tool_logger = get_logger("hunyo.tools.schema")
 

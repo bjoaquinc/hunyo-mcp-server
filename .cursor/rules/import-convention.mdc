@@ -1,0 +1,29 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+📦 Structured import organization with conditional fallbacks → all Python files
+
+# Standard order: future → stdlib → third-party → local
+from __future__ import annotations  # Type hints support
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+import pytest
+
+from src.capture.live_lineage_interceptor import MarimoLiveInterceptor  # Absolute project imports
+from capture.logger import get_logger  # Relative imports for capture module
+
+# Conditional imports with graceful fallbacks
+try:
+    from capture.lightweight_runtime_tracker import track_cell_execution
+    RUNTIME_AVAILABLE = True
+except ImportError:
+    RUNTIME_AVAILABLE = False
+
+# Strategic noqa for intentional unused imports (tool registration)
+from hunyo_mcp_server.tools import lineage_tool, query_tool  # noqa: F401
