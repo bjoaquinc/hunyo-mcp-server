@@ -114,7 +114,9 @@ test-py312 = "tox -e py312"
 test-py313 = "tox -e py313"
 compatibility-check = "tox -e compatibility-check"
 test-matrix = "hatch run test:test"
-coverage-report = "tox -e coverage-report"
+coverage-report = [
+    "pytest --cov=src/hunyo_mcp_server --cov=src/capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
+]
 
 [tool.hatch.envs.test]
 dependencies = [
