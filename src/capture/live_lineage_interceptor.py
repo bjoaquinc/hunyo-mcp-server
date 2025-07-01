@@ -376,8 +376,7 @@ class MarimoLiveInterceptor:
             filename,
             mode,
             flags=0,
-            *,
-            dont_inherit=False,
+            dont_inherit=False,  # noqa: FBT002
             optimize=-1,
             **kwargs,
         ):
