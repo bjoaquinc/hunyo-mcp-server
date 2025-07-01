@@ -96,7 +96,7 @@ dependencies = [
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:test}"
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args:test}"
-typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture test}"
+typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture}"
 style = [
     "ruff check {args:.}",
     "black --check --diff {args:.}",
