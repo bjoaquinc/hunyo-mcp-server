@@ -7,6 +7,7 @@ for both development and production environments.
 
 import os
 from pathlib import Path
+from typing import Any
 
 # Import logging utility
 try:
@@ -16,25 +17,25 @@ try:
 except ImportError:
     # Fallback for testing (silent for style compliance)
     class SimpleLogger:
-        def status(self, msg):
+        def status(self, msg: str) -> None:
             pass
 
-        def success(self, msg):
+        def success(self, msg: str) -> None:
             pass
 
-        def warning(self, msg):
+        def warning(self, msg: str) -> None:
             pass
 
-        def error(self, msg):
+        def error(self, msg: str) -> None:
             pass
 
-        def config(self, msg):
+        def config(self, msg: str) -> None:
             pass
 
-        def file_op(self, msg):
+        def file_op(self, msg: str) -> None:
             pass
 
-        def debug(self, msg):
+        def debug(self, msg: str) -> None:
             pass
 
     mcp_logger = SimpleLogger()
@@ -221,7 +222,7 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
     return events_dir / filename
 
 
-def get_environment_info() -> dict:
+def get_environment_info() -> dict[str, Any]:
     """
     Get comprehensive environment information for debugging.
 
@@ -259,11 +260,11 @@ class HunyoConfig:
     Provides easy access to all configuration settings and paths.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize configuration with current environment detection."""
         self._ensure_directories()
 
-    def _ensure_directories(self):
+    def _ensure_directories(self) -> None:
         """Ensure all directories exist during initialization."""
         try:
             ensure_directory_structure()
@@ -306,7 +307,7 @@ class HunyoConfig:
         """Get the full path for an event file."""
         return get_event_file_path(event_type, notebook_path)
 
-    def get_environment_info(self) -> dict:
+    def get_environment_info(self) -> dict[str, Any]:
         """Get comprehensive environment information."""
         return get_environment_info()
 

@@ -7,13 +7,13 @@ import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar
 
 
 class EmojiFormatter(logging.Formatter):
     """Custom formatter that adds emojis to log levels"""
 
-    EMOJI_MAP = {
+    EMOJI_MAP: ClassVar[dict[int, str]] = {
         logging.DEBUG: "🔍",
         logging.INFO: "ℹ️",
         logging.WARNING: "⚠️",
@@ -21,7 +21,7 @@ class EmojiFormatter(logging.Formatter):
         logging.CRITICAL: "🚨",
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         # Add emoji prefix
         emoji = self.EMOJI_MAP.get(record.levelno, "📝")
 
@@ -43,7 +43,7 @@ class HunyoLogger:
         if not self.logger.handlers:
             self._setup_handlers()
 
-    def _setup_handlers(self):
+    def _setup_handlers(self) -> None:
         """Setup console handler with emoji formatting"""
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(logging.INFO)
@@ -56,7 +56,7 @@ class HunyoLogger:
 
         self.logger.addHandler(console_handler)
 
-    def setup_file_logging(self, log_file: Path | None = None):
+    def setup_file_logging(self, log_file: Path | None = None) -> Path:
         """Add file logging for debugging"""
         if log_file is None:
             from . import get_user_data_dir
@@ -79,59 +79,59 @@ class HunyoLogger:
         return log_file
 
     # Convenience methods with emoji themes
-    def startup(self, message: str):
+    def startup(self, message: str) -> None:
         """Log startup messages with rocket emoji"""
         self.logger.info(f"🚀 {message}")
 
-    def success(self, message: str):
+    def success(self, message: str) -> None:
         """Log success messages with checkmark emoji"""
         self.logger.info(f"✅ {message}")
 
-    def status(self, message: str):
+    def status(self, message: str) -> None:
         """Log status messages with target emoji"""
         self.logger.info(f"🎯 {message}")
 
-    def tracking(self, message: str):
+    def tracking(self, message: str) -> None:
         """Log tracking messages with magnifying glass emoji"""
         self.logger.info(f"🔍 {message}")
 
-    def notebook(self, message: str):
+    def notebook(self, message: str) -> None:
         """Log notebook-related messages with notebook emoji"""
         self.logger.info(f"📝 {message}")
 
-    def lineage(self, message: str):
+    def lineage(self, message: str) -> None:
         """Log lineage messages with link emoji"""
         self.logger.info(f"🔗 {message}")
 
-    def runtime(self, message: str):
+    def runtime(self, message: str) -> None:
         """Log runtime messages with stopwatch emoji"""
         self.logger.info(f"⏱️ {message}")
 
-    def config(self, message: str):
+    def config(self, message: str) -> None:
         """Log configuration messages with gear emoji"""
         self.logger.info(f"🔧 {message}")
 
-    def file_op(self, message: str):
+    def file_op(self, message: str) -> None:
         """Log file operations with folder emoji"""
         self.logger.info(f"📁 {message}")
 
-    def warning(self, message: str):
+    def warning(self, message: str) -> None:
         """Log warnings"""
         self.logger.warning(message)
 
-    def error(self, message: str):
+    def error(self, message: str) -> None:
         """Log errors"""
         self.logger.error(message)
 
-    def info(self, message: str):
+    def info(self, message: str) -> None:
         """Log info messages"""
         self.logger.info(message)
 
-    def debug(self, message: str):
+    def debug(self, message: str) -> None:
         """Log debug messages"""
         self.logger.debug(f"🔍 {message}")
 
-    def critical(self, message: str):
+    def critical(self, message: str) -> None:
         """Log critical messages"""
         self.logger.critical(message)
 

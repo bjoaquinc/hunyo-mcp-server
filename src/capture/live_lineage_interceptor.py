@@ -13,6 +13,7 @@ import sys
 import threading
 import uuid
 import weakref
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -39,40 +40,40 @@ except ImportError:
 
     # Fallback logger (silent for style compliance)
     class SimpleLogger:
-        def status(self, msg):
+        def status(self, msg: str) -> None:
             pass
 
-        def success(self, msg):
+        def success(self, msg: str) -> None:
             pass
 
-        def warning(self, msg):
+        def warning(self, msg: str) -> None:
             pass
 
-        def error(self, msg):
+        def error(self, msg: str) -> None:
             pass
 
-        def config(self, msg):
+        def config(self, msg: str) -> None:
             pass
 
-        def lineage(self, msg):
+        def lineage(self, msg: str) -> None:
             pass
 
-        def tracking(self, msg):
+        def tracking(self, msg: str) -> None:
             pass
 
-        def debug(self, msg):
+        def debug(self, msg: str) -> None:
             pass
 
-        def startup(self, msg):
+        def startup(self, msg: str) -> None:
             pass
 
-        def notebook(self, msg):
+        def notebook(self, msg: str) -> None:
             pass
 
-        def file_op(self, msg):
+        def file_op(self, msg: str) -> None:
             pass
 
-        def runtime(self, msg):
+        def runtime(self, msg: str) -> None:
             pass
 
     lineage_logger = SimpleLogger()
@@ -81,9 +82,11 @@ except ImportError:
     )
 
 # Global tracking state
-_tracked_dataframes = weakref.WeakKeyDictionary()
-_cell_execution_context = {}
-_global_interceptor = None
+_tracked_dataframes: weakref.WeakKeyDictionary[Any, dict[str, Any]] = (
+    weakref.WeakKeyDictionary()
+)
+_cell_execution_context: dict[str, Any] = {}
+_global_interceptor: "MarimoLiveInterceptor | None" = None
 
 
 class MarimoLiveInterceptor:
@@ -94,10 +97,10 @@ class MarimoLiveInterceptor:
 
     def __init__(
         self,
-        notebook_path: str = None,
-        output_file: str = None,
+        notebook_path: str | None = None,
+        output_file: str | None = None,
         enable_runtime_debug: bool = True,
-    ):
+    ) -> None:
         # Determine notebook path and create unique file names
         if notebook_path is None:
             notebook_path = self._detect_notebook_path()
@@ -134,11 +137,11 @@ class MarimoLiveInterceptor:
         else:
             self.output_file = output_file or "marimo_live_lineage.jsonl"
 
-        self.output_file = Path(self.output_file)
-        self.session_id = str(uuid.uuid4())[:8]
-        self.tracked_operations = []
-        self.original_functions = {}
-        self.interceptor_active = False
+        self.output_file: Path = Path(self.output_file)
+        self.session_id: str = str(uuid.uuid4())[:8]
+        self.tracked_operations: list[dict[str, Any]] = []
+        self.original_functions: dict[str, Any] = {}
+        self.interceptor_active: bool = False
         self._lock = threading.Lock()
 
         # Runtime debugging
@@ -184,7 +187,7 @@ class MarimoLiveInterceptor:
         # Fallback to current working directory + generic name
         return os.path.join(os.getcwd(), "marimo_notebook.py")
 
-    def install(self):
+    def install(self) -> None:
         """Install all hooks for live tracking"""
         if self.interceptor_active:
             lineage_logger.warning("Interceptor already active")
@@ -204,7 +207,7 @@ class MarimoLiveInterceptor:
             lineage_logger.error(f"Failed to install hooks: {e}")
             self.uninstall()
 
-    def _hook_builtin_exec(self):
+    def _hook_builtin_exec(self) -> None:
         """Hook into Python's builtin exec function to detect cell execution"""
         original_exec = builtins.exec
 
@@ -343,7 +346,7 @@ class MarimoLiveInterceptor:
         builtins.exec = monitored_exec
         self.original_functions["builtin_exec"] = original_exec
 
-    def _hook_builtin_compile(self):
+    def _hook_builtin_compile(self) -> None:
         """Hook into Python's builtin compile function"""
         original_compile = builtins.compile
 
@@ -364,7 +367,7 @@ class MarimoLiveInterceptor:
         builtins.compile = monitored_compile
         self.original_functions["builtin_compile"] = original_compile
 
-    def _hook_builtin_eval(self):
+    def _hook_builtin_eval(self) -> None:
         """Hook into Python's builtin eval function"""
         original_eval = builtins.eval
 
@@ -382,7 +385,7 @@ class MarimoLiveInterceptor:
         builtins.eval = monitored_eval
         self.original_functions["builtin_eval"] = original_eval
 
-    def _hook_pandas_operations(self):
+    def _hook_pandas_operations(self) -> None:
         """Hook into pandas DataFrame operations"""
         try:
             import pandas as pd
@@ -446,10 +449,10 @@ class MarimoLiveInterceptor:
         except Exception as e:
             lineage_logger.warning(f"pandas hooking failed: {e}")
 
-    def _create_read_wrapper(self, func_name: str, original_func):
+    def _create_read_wrapper(self, func_name: str, original_func: Any) -> Any:
         """Create a wrapper for pandas read functions"""
 
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 result = original_func(*args, **kwargs)
 
@@ -471,10 +474,10 @@ class MarimoLiveInterceptor:
 
         return wrapper
 
-    def _create_method_wrapper(self, method_name: str, original_method):
+    def _create_method_wrapper(self, method_name: str, original_method: Any) -> Any:
         """Create a wrapper for DataFrame methods"""
 
-        def wrapper(df_self, *args, **kwargs):
+        def wrapper(df_self: Any, *args: Any, **kwargs: Any) -> Any:
             try:
                 result = original_method(df_self, *args, **kwargs)
 
@@ -502,7 +505,7 @@ class MarimoLiveInterceptor:
 
         return wrapper
 
-    def _discover_new_dataframes(self, globals_dict: dict[str, Any]):
+    def _discover_new_dataframes(self, globals_dict: dict[str, Any]) -> None:
         """Scan global namespace for new DataFrames after cell execution"""
         try:
             for var_name, obj in globals_dict.items():
@@ -529,8 +532,8 @@ class MarimoLiveInterceptor:
             lineage_logger.warning(f"Error discovering DataFrames: {e}")
 
     def _track_dataframe_creation(
-        self, df, operation: str, args=None, kwargs=None, name=None
-    ):
+        self, df: Any, operation: str, args: Any = None, kwargs: Any = None, name: str | None = None
+    ) -> None:
         """Track creation of a new DataFrame"""
         try:
             df_id = id(df)
@@ -596,8 +599,8 @@ class MarimoLiveInterceptor:
             lineage_logger.warning(f"Error tracking DataFrame creation: {e}")
 
     def _track_dataframe_transformation(
-        self, input_df, output_df, operation: str, args=None, kwargs=None
-    ):
+        self, input_df: Any, output_df: Any, operation: str, args: Any = None, kwargs: Any = None
+    ) -> None:
         """Track transformation from one DataFrame to another"""
         try:
             input_id = id(input_df)
@@ -662,9 +665,9 @@ class MarimoLiveInterceptor:
         except Exception as e:
             lineage_logger.warning(f"Error tracking DataFrame transformation: {e}")
 
-    def _sanitize_args(self, args):
+    def _sanitize_args(self, args: Any) -> list[Any]:
         """Sanitize arguments for JSON serialization"""
-        sanitized = []
+        sanitized: list[Any] = []
         for arg in args:
             try:
                 if hasattr(arg, "shape") and hasattr(arg, "columns"):
@@ -686,7 +689,7 @@ class MarimoLiveInterceptor:
                 sanitized.append("<unparseable>")
         return sanitized
 
-    def _emit_event(self, event):
+    def _emit_event(self, event: dict[str, Any]) -> None:
         """Emit a lineage event to the output file"""
         try:
             with self._lock:
@@ -695,7 +698,7 @@ class MarimoLiveInterceptor:
         except Exception as e:
             lineage_logger.warning(f"Failed to emit event: {e}")
 
-    def uninstall(self):
+    def uninstall(self) -> None:
         """Remove all hooks and restore original functions"""
         if not self.interceptor_active:
             return
@@ -759,7 +762,7 @@ class MarimoLiveInterceptor:
         except Exception as e:
             lineage_logger.warning(f"Error during uninstall: {e}")
 
-    def get_session_summary(self):
+    def get_session_summary(self) -> dict[str, Any]:
         """Get summary of current tracking session"""
         summary = {
             "session_id": self.session_id,
@@ -779,10 +782,10 @@ class MarimoLiveInterceptor:
 
 
 def enable_live_tracking(
-    notebook_path: str = None,
-    output_file: str = None,
+    notebook_path: str | None = None,
+    output_file: str | None = None,
     enable_runtime_debug: bool = True,
-):
+) -> MarimoLiveInterceptor:
     """Enable live DataFrame tracking for Marimo notebooks
 
     Args:
@@ -803,7 +806,7 @@ def enable_live_tracking(
     return _global_interceptor
 
 
-def disable_live_tracking():
+def disable_live_tracking() -> None:
     """Disable live DataFrame tracking"""
     global _global_interceptor
 
@@ -825,12 +828,12 @@ def disable_live_tracking():
         lineage_logger.warning("Live tracking was not active")
 
 
-def is_tracking_active():
+def is_tracking_active() -> bool:
     """Check if live tracking is currently active"""
     return _global_interceptor is not None and _global_interceptor.interceptor_active
 
 
-def get_tracking_summary():
+def get_tracking_summary() -> dict[str, Any]:
     """Get summary of current tracking session"""
     if _global_interceptor is not None:
         return _global_interceptor.get_session_summary()
@@ -838,7 +841,7 @@ def get_tracking_summary():
         return {"status": "inactive", "message": "Live tracking is not enabled"}
 
 
-def get_current_runtime_tracker():
+def get_current_runtime_tracker() -> Any:
     """Get the current runtime tracker instance if available"""
     if _global_interceptor and _global_interceptor.enable_runtime_debug:
         return _global_interceptor.runtime_tracker
@@ -846,7 +849,7 @@ def get_current_runtime_tracker():
 
 
 @contextmanager
-def runtime_debugging_context(cell_source: str, globals_dict: dict = None):
+def runtime_debugging_context(cell_source: str, globals_dict: dict[str, Any] | None = None) -> Generator[Any, None, None]:
     """
     Context manager for manual runtime debugging of specific code blocks
 
