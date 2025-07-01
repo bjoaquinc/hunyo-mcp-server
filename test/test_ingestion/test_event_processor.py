@@ -8,6 +8,7 @@ Tests cover event validation, transformation, batch processing, and error handli
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
@@ -34,60 +35,52 @@ class TestEventProcessor:
     @pytest.fixture
     def event_processor(self, mock_db_manager):
         """Create EventProcessor instance for testing"""
-        return EventProcessor(mock_db_manager)
+        return EventProcessor(mock_db_manager, strict_validation=False)
 
     @pytest.fixture
     def sample_runtime_event(self):
-        """Sample runtime event for testing"""
+        """Sample runtime event for testing with schema-compliant format"""
         return {
-            "event_type": "cell_execution_start",
-            "execution_id": "abcd1234",
-            "cell_id": "cell-test-123",
-            "cell_source": "df = pd.DataFrame({'test': [1, 2, 3]})",
-            "cell_source_lines": 1,
-            "start_memory_mb": 128.5,
-            "timestamp": "2024-01-01T00:00:00Z",
-            "session_id": "5e555678",
-            "emitted_at": "2024-01-01T00:00:00Z",
+            "event_type": "cell_execution_start",  # Must be from enum
+            "execution_id": "abcd1234",  # 8-character hex string
+            "cell_id": "cell_456",
+            "cell_source": "x = 5\nprint(x)",
+            "cell_source_lines": 2,
+            "start_memory_mb": 100.5,
+            "end_memory_mb": 102.3,
+            "duration_ms": 250,
+            "timestamp": "2024-01-01T00:00:00.000Z",
+            "session_id": "5e555678",  # 8-character hex string
+            "emitted_at": "2024-01-01T00:00:00.000Z",
+            # error_info omitted since there's no error (optional field)
         }
 
     @pytest.fixture
     def sample_openlineage_event(self):
-        """Sample OpenLineage event for testing"""
+        """Sample OpenLineage event for testing with all required fields."""
         return {
-            "eventTime": "2024-01-01T00:00:00.000Z",
             "eventType": "COMPLETE",
+            "eventTime": "2024-01-01T00:00:00.000Z",
             "run": {
-                "runId": "abcd1234-5678-90ef-1234-567890abcdef",
+                "runId": str(uuid.uuid4()),
                 "facets": {
-                    "marimoExecution": {
-                        "executionId": "exec-123",
-                        "sessionId": "session-456",
+                    "performance": {
+                        "_producer": "marimo-lineage-tracker",
+                        "durationMs": 150,
                     },
-                    "performance": {"durationMs": 150},
+                    "marimoExecution": {
+                        "_producer": "marimo-lineage-tracker",
+                        "executionId": "abcd1234",  # 8-character hex string
+                        "sessionId": "5e555678",  # 8-character hex string
+                    },
                 },
             },
-            "job": {"namespace": "marimo", "name": "pandas_read_csv", "facets": {}},
+            "job": {"namespace": "marimo", "name": "pandas_read_csv"},
             "inputs": [],
-            "outputs": [
-                {
-                    "namespace": "marimo",
-                    "name": "df_output",
-                    "facets": {
-                        "schema": {
-                            "_producer": "marimo-lineage-tracker",
-                            "_schemaURL": "https://schemas.openlineage.io/SchemaDatasetFacet/1-0-0",
-                            "fields": [
-                                {"name": "id", "type": "integer"},
-                                {"name": "name", "type": "string"},
-                            ],
-                        }
-                    },
-                }
-            ],
+            "outputs": [],
             "producer": "marimo-lineage-tracker",
-            "schemaURL": "https://schemas.openlineage.io/RunEvent/1-0-0",
-            "session_id": "session-456",
+            "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+            "session_id": "5e555678",  # 8-character hex string
             "emitted_at": "2024-01-01T00:00:00.000Z",
         }
 
@@ -270,7 +263,7 @@ class TestEventProcessor:
 
         assert transformed["event_type"] == "cell_execution_start"
         assert transformed["execution_id"] == "abcd1234"
-        assert transformed["cell_id"] == "cell-test-123"
+        assert transformed["cell_id"] == "cell_456"
         assert transformed["session_id"] == "5e555678"
         assert isinstance(transformed["timestamp"], datetime)
 
@@ -290,11 +283,16 @@ class TestEventProcessor:
         """Test lineage event transformation with OpenLineage format"""
         transformed = event_processor._transform_lineage_event(sample_openlineage_event)
 
-        assert transformed["run_id"] == "abcd1234-5678-90ef-1234-567890abcdef"
+        # Check that run_id is present and is a valid UUID string
+        assert "run_id" in transformed
+        assert isinstance(transformed["run_id"], str)
+        # Validate it's a valid UUID format
+        uuid.UUID(transformed["run_id"])  # This will raise ValueError if invalid
+
         assert transformed["event_type"] == "COMPLETE"
         assert transformed["job_name"] == "pandas_read_csv"
-        assert transformed["execution_id"] == "exec-123"
-        assert transformed["session_id"] == "session-456"
+        assert transformed["execution_id"] == "abcd1234"
+        assert transformed["session_id"] == "5e555678"
         assert transformed["duration_ms"] == 150
 
     def test_transform_lineage_event_simple_format(self, event_processor):
@@ -416,11 +414,21 @@ class TestEventProcessor:
         event_processor.processed_events = 10
         event_processor.failed_events = 2
 
-        stats = event_processor.get_processing_stats()
+        stats = event_processor.get_validation_summary()
 
-        assert stats["processed_events"] == 10
-        assert stats["failed_events"] == 2
-        assert stats["total_events"] == 12
+        expected_stats = {
+            "processed_events": 10,
+            "failed_events": 2,
+            "total_events": 12,
+            "success_rate": 10 / 12,
+            "strict_validation": False,
+            "schemas_loaded": {
+                "runtime_schema": True,
+                "openlineage_schema": True,
+            },
+        }
+
+        assert stats == expected_stats
 
     def test_multiple_event_processing(self, event_processor, sample_runtime_event):
         """Test processing multiple events in sequence"""

@@ -11,8 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import jsonschema
+
 # Import logging utility
 from capture.logger import get_logger
+from hunyo_mcp_server.config import get_repository_root
 from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 
 processor_logger = get_logger("hunyo.processor")
@@ -23,22 +26,80 @@ class EventProcessor:
     Processes and validates events from JSONL files for database insertion.
 
     Features:
+    - Full JSON schema validation using schemas/json/*.json
     - Validates event format and required fields
     - Transforms events to database schema format
     - Batch processing for efficiency
     - Error handling and logging
     """
 
-    def __init__(self, db_manager: DuckDBManager):
+    def __init__(
+        self,
+        db_manager: DuckDBManager,
+        strict_validation: bool = True,  # noqa: FBT001,FBT002
+    ):
         self.db_manager = db_manager
         self.processed_events = 0
         self.failed_events = 0
+        self.strict_validation = strict_validation
 
-        processor_logger.status("Event Processor initialized")
+        # Load JSON schemas at initialization for performance
+        self.runtime_schema = self._load_schema("runtime_events_schema.json")
+        self.openlineage_schema = self._load_schema("openlineage_events_schema.json")
+
+        processor_logger.status(
+            f"Event Processor initialized (strict_validation={strict_validation})"
+        )
+
+    def _load_schema(self, schema_filename: str) -> dict[str, Any] | None:
+        """Load JSON schema from schemas/json directory."""
+        try:
+            project_root = get_repository_root()
+            schema_path = project_root / "schemas" / "json" / schema_filename
+
+            if not schema_path.exists():
+                processor_logger.warning(f"Schema file not found: {schema_path}")
+                return None
+
+            with open(schema_path) as f:
+                schema = json.load(f)
+
+            processor_logger.success(f"✅ Loaded schema: {schema_filename}")
+            return schema
+
+        except Exception as e:
+            processor_logger.error(f"Failed to load schema {schema_filename}: {e}")
+            return None
+
+    def _validate_event_against_schema(
+        self, event: dict[str, Any], schema: dict[str, Any] | None, event_type: str
+    ) -> tuple[bool, str | None]:
+        """Validate a single event against its JSON schema."""
+        if schema is None:
+            if self.strict_validation:
+                return False, f"Schema not available for {event_type} events"
+            else:
+                processor_logger.warning(
+                    f"Schema validation skipped for {event_type} (schema not loaded)"
+                )
+                return True, None
+
+        try:
+            jsonschema.validate(event, schema)
+            return True, None
+
+        except jsonschema.ValidationError as e:
+            error_msg = f"Schema validation failed: {e.message}"
+            if hasattr(e, "path") and e.path:
+                error_msg += f" (at path: {'.'.join(str(p) for p in e.path)})"
+            return False, error_msg
+
+        except Exception as e:
+            return False, f"Schema validation error: {e}"
 
     def process_runtime_events(self, events: list[dict[str, Any]]) -> int:
         """
-        Process a batch of runtime events.
+        Process a batch of runtime events with schema validation.
 
         Args:
             events: List of runtime event dictionaries
@@ -56,7 +117,19 @@ class EventProcessor:
 
             for event in events:
                 try:
-                    # Validate and transform event
+                    # Schema validation first
+                    is_valid, validation_error = self._validate_event_against_schema(
+                        event, self.runtime_schema, "runtime"
+                    )
+
+                    if not is_valid:
+                        processor_logger.warning(
+                            f"Runtime event schema validation failed: {validation_error}"
+                        )
+                        self.failed_events += 1
+                        continue
+
+                    # Transform event
                     transformed_event = self._transform_runtime_event(event)
 
                     # Insert into database
@@ -82,7 +155,7 @@ class EventProcessor:
 
     def process_lineage_events(self, events: list[dict[str, Any]]) -> int:
         """
-        Process a batch of lineage events.
+        Process a batch of lineage events with schema validation.
 
         Args:
             events: List of lineage event dictionaries
@@ -100,7 +173,19 @@ class EventProcessor:
 
             for event in events:
                 try:
-                    # Validate and transform event
+                    # Schema validation first
+                    is_valid, validation_error = self._validate_event_against_schema(
+                        event, self.openlineage_schema, "openlineage"
+                    )
+
+                    if not is_valid:
+                        processor_logger.warning(
+                            f"OpenLineage event schema validation failed: {validation_error}"
+                        )
+                        self.failed_events += 1
+                        continue
+
+                    # Transform event
                     transformed_event = self._transform_lineage_event(event)
 
                     # Insert into database
@@ -126,7 +211,7 @@ class EventProcessor:
 
     def process_jsonl_file(self, file_path: Path, event_type: str) -> int:
         """
-        Process all events from a JSONL file.
+        Process all events from a JSONL file with schema validation.
 
         Args:
             file_path: Path to JSONL file
@@ -168,7 +253,7 @@ class EventProcessor:
             processor_logger.error(f"Failed to read JSONL file {file_path}: {e}")
             return 0
 
-        # Process events based on type
+        # Process events based on type with schema validation
         if event_type == "runtime":
             return self.process_runtime_events(events)
         elif event_type == "lineage":
@@ -179,7 +264,8 @@ class EventProcessor:
 
     def _transform_runtime_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Transform runtime event to database schema format."""
-        # Validate required fields
+        # With schema validation, we can trust the event structure more
+        # But still do basic validation for critical database fields
         required_fields = ["event_type", "session_id", "emitted_at"]
         for field in required_fields:
             if field not in event:
@@ -326,10 +412,20 @@ class EventProcessor:
 
         return other_facets if other_facets else None
 
-    def get_processing_stats(self) -> dict[str, int]:
-        """Get processing statistics."""
+    def get_validation_summary(self) -> dict[str, Any]:
+        """Get validation and processing summary."""
         return {
             "processed_events": self.processed_events,
             "failed_events": self.failed_events,
             "total_events": self.processed_events + self.failed_events,
+            "success_rate": (
+                self.processed_events / (self.processed_events + self.failed_events)
+                if (self.processed_events + self.failed_events) > 0
+                else 0.0
+            ),
+            "strict_validation": self.strict_validation,
+            "schemas_loaded": {
+                "runtime_schema": self.runtime_schema is not None,
+                "openlineage_schema": self.openlineage_schema is not None,
+            },
         }
