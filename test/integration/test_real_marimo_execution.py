@@ -151,7 +151,7 @@ def __(os, pd, Path):
         lineage_file=lineage_events_file
     )
 
-    print("✅ Tracking enabled!")
+    print(">>> Tracking enabled!")
     print(f"Runtime events -> {runtime_events_file}")
     print(f"Lineage events -> {lineage_events_file}")
 
@@ -180,8 +180,8 @@ def __(runtime_tracker, lineage_interceptor):
     runtime_summary = runtime_tracker.stop_tracking(flush_events=True) if runtime_tracker else None
     lineage_summary = lineage_interceptor.get_session_summary() if lineage_interceptor else None
 
-    print(f"🎯 Runtime summary: {runtime_summary}")
-    print(f"🔗 Lineage summary: {lineage_summary}")
+    print(f">>> Runtime summary: {runtime_summary}")
+    print(f">>> Lineage summary: {lineage_summary}")
 
     # Clean up
     if lineage_interceptor:
@@ -194,12 +194,10 @@ if __name__ == "__main__":
 """
 
         notebook_path = temp_hunyo_dir / "simple_test_notebook.py"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(notebook_content)
 
         return notebook_path
-
-
 
     @pytest.mark.integration
     def test_programmatic_marimo_session_with_hooks(
@@ -230,11 +228,14 @@ if __name__ == "__main__":
         pythonpath_sep = ";" if platform.system() == "Windows" else ":"
         current_pythonpath = os.environ.get("PYTHONPATH", "")
         src_path = str(Path.cwd() / "src")
-        
+
         env = {
             **dict(os.environ),
             "HUNYO_DATA_DIR": str(temp_hunyo_dir),
-            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path
+            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path,
+            # Fix Windows Unicode encoding issues
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1"
         }
 
         test_logger.startup(f"Running marimo with session TTL: {simple_marimo_notebook}")
@@ -416,11 +417,14 @@ if __name__ == "__main__":
         pythonpath_sep = ";" if platform.system() == "Windows" else ":"
         current_pythonpath = os.environ.get("PYTHONPATH", "")
         src_path = str(Path.cwd() / "src")
-        
+
         env = {
             **dict(os.environ),
             "HUNYO_DATA_DIR": str(temp_hunyo_dir),
-            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path
+            "PYTHONPATH": f"{src_path}{pythonpath_sep}{current_pythonpath}" if current_pythonpath else src_path,
+            # Fix Windows Unicode encoding issues
+            "PYTHONIOENCODING": "utf-8",
+            "PYTHONUTF8": "1"
         }
 
         runtime_events_file = temp_hunyo_dir / "runtime_events.jsonl"

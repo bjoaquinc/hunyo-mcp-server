@@ -8,10 +8,10 @@ the JSON schemas in /schemas/json.
 """
 
 import json
+import os
 import subprocess
 import sys
 import time
-import os
 from pathlib import Path
 from typing import Any
 
@@ -407,11 +407,11 @@ if __name__ == "__main__":
 
         # Create a script that runs the notebook programmatically
         runner_script = temp_hunyo_dir / "run_notebook.py"
-        
+
         # Use absolute paths that work cross-platform
         current_project_root = Path.cwd()
         src_path = current_project_root / "src"
-        
+
         runner_script.write_text(f"""
 import sys
 import os
@@ -554,7 +554,7 @@ except Exception as e:
         }
 
         # Debug: Check if files exist and their sizes
-        test_logger.debug(f"Checking event files:")
+        test_logger.debug("Checking event files:")
         test_logger.debug(f"  Runtime file exists: {runtime_events_file.exists()}")
         test_logger.debug(f"  Runtime file size: {runtime_events_file.stat().st_size if runtime_events_file.exists() else 'N/A'}")
         test_logger.debug(f"  Lineage file exists: {lineage_events_file.exists()}")
@@ -601,7 +601,7 @@ except Exception as e:
 
         # Should have captured some events
         total_events = validation_results["runtime_events"]["total"] + validation_results["lineage_events"]["total"]
-        
+
         # Provide better error messaging for Windows CI debugging
         if total_events == 0:
             error_info = []
@@ -609,19 +609,19 @@ except Exception as e:
             error_info.append(f"Subprocess stdout: {result.stdout[:500]}...")  # Truncate for readability
             if result.stderr:
                 error_info.append(f"Subprocess stderr: {result.stderr[:500]}...")
-            
+
             # Check if this is Windows CI
             if platform.system() == "Windows":
                 error_info.append("Running on Windows - this may be a platform-specific issue")
                 error_info.append("Consider checking path separators and subprocess environment")
-            
+
             # For now, make this a warning instead of a hard failure on Windows to unblock CI
             if platform.system() == "Windows" and "CI" in os.environ:
                 test_logger.warning("No events captured on Windows CI - this is a known issue being investigated")
                 test_logger.warning("\n".join(error_info))
                 pytest.skip("Skipping Windows CI event capture test due to known platform-specific issues")
             else:
-                assert total_events > 0, f"No events were captured during notebook execution.\n" + "\n".join(error_info)
+                assert total_events > 0, "No events were captured during notebook execution.\n" + "\n".join(error_info)
 
     def test_schema_validation_utility_integration(
         self,
