@@ -41,10 +41,17 @@ jobs:
     strategy:
       fail-fast: false  # Don't cancel other jobs if one fails
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        os: [ubuntu-latest]
         include:
-          # Test on multiple OS for critical versions
+          # Base matrix: all Python versions on Ubuntu
+          - python-version: "3.10"
+            os: ubuntu-latest
+          - python-version: "3.11"
+            os: ubuntu-latest
+          - python-version: "3.12"
+            os: ubuntu-latest
+          - python-version: "3.13"
+            os: ubuntu-latest
+          # Additional OS testing for stable versions
           - python-version: "3.11"
             os: windows-latest
           - python-version: "3.11" 
@@ -52,12 +59,6 @@ jobs:
           - python-version: "3.12"
             os: windows-latest
           - python-version: "3.12"
-            os: macos-latest
-        exclude:
-          # Python 3.13 might not be available on all OS yet
-          - python-version: "3.13"
-            os: windows-latest
-          - python-version: "3.13"
             os: macos-latest
     
     steps:
@@ -86,16 +87,30 @@ jobs:
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install hatch tox
+        python -m pip install hatch tox
+        
+    - name: Debug environment
+      shell: bash
+      run: |
+        echo "Python version: $(python --version)"
+        echo "Python path: $(which python)"
+        echo "Pip version: $(python -m pip --version)"
+        echo "Tox version: $(tox --version)"
+        echo "Platform: ${{ runner.os }}"
+        echo "Matrix Python version: ${{ matrix.python-version }}"
         
     - name: Install package in development mode
       run: |
         hatch env create
-        hatch run pip install -e .
+        hatch run python -m pip install -e .
         
     - name: Run tests with coverage
+      shell: bash
       run: |
-        tox -e py$(echo ${{ matrix.python-version }} | tr -d .)
+        # Convert Python version to tox environment name (e.g., 3.11 -> py311)
+        PY_VERSION=$(echo "${{ matrix.python-version }}" | tr -d '.')
+        echo "Running tox environment: py${PY_VERSION}"
+        tox -e py${PY_VERSION}
         
     - name: Upload coverage data
       uses: actions/upload-artifact@v4
