@@ -9,7 +9,7 @@ import hashlib
 import os
 from pathlib import Path
 
-from capture.logger import (
+from .logger import (
     capture_logger,
     get_logger,
     hooks_logger,

@@ -72,6 +72,9 @@ hunyo-mcp-server = "hunyo_mcp_server.server:main"
 [tool.hatch.version]
 path = "src/hunyo_mcp_server/__init__.py"
 
+[tool.hatch.build.targets.wheel]
+packages = ["src/hunyo_mcp_server", "src/capture"]
+
 [tool.hatch.envs.default]
 dependencies = [
     "pytest>=7.0.0",

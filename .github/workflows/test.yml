@@ -106,6 +106,8 @@ jobs:
         
     - name: Run tests with coverage
       shell: bash
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         # Convert Python version to tox environment name (e.g., 3.11 -> py311)
         PY_VERSION=$(echo "${{ matrix.python-version }}" | tr -d '.')
@@ -164,10 +166,14 @@ jobs:
         pip install hatch
         
     - name: Run integration tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         hatch run test test/integration/ -v --timeout=60
         
     - name: Run capture integration tests  
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         hatch run test test/test_capture_integration.py -v
 
@@ -232,6 +238,8 @@ jobs:
         hatch build
         
     - name: Test package installation
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         pip install dist/*.whl
         python -c "import hunyo_mcp_server; print('✅ Package installed successfully')"
@@ -259,6 +267,8 @@ jobs:
         pip install hatch pytest-benchmark
         
     - name: Run performance tests
+      env:
+        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
         hatch run python -c "
         import time

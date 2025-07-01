@@ -576,24 +576,24 @@ if __name__ == "__main__":
             # Cleanup interceptor
             if interceptor.interceptor_active:
                 interceptor.uninstall()
-            
+
             # Clean up test files
             try:
                 if runtime_file.exists():
                     runtime_file.unlink()
                 if lineage_file.exists():
                     lineage_file.unlink()
-                
+
                 # Also clean up any runtime tracker output file if it exists
-                if (interceptor.runtime_tracker and 
-                    interceptor.runtime_tracker.output_file and 
+                if (interceptor.runtime_tracker and
+                    interceptor.runtime_tracker.output_file and
                     interceptor.runtime_tracker.output_file.exists()):
                     interceptor.runtime_tracker.output_file.unlink()
-                    
+
                 # Clean up any stray marimo_runtime.jsonl in project root
                 project_runtime_file = Path("marimo_runtime.jsonl")
                 if project_runtime_file.exists():
                     project_runtime_file.unlink()
-                    
+
             except Exception as cleanup_error:
                 test_logger.warning(f"Failed to clean up test files: {cleanup_error}")
