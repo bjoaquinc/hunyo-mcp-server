@@ -80,8 +80,9 @@ hunyo-mcp-server/.hunyo/
 
 **4. Testing Infrastructure**
 - `test/test_capture_integration.py` - Integration testing framework
-- `test/test_fixed_runtime.py` - Runtime tracking tests  
-- `test/test_openlineage_generation.py` - Lineage event validation
+- `test/fixtures/runtime_tracking_demo_notebook.py` - Runtime tracking demo notebook  
+- `test/fixtures/openlineage_demo_notebook.py` - Lineage event validation notebook
+- `test/test_marimo_notebook_fixtures.py` - Tests for marimo notebook fixtures
 - `test/test_capture/` - Comprehensive unit test suite (4 modules, 35+ tests)
 - `test/integration/` - Integration test coverage for marimo workflows
 - `test/test_ingestion/` - ✅ **NEW** SQL robustness testing with comprehensive database validation
@@ -195,8 +196,12 @@ hunyo-mcp-server/
 │   ├── conftest.py               # ✅ Pytest fixtures and configuration
 │   ├── mocks.py                  # ✅ Sophisticated mock infrastructure
 │   ├── test_capture_integration.py
-│   ├── test_fixed_runtime.py
-│   ├── test_openlineage_generation.py
+
+│   ├── test_marimo_notebook_fixtures.py
+│   ├── fixtures/
+│   │   ├── openlineage_demo_notebook.py
+│   │   ├── runtime_tracking_demo_notebook.py
+│   │   └── test_notebook.py
 │   ├── integration/              # ✅ Integration test coverage
 │   │   ├── test_capture_integration.py
 │   │   └── test_marimo_notebook_integration.py

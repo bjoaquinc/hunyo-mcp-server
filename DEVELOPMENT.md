@@ -242,10 +242,10 @@ hatch run test test/test_capture/
 hatch run test test/test_capture_integration.py
 
 # Test OpenLineage generation (4 tests)
-hatch run test test/test_openlineage_generation.py
+hatch run test test/test_marimo_notebook_fixtures.py -k openlineage
 
 # Test runtime tracking (4 tests)
-hatch run test test/test_fixed_runtime.py
+hatch run test test/test_marimo_notebook_fixtures.py -k runtime
 ```
 
 ### 2. Test Marimo Integration (Critical)

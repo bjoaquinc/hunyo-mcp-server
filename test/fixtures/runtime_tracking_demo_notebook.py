@@ -14,9 +14,17 @@ def _():
 def _():
     # Enable runtime tracking with the fixed system
     print("Enabling fixed runtime tracking...")
-    import marimo_native_hooks_interceptor
+    import os
+    import sys
 
-    interceptor = marimo_native_hooks_interceptor.enable_native_hook_tracking()
+    # Add project root to path to allow importing from src
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
+    from src.capture.native_hooks_interceptor import enable_native_hook_tracking
+
+    interceptor = enable_native_hook_tracking()
     print(f"✅ Interceptor enabled: {interceptor.session_id}")
 
 

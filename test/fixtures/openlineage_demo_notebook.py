@@ -13,16 +13,16 @@ def _():
     import marimo as mo
     import pandas as pd
 
-    # Add project root to path to allow importing marimo_native_hooks_interceptor
+    # Add project root to path to allow importing from src
     # This is necessary because the test is in a subdirectory.
-    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     if project_root not in sys.path:
         sys.path.insert(0, project_root)
 
-    # Now the import should work
-    import marimo_native_hooks_interceptor
+    # Import the actual native hooks interceptor
+    from src.capture.native_hooks_interceptor import enable_native_hook_tracking
 
-    marimo_native_hooks_interceptor.enable_native_hook_tracking()
+    enable_native_hook_tracking()
     return mo, os, pd
 
 
