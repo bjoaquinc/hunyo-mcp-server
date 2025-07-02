@@ -66,5 +66,8 @@ logs/
 # Notebook for testing
 test_notebook.py
 
-# Test coverage report auto generated
+# Test coverage reports and data files
 .coverage
+.coverage.*
+htmlcov/
+coverage.xml

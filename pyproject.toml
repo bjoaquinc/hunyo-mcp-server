@@ -117,6 +117,11 @@ test-matrix = "hatch run test:test"
 coverage-report = [
     "pytest --cov=src/hunyo_mcp_server --cov=src/capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
 ]
+coverage-local = [
+    "test-cov",
+    "python -c 'print(\"\\n📊 Coverage reports generated in htmlcov/ directory\")'",
+    "python -c 'print(\"📄 Open htmlcov/index.html in your browser to view detailed coverage\")'",
+]
 
 [tool.hatch.envs.test]
 dependencies = [
