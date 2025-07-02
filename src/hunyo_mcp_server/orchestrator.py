@@ -209,22 +209,50 @@ class HunyoOrchestrator:
         """Initialize the capture layer for the notebook."""
         orchestrator_logger.startup("🔧 Initializing capture layer...")
 
-        # TODO: Implement notebook injection when AST injector is ready
-        # For now, log that manual imports are needed
-        orchestrator_logger.warning(
-            "⚠️ Notebook auto-injection not yet implemented. "
-            "Please add these imports to your notebook manually:"
-        )
-        orchestrator_logger.config(
-            "  from capture.lightweight_runtime_tracker import enable_runtime_tracking"
-        )
-        orchestrator_logger.config(
-            "  from capture.live_lineage_interceptor import enable_live_tracking"
-        )
-        orchestrator_logger.config("  enable_runtime_tracking()")
-        orchestrator_logger.config("  enable_live_tracking()")
+        try:
+            # Import and start runtime tracking directly
+            # Generate proper file paths for this notebook
+            from capture import get_event_filenames
+            from capture.lightweight_runtime_tracker import enable_runtime_tracking
+            from capture.live_lineage_interceptor import enable_live_tracking
 
-        orchestrator_logger.success("Capture layer ready (manual imports required)")
+            runtime_file, lineage_file = get_event_filenames(
+                str(self.notebook_path), str(self.data_dir)
+            )
+
+            orchestrator_logger.config(f"Runtime events: {Path(runtime_file).name}")
+            orchestrator_logger.config(f"Lineage events: {Path(lineage_file).name}")
+
+            # Enable tracking with proper file paths
+            enable_runtime_tracking(output_file=runtime_file)
+            enable_live_tracking(
+                notebook_path=str(self.notebook_path),
+                output_file=lineage_file,
+                enable_runtime_debug=True,
+            )
+
+            orchestrator_logger.success("✅ Capture layer active - tracking enabled")
+
+        except ImportError as e:
+            orchestrator_logger.warning(f"Capture layer import failed: {e}")
+            orchestrator_logger.warning(
+                "⚠️ Runtime tracking not available. Please add these imports to your notebook manually:"
+            )
+            orchestrator_logger.config(
+                "  from capture.lightweight_runtime_tracker import enable_runtime_tracking"
+            )
+            orchestrator_logger.config(
+                "  from capture.live_lineage_interceptor import enable_live_tracking"
+            )
+            orchestrator_logger.config("  enable_runtime_tracking()")
+            orchestrator_logger.config("  enable_live_tracking()")
+
+        except Exception as e:
+            orchestrator_logger.error(f"Failed to start capture layer: {e}")
+            orchestrator_logger.warning("Falling back to manual import instructions...")
+            orchestrator_logger.config(
+                "Please add tracking imports to your notebook manually (see logs above)"
+            )
 
 
 # Global orchestrator instance for MCP tools to access

@@ -9,8 +9,6 @@ tracking data flow, and understanding transformation relationships.
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
@@ -27,12 +25,8 @@ except ImportError:
 
 
 # Get the FastMCP instance from server.py
-try:
-    from hunyo_mcp_server.server import mcp
-except ImportError:
-    # Fallback for testing - create a minimal MCP instance
-    mcp = FastMCP("lineage-tool-test")
-
+# Get the shared FastMCP instance
+from hunyo_mcp_server.mcp_instance import mcp
 
 # Constants for magic numbers
 DEFAULT_QUERY_LIMIT = 100

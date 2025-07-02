@@ -8,8 +8,6 @@ using SQL with safety constraints and helpful query templates.
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
 # Import logging utility
@@ -36,12 +34,8 @@ except ImportError:
 MAX_QUERY_LIMIT = 1000  # Maximum number of rows that can be returned by a query
 QUERY_LOG_TRUNCATE_LENGTH = 100  # Maximum length for query logging
 
-# Get the FastMCP instance from server.py
-try:
-    from hunyo_mcp_server.server import mcp
-except ImportError:
-    # Fallback for testing - create a minimal MCP instance
-    mcp = FastMCP("hunyo-test")
+# Get the shared FastMCP instance
+from hunyo_mcp_server.mcp_instance import mcp
 
 
 @mcp.tool("query_database")

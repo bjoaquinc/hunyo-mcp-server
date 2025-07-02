@@ -63,6 +63,11 @@ logs/
 # Local data storage
 .hunyo/
 
+# Lineage files (should be in .hunyo/ directory, not repo root)
+marimo_live_lineage.jsonl
+*_lineage_events.jsonl
+*_runtime_events.jsonl
+
 # Test coverage reports and data files
 .coverage
 .coverage.*

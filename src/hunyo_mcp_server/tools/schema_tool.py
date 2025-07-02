@@ -8,8 +8,6 @@ to help LLMs understand the data structure for query construction.
 
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-
 # Import logging utility
 from capture.logger import get_logger
 from hunyo_mcp_server.orchestrator import get_global_orchestrator
@@ -17,12 +15,8 @@ from hunyo_mcp_server.orchestrator import get_global_orchestrator
 tool_logger = get_logger("hunyo.tools.schema")
 
 
-# Get the FastMCP instance from server.py
-try:
-    from hunyo_mcp_server.server import mcp
-except ImportError:
-    # Fallback for testing - create a minimal MCP instance
-    mcp = FastMCP("hunyo-test")
+# Get the shared FastMCP instance
+from hunyo_mcp_server.mcp_instance import mcp
 
 
 @mcp.tool("inspect_schema")

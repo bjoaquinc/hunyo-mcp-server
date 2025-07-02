@@ -101,6 +101,11 @@ fmt = [
     "ruff check --fix {args:.}",
     "style",
 ]
+# MCP Inspector commands for testing the server
+inspect = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebook test/fixtures/test_notebook.py {args:}"
+inspect-cli = "npx @modelcontextprotocol/inspector --cli hunyo-mcp-server --notebook test/fixtures/test_notebook.py {args:}"
+inspect-ui = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebook test/fixtures/test_notebook.py"
+inspect-verbose = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebook test/fixtures/test_notebook.py --verbose {args:}"
 # Multi-version testing scripts
 # Multi-Python testing now handled by GitHub Actions CI
 # Run tests locally with: hatch run test

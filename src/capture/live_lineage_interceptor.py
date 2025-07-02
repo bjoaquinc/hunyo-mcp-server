@@ -143,7 +143,24 @@ class MarimoLiveInterceptor:
             else:
                 self.output_file = output_file
         else:
-            self.output_file = output_file or "marimo_live_lineage.jsonl"
+            # Fallback: still use proper data directory structure even without runtime tracking
+            try:
+                from hunyo_mcp_server.config import get_hunyo_data_dir
+
+                fallback_data_dir = get_hunyo_data_dir()
+            except ImportError:
+                # Last resort: use .hunyo in current directory
+                fallback_data_dir = Path.cwd() / ".hunyo"
+
+            if output_file is None:
+                self.output_file = str(
+                    fallback_data_dir
+                    / "events"
+                    / "lineage"
+                    / "marimo_live_lineage.jsonl"
+                )
+            else:
+                self.output_file = output_file
 
         self.output_file: Path = Path(self.output_file)
         self.session_id: str = str(uuid.uuid4())[:8]
