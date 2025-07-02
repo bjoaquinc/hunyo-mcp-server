@@ -19,8 +19,8 @@ from typing import Any
 import jsonschema
 import pytest
 
-from src.capture.lightweight_runtime_tracker import LightweightRuntimeTracker
-from src.capture.logger import get_logger
+from capture.lightweight_runtime_tracker import LightweightRuntimeTracker
+from capture.logger import get_logger
 
 # Create test logger instance
 test_logger = get_logger("hunyo.test.schema_validation")
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     ):
         """Test lineage interceptor generates schema-compliant OpenLineage events"""
         # Import the correct interceptor for OpenLineage events
-        from src.capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
+        from capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
 
         # Initialize native hooks interceptor for OpenLineage events
         MarimoNativeHooksInterceptor(lineage_file=str(lineage_events_file))

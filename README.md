@@ -15,7 +15,8 @@ A comprehensive **zero-configuration** system that provides OpenLineage-complian
 
 ```python
 # Single import enables both runtime debugging AND DataFrame lineage tracking
-import marimo_live_lineage_interceptor
+from capture.live_lineage_interceptor import enable_live_tracking
+enable_live_tracking()
 
 import pandas as pd
 
@@ -33,13 +34,13 @@ df_summary = df.groupby('x').sum()
 
 ### Core Components
 
-1. **`marimo_live_lineage_interceptor.py`** - Main orchestrator
+1. **`capture/live_lineage_interceptor.py`** - Main orchestrator
    - Hooks into pandas operations via monkey patching
    - Detects Marimo cell execution through `exec()` monitoring
    - Generates OpenLineage-compliant events
    - Manages runtime tracker integration
 
-2. **`marimo_lightweight_runtime_tracker.py`** - Runtime debugging
+2. **`capture/lightweight_runtime_tracker.py`** - Runtime debugging
    - Tracks cell execution timing, memory usage, errors
    - Smart result capture with DataFrame ID linking
    - Thread-safe JSON Lines logging
@@ -138,7 +139,7 @@ The system intelligently handles different output types:
 
 ### Manual Runtime Tracking
 ```python
-from marimo_lightweight_runtime_tracker import track_cell_execution
+from capture.lightweight_runtime_tracker import track_cell_execution
 
 with track_cell_execution("df = pd.read_csv('data.csv')") as ctx:
     df = pd.read_csv('data.csv')
@@ -147,17 +148,20 @@ with track_cell_execution("df = pd.read_csv('data.csv')") as ctx:
 
 ### Session Management
 ```python
-import marimo_live_lineage_interceptor
+from capture.live_lineage_interceptor import (
+    get_global_interceptor,
+    disable_live_tracking,
+)
 
 # Get tracking summary
-interceptor = marimo_live_lineage_interceptor.get_global_interceptor()
+interceptor = get_global_interceptor()
 if interceptor:
     summary = interceptor.get_session_summary()
     print(f"Events logged: {summary['events_logged']}")
     print(f"DataFrames tracked: {summary['dataframes_tracked']}")
 
 # Disable tracking
-marimo_live_lineage_interceptor.disable_live_tracking()
+disable_live_tracking()
 ```
 
 ## 📋 Event Types
@@ -188,7 +192,7 @@ python>=3.7
 ## 🔍 Troubleshooting
 
 ### No Events Generated
-- Ensure you import `marimo_live_lineage_interceptor` before any pandas operations
+- Ensure you call `enable_live_tracking()` before any pandas operations
 - Check that you're running in a Marimo notebook environment
 - Verify the output files are writable
 

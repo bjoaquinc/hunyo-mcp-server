@@ -32,7 +32,7 @@ def __():
 @app.cell
 def __():
     # Test the basic utilities
-    from src.capture import (
+    from capture import (
         get_event_filenames,
         get_notebook_file_hash,
         get_notebook_name,
@@ -62,7 +62,7 @@ def __():
 @app.cell
 def __():
     # Test the runtime tracker with the new naming
-    from src.capture.lightweight_runtime_tracker import enable_runtime_tracking
+    from capture.lightweight_runtime_tracker import enable_runtime_tracking
 
     tracker = enable_runtime_tracking(notebook_path=__file__)
     print("✅ Runtime tracker enabled with unique file naming")
@@ -86,7 +86,7 @@ def __():
 @app.cell
 def __():
     # Test the live lineage interceptor with the new naming
-    from src.capture.live_lineage_interceptor import enable_live_tracking
+    from capture.live_lineage_interceptor import enable_live_tracking
 
     interceptor = enable_live_tracking(notebook_path=__file__)
     print("✅ Live lineage tracking enabled with unique file naming")

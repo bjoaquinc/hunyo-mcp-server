@@ -53,7 +53,7 @@ class TestMarimoNotebookFixtures:
 
         # Test that the key import works
         try:
-            from src.capture.native_hooks_interceptor import enable_native_hook_tracking
+            from capture.native_hooks_interceptor import enable_native_hook_tracking
 
             assert callable(
                 enable_native_hook_tracking
@@ -76,7 +76,7 @@ class TestMarimoNotebookFixtures:
             sys.path.insert(0, str(project_root))
 
         try:
-            from src.capture.native_hooks_interceptor import enable_native_hook_tracking
+            from capture.native_hooks_interceptor import enable_native_hook_tracking
 
             assert callable(
                 enable_native_hook_tracking
@@ -167,7 +167,7 @@ class TestMarimoNotebookFixtures:
 
             # Should import from the correct source
             assert (
-                "from src.capture.native_hooks_interceptor import enable_native_hook_tracking"
+                "from capture.native_hooks_interceptor import enable_native_hook_tracking"
                 in content
             ), f"{notebook_name} should import from correct module path"
 

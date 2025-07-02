@@ -1,4 +1,7 @@
 # ruff: noqa
+# Prevent pytest from collecting this fixture file as a test module
+__test__ = False
+
 import marimo
 
 __generated_with = "0.14.7"
@@ -20,7 +23,7 @@ def _():
         sys.path.insert(0, project_root)
 
     # Import the actual native hooks interceptor
-    from src.capture.native_hooks_interceptor import enable_native_hook_tracking
+    from capture.native_hooks_interceptor import enable_native_hook_tracking
 
     enable_native_hook_tracking()
     return mo, os, pd

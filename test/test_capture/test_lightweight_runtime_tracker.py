@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from src.capture.lightweight_runtime_tracker import LightweightRuntimeTracker
+from capture.lightweight_runtime_tracker import LightweightRuntimeTracker
 
 
 class TestLightweightRuntimeTracker:
@@ -14,7 +14,7 @@ class TestLightweightRuntimeTracker:
     @pytest.fixture(autouse=True)
     def setup_clean_tracker_state(self):
         """Ensure clean global tracker state before and after each test"""
-        from src.capture.lightweight_runtime_tracker import disable_runtime_tracking
+        from capture.lightweight_runtime_tracker import disable_runtime_tracking
 
         # Clean up before test
         disable_runtime_tracking()
@@ -213,7 +213,7 @@ class TestLightweightRuntimeTracker:
 
     def test_context_manager_functionality(self, tmp_path):
         """Test the track_cell_execution context manager"""
-        from src.capture.lightweight_runtime_tracker import (
+        from capture.lightweight_runtime_tracker import (
             disable_runtime_tracking,
             enable_runtime_tracking,
             track_cell_execution,

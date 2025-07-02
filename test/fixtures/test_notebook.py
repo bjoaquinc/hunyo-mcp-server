@@ -6,6 +6,9 @@ This is a simple Python file that represents a marimo notebook for testing purpo
 The MCP server will process this file to set up infrastructure and validate the pipeline.
 """
 
+# Prevent pytest from collecting this fixture file as a test module
+__test__ = False
+
 import pandas as pd
 
 

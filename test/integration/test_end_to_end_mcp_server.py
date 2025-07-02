@@ -15,7 +15,7 @@ from typing import Any
 import jsonschema
 import pytest
 
-from src.capture.logger import get_logger
+from capture.logger import get_logger
 
 # Create test logger
 e2e_logger = get_logger("hunyo.test.e2e")

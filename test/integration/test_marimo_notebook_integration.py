@@ -12,7 +12,7 @@ from unittest.mock import MagicMock, patch
 import jsonschema
 import pytest
 
-from src.capture.logger import get_logger
+from capture.logger import get_logger
 
 # Create test logger instance
 test_logger = get_logger("hunyo.test.marimo_integration")

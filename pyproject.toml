@@ -47,21 +47,24 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
+test = [
     "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
+    "pytest-asyncio>=0.21.0", 
     "pytest-timeout>=2.1.0",
     "pytest-cov>=4.0.0",
+    "jsonschema>=4.0.0",
+    "marimo>=0.8.0",
+]
+dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "types-click",
-    "types-psutil",
+    "types-psutil", 
     "pandas-stubs",
-    "marimo>=0.8.0",
-    "tox>=4.0.0",
-    "jsonschema>=4.0.0",
 ]
+# Legacy compatibility - remove tox from dependencies
+# tox conflicts with hatch and creates environment isolation issues
 
 [project.urls]
 Documentation = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp#readme"
@@ -78,31 +81,11 @@ path = "src/hunyo_mcp_server/__init__.py"
 packages = ["src/hunyo_mcp_server", "src/capture"]
 
 [tool.hatch.envs.default]
+features = ["test", "dev"]
+dev-mode = true  # Install project in development mode
 dependencies = [
-    # Test dependencies
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-timeout>=2.1.0",
-    "pytest-cov>=4.0.0",
-    # Core project dependencies (required for tests)
-    "mcp>=1.0.0",
-    "click>=8.0.0",
-    "duckdb>=0.9.0",
-    "pandas>=2.0.0",
-    "pydantic>=2.0.0",
-    "watchdog>=3.0.0",
-    "websockets>=11.0.0",
-    "openlineage-python>=0.28.0",
-    # Development and typing dependencies
-    "black",
-    "ruff",
-    "mypy",
-    "types-click",
-    "types-psutil",
-    "pandas-stubs",
-    # Test-specific dependencies
-    "marimo>=0.8.0",
-    "jsonschema>=4.0.0",
+    # All dependencies are now properly managed through features
+    # This ensures consistency and eliminates duplication
 ]
 
 [tool.hatch.envs.default.scripts]
@@ -119,12 +102,9 @@ fmt = [
     "style",
 ]
 # Multi-version testing scripts
-test-all = "tox"
-test-py310 = "tox -e py310" 
-test-py311 = "tox -e py311"
-test-py312 = "tox -e py312"
-test-py313 = "tox -e py313"
-compatibility-check = "tox -e compatibility-check"
+# Multi-Python testing now handled by GitHub Actions CI
+# Run tests locally with: hatch run test
+# See .github/workflows/test.yml for comprehensive CI matrix
 test-matrix = "hatch run test:test"
 coverage-report = [
     "pytest --cov=src/hunyo_mcp_server --cov=src/capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
@@ -136,25 +116,10 @@ coverage-local = [
 ]
 
 [tool.hatch.envs.test]
-dependencies = [
-    # Test dependencies
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0", 
-    "pytest-timeout>=2.1.0",
-    "pytest-cov>=4.0.0",
-    # Core project dependencies (required for tests)
-    "mcp>=1.0.0",
-    "click>=8.0.0",
-    "duckdb>=0.9.0",
-    "pandas>=2.0.0",
-    "pydantic>=2.0.0",
-    "watchdog>=3.0.0",
-    "websockets>=11.0.0",
-    "openlineage-python>=0.28.0",
-    # Test-specific dependencies
-    "marimo>=0.8.0",
-    "jsonschema>=4.0.0",
-]
+features = ["test"]
+dev-mode = true  # Install project in development mode
+# Core dependencies are automatically included via project dependencies
+# Test-specific dependencies come from features = ["test"]
 
 [tool.hatch.envs.test.scripts]
 test = "pytest {args}"
@@ -172,7 +137,12 @@ matrix.python.dependencies = [
 # Pytest configuration following marimo patterns
 [tool.pytest.ini_options]
 minversion = "7.0"
-addopts = "-ra -q -v --strict-markers --strict-config"
+addopts = [
+    "-ra", "-q", "-v", 
+    "--strict-markers", "--strict-config",
+    "--ignore-glob=**/fixtures/test_*.py",  # Exclude fixture files from collection
+    "--import-mode=importlib"  # Modern import mode for better compatibility
+]
 testpaths = ["test"]
 # asyncio_mode = "auto"  # Disabled - requires pytest-asyncio>=0.21.0, CI might have older version
 timeout = 30  # seconds, per test
@@ -283,6 +253,11 @@ known-first-party = ["hunyo_mcp_server", "capture"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
+# Prevent imports starting with "src." to enforce proper package imports
+banned-module-level-imports = [
+    "src",          # Ban any import starting with "src."
+    "src.*",        # Ban all submodules of src package  
+]
 
 [tool.ruff.lint.per-file-ignores]
 # Tests can use magic values, assertions, relative imports, unused fixtures, subprocess calls, print statements, and marimo function naming

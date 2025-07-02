@@ -1,6 +1,6 @@
 # Development Guide
 
-This guide explains how to set up the **Hunyo MCP Server** project for development using modern Python tooling.
+This guide explains how to set up the **Hunyo MCP Server** project for development using modern Python tooling with **hatch-only architecture**.
 
 ## 🚀 Quick Start
 
@@ -15,7 +15,7 @@ hatch shell
 # 3. You're ready to develop!
 ```
 
-That's it! Hatch automatically reads `pyproject.toml` and sets up everything you need.
+That's it! Our modern **hatch-only** setup automatically reads `pyproject.toml` and sets up everything you need with perfect CI/local consistency.
 
 ## 📋 Prerequisites
 
@@ -129,11 +129,37 @@ hatch run style
 hatch run test test/test_capture/test_your_module.py
 ```
 
+## 🏗️ Modern CI/CD Architecture
+
+This project uses a **streamlined hatch-only approach** that eliminates common CI/CD problems:
+
+### ✅ **What We Fixed**
+- **Eliminated tox conflicts** - No more dual environment management 
+- **Fixed test isolation** - Tests use temporary directories, not polluting development
+- **Resolved dependency timing** - All dependencies available during pytest collection
+- **Cross-platform compatibility** - Works on Linux, macOS, Windows
+- **Simplified CI workflow** - Single tool (hatch) for consistency
+
+### 🚀 **CI Pipeline Features**
+- **Multi-Python matrix** (3.10, 3.11, 3.12, 3.13) on Ubuntu, macOS, Windows
+- **Comprehensive testing** - Unit, integration, style, typing checks
+- **Automated dependency management** - Hatch handles everything
+- **Performance optimized** - Cached dependencies, parallel execution
+- **Zero configuration drift** - Local environment matches CI exactly
+
+### 📋 **Development = CI**
+Your local commands work identically in CI:
+```bash
+hatch run test      # Same command used in CI
+hatch run style     # Same style checks as CI  
+hatch run typing    # Same type checking as CI
+```
+
 ## 🧪 Development Workflow
 
 ### Running Tests
 
-The project has a comprehensive test suite with **70 tests** covering both unit and integration testing:
+The project has a comprehensive test suite with **200+ tests** covering both unit and integration testing:
 
 ```bash
 # Run all tests (70 tests total)
@@ -178,7 +204,7 @@ hatch run test test/integration/test_capture_integration.py              # 11 te
 # Format code with Black and Ruff
 hatch run fmt
 
-# Check code style and linting  
+# Check code style and linting (includes import ban enforcement)
 hatch run style
 
 # Type checking with MyPy
@@ -186,6 +212,11 @@ hatch run typing
 
 # All quality checks at once
 hatch run style && hatch run typing
+
+# Example: Test import ban enforcement
+echo "from src.capture.logger import get_logger" > bad_import.py
+hatch run ruff check bad_import.py  # Shows: TID253 `src` is banned at the module level
+rm bad_import.py
 ```
 
 ### Development Commands
@@ -444,3 +475,46 @@ hatch publish
 ---
 
 **Questions?** Check the existing issues or create a new one in the repository. 
+
+## 🛡️ **Import Standards & Enforcement**
+
+### ✅ **Proper Package Imports**
+This project enforces **strict import standards** to prevent common CI/development issues:
+
+```python
+# ✅ CORRECT - Use proper package imports
+from capture.live_lineage_interceptor import MarimoLiveInterceptor
+from hunyo_mcp_server.config import get_hunyo_data_dir
+
+# ❌ BANNED - src. imports are automatically flagged
+from src.capture.live_lineage_interceptor import MarimoLiveInterceptor  # TID253 error
+from src.hunyo_mcp_server.config import get_hunyo_data_dir            # TID253 error
+```
+
+### 🚫 **Why `src.` Imports Are Banned**
+
+**Root Cause of Major Issues**: Using `from src.module` imports caused:
+- **Test isolation failures** - Wrong module resolution during pytest collection 
+- **CI/CD dependency conflicts** - Modules not found during test discovery
+- **Development environment inconsistencies** - Different behavior locally vs CI
+- **Package installation problems** - Broke when project installed in development mode
+
+**Technical Details**: The `src.` import pattern assumes the `src/` directory is in `PYTHONPATH`, but modern Python packaging (hatch, pip install -e) creates proper package namespaces that don't include `src/` in the module path.
+
+### 🔧 **Automatic Enforcement**
+
+Our **ruff configuration** automatically prevents these problematic imports:
+
+```toml
+[tool.ruff.lint.flake8-tidy-imports]
+banned-module-level-imports = [
+    "src",          # Ban any import starting with "src."
+    "src.*",        # Ban all submodules of src package  
+]
+```
+
+**Error Code**: `TID253` - Shows whenever someone tries to use `src.` imports
+
+**Resolution**: Use proper package imports based on your `pyproject.toml` package structure
+
+## 🧪 Development Workflow

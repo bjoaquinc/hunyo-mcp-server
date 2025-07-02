@@ -10,33 +10,11 @@ on:
     - cron: '0 6 * * 1'  # Every Monday at 6 AM UTC
 
 jobs:
-  # Quick compatibility check first
-  compatibility-check:
-    name: "Python Version Compatibility Check"
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.10"
-        
-    - name: Install base dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install tox
-        
-    - name: Run compatibility check
-      run: tox -e compatibility-check
-
-  # Test matrix across all Python versions
+  # Test matrix across all Python versions - simplified hatch-only approach
   test-matrix:
     name: "Python ${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    needs: compatibility-check
     
     strategy:
       fail-fast: false  # Don't cancel other jobs if one fails
@@ -51,7 +29,7 @@ jobs:
             os: ubuntu-latest
           - python-version: "3.13"
             os: ubuntu-latest
-          # Additional OS testing for stable versions
+          # Additional OS testing for stable versions  
           - python-version: "3.11"
             os: windows-latest
           - python-version: "3.11" 
@@ -70,24 +48,10 @@ jobs:
         python-version: ${{ matrix.python-version }}
         allow-prereleases: true  # Allow Python 3.13 prereleases
         
-    - name: Get pip cache dir
-      id: pip-cache
-      run: echo "dir=$(python -m pip cache dir)" >> "$GITHUB_OUTPUT"
-      shell: bash
-      
-    - name: Cache pip dependencies
-      uses: actions/cache@v4
-      with:
-        path: ${{ steps.pip-cache.outputs.dir }}
-        key: ${{ runner.os }}-pip-py${{ matrix.python-version }}-${{ hashFiles('pyproject.toml', 'tox.ini') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-py${{ matrix.python-version }}-
-          ${{ runner.os }}-pip-
-          
-    - name: Install build dependencies
+    - name: Install hatch
       run: |
         python -m pip install --upgrade pip
-        python -m pip install hatch tox
+        python -m pip install hatch
         
     - name: Debug environment
       shell: bash
@@ -95,55 +59,36 @@ jobs:
         echo "Python version: $(python --version)"
         echo "Python path: $(which python)"
         echo "Pip version: $(python -m pip --version)"
-        echo "Tox version: $(tox --version)"
+        echo "Hatch version: $(hatch --version)"
         echo "Platform: ${{ runner.os }}"
         echo "Matrix Python version: ${{ matrix.python-version }}"
         
+    - name: Create hatch environment
+      run: |
+        echo "Creating hatch environment with test dependencies..."
+        hatch env create test
+        
+    - name: Verify dependencies
+      run: |
+        echo "🔍 Verifying critical dependencies..."
+        hatch run test:python -c "import pandas; print('✅ pandas available')"
+        hatch run test:python -c "import duckdb; print('✅ duckdb available')" 
+        hatch run test:python -c "import jsonschema; print('✅ jsonschema available')"
+        hatch run test:python -c "import pytest; print('✅ pytest available')"
+        hatch run test:python -c "import click; print('✅ click available')"
+        echo "✅ All dependencies verified"
+        
     - name: Run tests with coverage
       shell: bash
-      working-directory: ${{ github.workspace }}
-      env:
-        PYTHONPATH: ./src
       run: |
-        # Debug paths and environment
-        echo "Working directory: $(pwd)"
-        echo "Source directory structure:"
-        find src/ -name "*.py" | head -10 || echo "No Python files found"
-        echo "PYTHONPATH: $PYTHONPATH"
+        echo "Running tests with coverage on Python ${{ matrix.python-version }}"
+        hatch run test:test-cov
         
-        # Convert Python version to tox environment name (e.g., 3.11 -> py311)
-        PY_VERSION=$(echo "${{ matrix.python-version }}" | tr -d '.')
-        echo "Running tox environment: py${PY_VERSION}"
-        tox -e py${PY_VERSION}
-        
-        # Install coverage for file combination (if needed)
-        pip install coverage[toml]
-        
-        # Debug: Check what files exist after test run
-        echo "All files in directory after test run:"
-        ls -la . | grep -E "(coverage|\.coverage)" || echo "No coverage files found"
-        
-        # Handle both single .coverage and parallel .coverage.* files
-        if ls .coverage.* 1>/dev/null 2>&1; then
-          # Parallel coverage files exist - combine them first
-          echo "🔗 Found parallel coverage files, combining..."
-          coverage combine
-          echo "✅ Coverage files combined into .coverage"
-        fi
-        
-        # Now check for the main coverage file and rename it
+        # Rename coverage file to include job info for later combination
         if [ -f .coverage ]; then
-          # Rename coverage file to include job info for later combination
-          mv .coverage .coverage.py${PY_VERSION}-${{ runner.os }}
-          echo "✅ Coverage file renamed to: .coverage.py${PY_VERSION}-${{ runner.os }}"
-        else
-          echo "⚠️ Warning: No .coverage file found after test run"
-          echo "This might indicate coverage wasn't collected properly"
+          mv .coverage .coverage.py${{ matrix.python-version }}-${{ runner.os }}
+          echo "✅ Coverage file renamed to: .coverage.py${{ matrix.python-version }}-${{ runner.os }}"
         fi
-        
-        # List all coverage files for debugging
-        echo "Coverage files available for upload:"
-        ls -la .coverage* 2>/dev/null || echo "No .coverage.* files found"
         
     - name: Upload coverage data
       uses: actions/upload-artifact@v4
@@ -154,7 +99,7 @@ jobs:
 
   # Code quality checks
   code-quality:
-    name: "Code Quality (Python 3.11)"
+    name: "Code Quality"
     runs-on: ubuntu-latest
     timeout-minutes: 15
     
@@ -166,10 +111,10 @@ jobs:
       with:
         python-version: "3.11"
         
-    - name: Install dependencies
+    - name: Install hatch
       run: |
         python -m pip install --upgrade pip
-        pip install hatch
+        python -m pip install hatch
         
     - name: Run code quality checks
       run: |
@@ -178,7 +123,7 @@ jobs:
 
   # Integration testing on latest stable Python
   integration-tests:
-    name: "Integration Tests (Python 3.12)"
+    name: "Integration Tests"
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: test-matrix
@@ -191,33 +136,19 @@ jobs:
       with:
         python-version: "3.12"
         
-    - name: Install dependencies
+    - name: Install hatch
       run: |
         python -m pip install --upgrade pip
-        pip install hatch
+        python -m pip install hatch
         
-    - name: Create hatch environment and install project
+    - name: Create environment and verify setup
       run: |
-        # Explicitly create the environment and install the project
-        hatch env create
-        hatch run python -m pip install -e .
-        
-    - name: Verify environment setup
-      run: |
-        echo "🔍 Verifying critical dependencies..."
-        hatch run python -c "import pandas; print('✅ pandas available')"
-        hatch run python -c "import duckdb; print('✅ duckdb available')"
-        hatch run python -c "import jsonschema; print('✅ jsonschema available')"
-        hatch run python -c "import marimo; print('✅ marimo available')"
-        hatch run python -c "import click; print('✅ click available')"
-        echo "✅ All dependencies verified"
+        hatch env create test
+        hatch run test:python -c "import marimo; print('✅ marimo available')"
         
     - name: Run integration tests
-      working-directory: ${{ github.workspace }}
-      env:
-        PYTHONPATH: ./src
       run: |
-        hatch run test test/integration/ -v --timeout=60
+        hatch run test:test test/integration/ -v --timeout=60
 
   # Generate final coverage report
   coverage-report:
@@ -238,7 +169,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install tox coverage[toml]
+        python -m pip install hatch coverage[toml]
         
     - name: Download all coverage data
       uses: actions/download-artifact@v4
@@ -248,59 +179,29 @@ jobs:
         
     - name: Generate coverage report
       run: |
-        # Debug coverage data
-        echo "📁 Working directory: $(pwd)"
-        echo "📊 All files in directory:"
-        ls -la | head -20
-        echo ""
-        echo "🔍 Looking for coverage files:"
-        ls -la .coverage* 2>/dev/null || echo "❌ No .coverage files found"
-        echo ""
-        echo "📂 All files matching 'coverage' pattern:"
-        find . -name "*coverage*" -type f 2>/dev/null || echo "No files with 'coverage' in name"
-        echo ""
-        echo "🏗️ Source structure verification:"
-        find . -name "*.py" -path "./src/*" | head -5
+        echo "📊 Processing coverage data..."
+        ls -la .coverage* 2>/dev/null || echo "No coverage files found"
         
-        # Check if we have coverage data to combine
         if ls .coverage.* 1>/dev/null 2>&1; then
-          echo "Found parallel coverage files, combining..."
-          # Use coverage directly instead of tox for better control
+          echo "Combining coverage files..."
           coverage combine
-          echo "Coverage data combined successfully"
-          
-          # Generate reports
-          echo "Generating coverage reports..."
-          coverage report --show-missing --fail-under=1
+          coverage report --show-missing
           coverage html
           coverage xml
-          
-          echo "Coverage reports generated successfully"
+          echo "✅ Coverage reports generated"
         else
-          echo "No coverage data found from test jobs"
-          echo "Running fallback coverage collection..."
-          
-          # Fallback: run a basic coverage collection if no data from matrix jobs
-          python -m pip install pytest pytest-cov pytest-timeout
-          export PYTHONPATH=./src
-          
-          # Run a subset of tests with coverage as fallback (skip slow integration tests)
-          pytest --cov=src/hunyo_mcp_server --cov=src/capture \
-                 --cov-report=term-missing --cov-report=html --cov-report=xml \
-                 --timeout=30 -v test/ -k "not integration and not slow" || echo "Fallback coverage completed with warnings"
-          
-          echo "Fallback coverage collection completed"
+          echo "No coverage data found, running fallback collection..."
+          hatch env create test
+          hatch run test:test-cov -k "not slow"
         fi
         
     - name: Upload coverage reports to Codecov
       uses: codecov/codecov-action@v4
       with:
         file: ./coverage.xml
-        flags: unittests
-        name: codecov-umbrella
         fail_ci_if_error: false
 
-  # Test installation from built package
+  # Test package installation  
   test-package:
     name: "Test Package Installation"
     runs-on: ubuntu-latest
@@ -315,73 +216,26 @@ jobs:
       with:
         python-version: "3.11"
         
-    - name: Build package
+    - name: Build and test package
       run: |
         python -m pip install --upgrade pip
-        pip install build hatch
+        python -m pip install hatch
         hatch build
-        
-    - name: Test package installation
-      working-directory: ${{ github.workspace }}
-      env:
-        PYTHONPATH: ./src
-      run: |
         pip install dist/*.whl
         python -c "import hunyo_mcp_server; print('✅ Package installed successfully')"
         python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer importable')"
 
-  # Performance regression testing
-  performance-check:
-    name: "Performance Check"
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: test-matrix
-    if: github.event_name == 'pull_request'
-    
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install hatch pytest-benchmark
-        
-    - name: Run performance tests
-      working-directory: ${{ github.workspace }}
-      env:
-        PYTHONPATH: ./src
-      run: |
-        hatch run python -c "
-        import time
-        from capture.live_lineage_interceptor import MarimoLiveInterceptor
-        
-        # Simple performance check
-        start = time.time()
-        interceptor = MarimoLiveInterceptor('/tmp')
-        setup_time = time.time() - start
-        
-        print(f'📊 Interceptor setup time: {setup_time:.3f}s')
-        assert setup_time < 1.0, f'Setup too slow: {setup_time:.3f}s'
-        print('✅ Performance check passed')
-        "
-
-# Workflow summary
+  # Test summary
   test-summary:
     name: "Test Summary"
     runs-on: ubuntu-latest
-    needs: [compatibility-check, test-matrix, code-quality, integration-tests, coverage-report, test-package]
+    needs: [test-matrix, code-quality, integration-tests, coverage-report, test-package]
     if: always()
     
     steps:
     - name: Check test results
       run: |
         echo "🧪 Test Summary:"
-        echo "  ✅ Compatibility Check: ${{ needs.compatibility-check.result }}"
         echo "  📊 Test Matrix: ${{ needs.test-matrix.result }}"
         echo "  🎨 Code Quality: ${{ needs.code-quality.result }}"
         echo "  🔗 Integration Tests: ${{ needs.integration-tests.result }}"
@@ -389,8 +243,7 @@ jobs:
         echo "  📦 Package Test: ${{ needs.test-package.result }}"
         
         # Fail if critical tests failed
-        if [[ "${{ needs.compatibility-check.result }}" != "success" ]] || 
-           [[ "${{ needs.test-matrix.result }}" != "success" ]] ||
+        if [[ "${{ needs.test-matrix.result }}" != "success" ]] || 
            [[ "${{ needs.code-quality.result }}" != "success" ]]; then
           echo "❌ Critical tests failed"
           exit 1

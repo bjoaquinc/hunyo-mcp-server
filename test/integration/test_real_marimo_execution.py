@@ -18,8 +18,8 @@ import pandas as pd
 import pytest
 
 # Import the REAL implementations (not mocks)
-from src.capture.lightweight_runtime_tracker import LightweightRuntimeTracker
-from src.capture.logger import get_logger
+from capture.lightweight_runtime_tracker import LightweightRuntimeTracker
+from capture.logger import get_logger
 
 # Create test logger instance
 test_logger = get_logger("hunyo.test.integration")
@@ -384,7 +384,7 @@ if __name__ == "__main__":
         """Test that our hooks can be installed and are present in marimo's hook lists"""
 
         # Import our native hooks interceptor
-        from src.capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
+        from capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
 
         # Create interceptor (should install hooks)
         lineage_file = temp_hunyo_dir / "test_lineage.jsonl"
@@ -576,7 +576,7 @@ if __name__ == "__main__":
 
         from unittest.mock import MagicMock
 
-        from src.capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
+        from capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
 
         # Create interceptor and install hooks
         runtime_file = temp_hunyo_dir / "simulated_runtime.jsonl"

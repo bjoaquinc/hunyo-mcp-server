@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from src.capture.live_lineage_interceptor import (
+from capture.live_lineage_interceptor import (
     MarimoLiveInterceptor,
     disable_live_tracking,
     enable_live_tracking,
