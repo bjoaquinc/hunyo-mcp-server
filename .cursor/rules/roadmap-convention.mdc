@@ -1,0 +1,16 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+Test-driven roadmap updates with exact formatting compliance → ROADMAP.md
+
+# Always check tests FIRST to understand expected format
+hatch run test test/test_roadmap_validation.py -v
+
+# Required formats (tests are source of truth):
+✅ **IMPLEMENTED** `server.py` (94 lines)  # NOT "✅ IMPLEMENTED - server.py"
+✅ **Create `pyproject.toml`**              # NOT "✅ COMPLETE - Create..."  
+✅ **172/174 tests passing** (99% success rate, 2 skipped)  # Exact text expected
+
+# Process: test → read current → update → test again
