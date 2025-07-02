@@ -220,11 +220,9 @@ class TestMarimoLiveInterceptorReal:
         notebook_path = str(tmp_path / "test_notebook.py")
         output_file = str(tmp_path / "lineage_events.jsonl")
 
-        with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
-        ):
+        with patch("capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True):
             with patch(
-                "src.capture.live_lineage_interceptor.get_user_data_dir",
+                "capture.live_lineage_interceptor.get_user_data_dir",
                 return_value=str(tmp_path),
             ):
                 interceptor = MarimoLiveInterceptor(
@@ -250,10 +248,10 @@ class TestMarimoLiveInterceptorReal:
             return_value="/test/notebook.py",
         ):
             with patch(
-                "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
+                "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
             ):
                 with patch(
-                    "src.capture.live_lineage_interceptor.get_user_data_dir",
+                    "capture.live_lineage_interceptor.get_user_data_dir",
                     return_value=str(tmp_path),
                 ):
                     interceptor = MarimoLiveInterceptor(
@@ -270,11 +268,9 @@ class TestMarimoLiveInterceptorReal:
 
         output_file = str(tmp_path / "lineage_events.jsonl")
 
-        with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
-        ):
+        with patch("capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True):
             with patch(
-                "src.capture.live_lineage_interceptor.get_user_data_dir",
+                "capture.live_lineage_interceptor.get_user_data_dir",
                 return_value=str(tmp_path),
             ):
                 interceptor = MarimoLiveInterceptor(
@@ -294,10 +290,10 @@ class TestMarimoLiveInterceptorReal:
             return_value="/path/to/my_notebook.py",
         ):
             with patch(
-                "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
+                "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
             ):
                 with patch(
-                    "src.capture.live_lineage_interceptor.get_user_data_dir",
+                    "capture.live_lineage_interceptor.get_user_data_dir",
                     return_value=str(tmp_path),
                 ):
                     interceptor = MarimoLiveInterceptor(
@@ -322,10 +318,10 @@ class TestMarimoLiveInterceptorReal:
 
         with patch("sys._getframe", return_value=mock_frame_1):
             with patch(
-                "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
+                "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
             ):
                 with patch(
-                    "src.capture.live_lineage_interceptor.get_user_data_dir",
+                    "capture.live_lineage_interceptor.get_user_data_dir",
                     return_value=str(tmp_path),
                 ):
                     interceptor = MarimoLiveInterceptor(
@@ -340,7 +336,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -361,7 +357,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -381,7 +377,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -399,7 +395,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -417,7 +413,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -437,7 +433,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -462,7 +458,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -492,7 +488,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -529,7 +525,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -573,7 +569,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -620,7 +616,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -649,7 +645,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = tmp_path / "lineage_events.jsonl"
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -678,7 +674,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -705,7 +701,7 @@ class TestMarimoLiveInterceptorReal:
         notebook_path = str(tmp_path / "test_notebook.py")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             # Test enable
             interceptor = enable_live_tracking(
@@ -725,11 +721,9 @@ class TestMarimoLiveInterceptorReal:
 
     def test_runtime_debugging_context(self, tmp_path):
         """Test runtime debugging context manager"""
-        with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True
-        ):
+        with patch("capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", True):
             with patch(
-                "src.capture.live_lineage_interceptor.track_cell_execution"
+                "capture.live_lineage_interceptor.track_cell_execution"
             ) as mock_track:
                 cell_source = "df = pd.DataFrame({'test': [1, 2, 3]})"
                 globals_dict = {"pd": pd}
@@ -746,7 +740,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",
@@ -766,7 +760,7 @@ class TestMarimoLiveInterceptorReal:
         output_file = str(tmp_path / "lineage_events.jsonl")
 
         with patch(
-            "src.capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
+            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
         ):
             interceptor = MarimoLiveInterceptor(
                 notebook_path="/test/notebook.py",

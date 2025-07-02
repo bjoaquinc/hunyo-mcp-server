@@ -1,0 +1,59 @@
+# Pre-commit configuration for Hunyo MCP Server
+# Runs the same checks as CI/CD pipeline locally before each commit
+
+repos:
+  - repo: local
+    hooks:
+      # Auto-fix hooks (run first)
+      - id: black-format
+        name: "🎨 Auto-format with Black"
+        entry: hatch run black
+        language: system
+        types: [python]
+
+      - id: ruff-fix
+        name: "🔧 Auto-fix with Ruff"
+        entry: hatch run ruff check --fix
+        language: system
+        types: [python]
+
+      # Quality checks (exact CI/CD matches)
+      - id: ruff-check
+        name: "📝 Ruff Linting (CI Match)"
+        entry: hatch run ruff check
+        language: system
+        types: [python]
+
+      - id: black-check
+        name: "🎨 Black Formatting (CI Match)"
+        entry: hatch run black --check --diff
+        language: system
+        types: [python]
+
+      - id: mypy-check
+        name: "🔧 MyPy Type Checking (CI Match)"
+        entry: hatch run typing
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Fast test subset for commit speed
+      - id: unit-tests
+        name: "🧪 Unit Tests (Fast Subset)"
+        entry: hatch run test test/test_capture/ -x --tb=short
+        language: system
+        pass_filenames: false
+
+      # Import standards enforcement
+      - id: import-validation
+        name: "🚫 Import Standards (src. ban)"
+        entry: hatch run ruff check --select=TID253
+        language: system
+        types: [python]
+
+# Configuration
+default_language_version:
+  python: python3.13
+
+minimum_pre_commit_version: "3.0.0"
+default_stages: [pre-commit] 
