@@ -121,18 +121,34 @@ jobs:
         echo "Running tox environment: py${PY_VERSION}"
         tox -e py${PY_VERSION}
         
-        # Ensure coverage file exists and rename for unique identification
+        # Install coverage for file combination (if needed)
+        pip install coverage[toml]
+        
+        # Debug: Check what files exist after test run
+        echo "All files in directory after test run:"
+        ls -la . | grep -E "(coverage|\.coverage)" || echo "No coverage files found"
+        
+        # Handle both single .coverage and parallel .coverage.* files
+        if ls .coverage.* 1>/dev/null 2>&1; then
+          # Parallel coverage files exist - combine them first
+          echo "🔗 Found parallel coverage files, combining..."
+          coverage combine
+          echo "✅ Coverage files combined into .coverage"
+        fi
+        
+        # Now check for the main coverage file and rename it
         if [ -f .coverage ]; then
           # Rename coverage file to include job info for later combination
           mv .coverage .coverage.py${PY_VERSION}-${{ runner.os }}
-          echo "Coverage file renamed to: .coverage.py${PY_VERSION}-${{ runner.os }}"
+          echo "✅ Coverage file renamed to: .coverage.py${PY_VERSION}-${{ runner.os }}"
         else
-          echo "Warning: No .coverage file found after test run"
+          echo "⚠️ Warning: No .coverage file found after test run"
+          echo "This might indicate coverage wasn't collected properly"
         fi
         
         # List all coverage files for debugging
-        echo "Coverage files in directory:"
-        ls -la .coverage* 2>/dev/null || echo "No coverage files found"
+        echo "Coverage files available for upload:"
+        ls -la .coverage* 2>/dev/null || echo "No .coverage.* files found"
         
     - name: Upload coverage data
       uses: actions/upload-artifact@v4
@@ -222,10 +238,17 @@ jobs:
     - name: Generate coverage report
       run: |
         # Debug coverage data
-        echo "Coverage files found:"
-        ls -la .coverage* || echo "No .coverage files found"
-        echo "Working directory: $(pwd)"
-        echo "Source structure:"
+        echo "📁 Working directory: $(pwd)"
+        echo "📊 All files in directory:"
+        ls -la | head -20
+        echo ""
+        echo "🔍 Looking for coverage files:"
+        ls -la .coverage* 2>/dev/null || echo "❌ No .coverage files found"
+        echo ""
+        echo "📂 All files matching 'coverage' pattern:"
+        find . -name "*coverage*" -type f 2>/dev/null || echo "No files with 'coverage' in name"
+        echo ""
+        echo "🏗️ Source structure verification:"
         find . -name "*.py" -path "./src/*" | head -5
         
         # Check if we have coverage data to combine
@@ -247,13 +270,13 @@ jobs:
           echo "Running fallback coverage collection..."
           
           # Fallback: run a basic coverage collection if no data from matrix jobs
-          python -m pip install pytest pytest-cov
+          python -m pip install pytest pytest-cov pytest-timeout
           export PYTHONPATH=./src
           
-          # Run a subset of tests with coverage as fallback
+          # Run a subset of tests with coverage as fallback (skip slow integration tests)
           pytest --cov=src/hunyo_mcp_server --cov=src/capture \
                  --cov-report=term-missing --cov-report=html --cov-report=xml \
-                 --timeout=30 -v test/ || echo "Fallback coverage completed with warnings"
+                 --timeout=30 -v test/ -k "not integration and not slow" || echo "Fallback coverage completed with warnings"
           
           echo "Fallback coverage collection completed"
         fi
