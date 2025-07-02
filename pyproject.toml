@@ -198,8 +198,20 @@ omit = [
 ]
 
 [tool.coverage.paths]
-hunyo_mcp_server = ["src/hunyo_mcp_server", "*/hunyo-mcp-server/src/hunyo_mcp_server"]
-capture = ["src/capture", "*/hunyo-mcp-server/src/capture"]
+hunyo_mcp_server = [
+    "src/hunyo_mcp_server", 
+    "*/hunyo-mcp-server/src/hunyo_mcp_server",
+    "*/hunyo-notebook-memories-mcp/src/hunyo_mcp_server",
+    "/home/runner/work/hunyo-mcp-server/hunyo-mcp-server/src/hunyo_mcp_server",
+    "/Users/*/hunyo-notebook-memories-mcp/src/hunyo_mcp_server"
+]
+capture = [
+    "src/capture", 
+    "*/hunyo-mcp-server/src/capture",
+    "*/hunyo-notebook-memories-mcp/src/capture", 
+    "/home/runner/work/hunyo-mcp-server/hunyo-mcp-server/src/capture",
+    "/Users/*/hunyo-notebook-memories-mcp/src/capture"
+]
 
 [tool.coverage.report]
 exclude_lines = [

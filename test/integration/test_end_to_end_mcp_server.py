@@ -41,8 +41,12 @@ class TestEndToEndMCPServer:
     @pytest.fixture
     def test_notebook_path(self) -> Path:
         """Use the test notebook file from test fixtures"""
-        notebook_path = Path("test/fixtures/test_notebook.py")
-        assert notebook_path.exists(), f"test_notebook.py not found at {notebook_path}"
+        # Use absolute path resolution to ensure it works in CI
+        test_dir = Path(__file__).parent.parent  # Go up from integration/ to test/
+        notebook_path = test_dir / "fixtures" / "test_notebook.py"
+        assert (
+            notebook_path.exists()
+        ), f"test_notebook.py not found at {notebook_path} (absolute: {notebook_path.absolute()})"
         return notebook_path
 
     def validate_event_against_schema(
