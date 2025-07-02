@@ -102,19 +102,30 @@ class HunyoOrchestrator:
         try:
             # Stop file watcher and background tasks
             if self._event_loop and not self._event_loop.is_closed():
+                # Cancel all tasks first
                 for task in self._tasks:
                     if not task.done():
                         task.cancel()
 
-                # Stop the event loop
+                # Stop the event loop gracefully
                 self._event_loop.call_soon_threadsafe(self._event_loop.stop)
 
-            # Wait for background thread to finish
+            # Wait for background thread to finish with reasonable timeout
             if self._background_thread and self._background_thread.is_alive():
-                self._background_thread.join(timeout=5.0)
+                orchestrator_logger.startup(
+                    "⏳ Waiting for background thread to finish..."
+                )
+                self._background_thread.join(timeout=10.0)
+
+                # If thread is still alive after timeout, something is stuck
+                if self._background_thread.is_alive():
+                    orchestrator_logger.warning(
+                        "⚠️ Background thread did not finish gracefully"
+                    )
 
             # Close database connections
             if self.db_manager:
+                orchestrator_logger.startup("📊 Closing database connections...")
                 self.db_manager.close()
 
             self.running = False
@@ -122,6 +133,7 @@ class HunyoOrchestrator:
 
         except Exception as e:
             orchestrator_logger.error(f"Error during shutdown: {e}")
+            # Continue with shutdown even if there are errors
 
     def get_db_manager(self) -> DuckDBManager:
         """Get the database manager instance for MCP tools."""
@@ -186,7 +198,9 @@ class HunyoOrchestrator:
                         task.cancel()
                 self._event_loop.close()
 
-        self._background_thread = threading.Thread(target=run_file_watcher, daemon=True)
+        self._background_thread = threading.Thread(
+            target=run_file_watcher, daemon=False
+        )
         self._background_thread.start()
 
         orchestrator_logger.success("File watcher started in background")

@@ -133,7 +133,7 @@ print(df)
             assert result.exit_code == 0
             assert "🎯 Starting Hunyo MCP Server" in result.output
             assert f"📝 Notebook: {temp_notebook_file}" in result.output
-            assert "🛑 Shutting down..." in result.output
+            assert "🛑 Keyboard interrupt received..." in result.output
             assert "✅ Shutdown complete" in result.output
 
     def test_cli_dev_mode_flag(self, cli_runner, temp_notebook_file):
@@ -295,7 +295,7 @@ print(df)
             result = cli_runner.invoke(main, ["--notebook", str(temp_notebook_file)])
 
             assert result.exit_code == 0
-            assert "🛑 Shutting down..." in result.output
+            assert "🛑 Keyboard interrupt received..." in result.output
             assert "✅ Shutdown complete" in result.output
             mock_orchestrator_instance.stop.assert_called_once()
 

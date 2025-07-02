@@ -8,6 +8,8 @@ Provides the main command-line interface for the hunyo-mcp-server that:
 3. Orchestrates capture, ingestion, and query components
 """
 
+import signal
+import sys
 from pathlib import Path
 
 import click
@@ -37,7 +39,12 @@ mcp = FastMCP(
     "--dev-mode", is_flag=True, help="Force development mode (use .hunyo in repo root)"
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging")
-def main(notebook: Path, *, dev_mode: bool, verbose: bool):
+@click.option(
+    "--standalone",
+    is_flag=True,
+    help="Run in standalone mode (for testing/development)",
+)
+def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
     """
     Hunyo MCP Server - Zero-touch notebook instrumentation for DataFrame lineage tracking.
 
@@ -62,6 +69,19 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool):
     click.echo(f"📝 Notebook: {notebook}")
     click.echo(f"📁 Data directory: {get_hunyo_data_dir()}")
 
+    orchestrator = None
+
+    def signal_handler(signum, _frame):
+        """Handle termination signals gracefully."""
+        click.echo(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+        if orchestrator:
+            orchestrator.stop()
+        sys.exit(0)
+
+    # Register signal handlers for graceful shutdown
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
     try:
         # Create and start the orchestrator
         orchestrator = HunyoOrchestrator(notebook_path=notebook, verbose=verbose)
@@ -74,19 +94,44 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool):
 
         click.echo("🚀 MCP server starting...")
 
-        # Run the MCP server (this blocks until shutdown)
-        mcp.run()
+        # Check if we're running in standalone mode
+        if standalone:
+            click.echo("📡 Running in standalone mode - waiting for connections...")
+            # Keep-alive loop for standalone operation (testing/development)
+            try:
+                while True:
+                    import time
+
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                raise
+        else:
+            # Normal MCP protocol mode (with client via stdin/stdout)
+            click.echo("💬 Running in MCP protocol mode...")
+            mcp.run()
 
     except KeyboardInterrupt:
-        click.echo("\n🛑 Shutting down...")
+        try:
+            click.echo("\n🛑 Keyboard interrupt received...")
+        except (OSError, ValueError):
+            pass
     except Exception as e:
-        click.echo(f"❌ Error: {e}")
+        try:
+            click.echo(f"❌ Error: {e}")
+        except (OSError, ValueError):
+            pass
         raise
     finally:
         # Clean shutdown
-        if "orchestrator" in locals():
+        if orchestrator:
             orchestrator.stop()
-        click.echo("✅ Shutdown complete")
+
+        # Safe echo during shutdown (may fail if stdout is closed)
+        try:
+            click.echo("✅ Shutdown complete")
+        except (OSError, ValueError):
+            # stdout/stderr may be closed during process termination
+            pass
 
 
 if __name__ == "__main__":

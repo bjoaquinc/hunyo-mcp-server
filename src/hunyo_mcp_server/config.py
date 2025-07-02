@@ -46,12 +46,18 @@ def get_hunyo_data_dir() -> Path:
     Returns the appropriate data directory for Hunyo events and database.
 
     Logic:
-    - Production mode: ~/.hunyo
-    - Development mode: .hunyo in repository root
+    1. Check HUNYO_DATA_DIR environment variable (for testing/custom paths)
+    2. Development mode: .hunyo in repository root
+    3. Production mode: ~/.hunyo in user home directory
 
     Returns:
         Path: The data directory path
     """
+    # Environment variable override (for testing or custom installations)
+    env_data_dir = os.environ.get("HUNYO_DATA_DIR")
+    if env_data_dir:
+        return Path(env_data_dir)
+
     if is_development_mode():
         # Development: use .hunyo in repository root
         repo_root = get_repository_root()

@@ -102,12 +102,30 @@ class HunyoLogger:
 
     def _safe_log(self, level: str, message: str) -> None:
         """Safely log messages, using print in marimo context"""
-        if self._is_marimo_context():
-            # Use print for marimo to avoid stream conflicts
-            print(message)  # noqa: T201
-        else:
-            # Use regular logging outside marimo
-            getattr(self.logger, level)(message)
+        try:
+            if self._is_marimo_context():
+                # Use print for marimo to avoid stream conflicts
+                print(message)  # noqa: T201
+            else:
+                # Use regular logging outside marimo
+                getattr(self.logger, level)(message)
+        except (OSError, ValueError, AttributeError) as e:
+            # Handle I/O errors (closed stdout/stderr during shutdown)
+            # Silently ignore these errors to prevent crash during cleanup
+            if (
+                "I/O operation on closed file" in str(e)
+                or "closed file" in str(e)
+                or "stream" in str(e).lower()
+            ):
+                pass  # Expected during shutdown
+            else:
+                # Re-raise unexpected errors
+                raise
+        except Exception:  # noqa: S110
+            # Catch any other logging-related errors during shutdown
+            # This is a last resort to prevent crashes during cleanup
+            # We intentionally don't log here to avoid recursive logging errors
+            pass
 
     # Convenience methods with emoji themes
     def startup(self, message: str) -> None:
