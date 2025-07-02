@@ -109,6 +109,13 @@ jobs:
       env:
         PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
       run: |
+        # Ensure consistent working directory and debug paths
+        cd ${{ github.workspace }}
+        echo "Working directory: $(pwd)"
+        echo "Source directory structure:"
+        find src/ -name "*.py" | head -10
+        echo "PYTHONPATH: $PYTHONPATH"
+        
         # Convert Python version to tox environment name (e.g., 3.11 -> py311)
         PY_VERSION=$(echo "${{ matrix.python-version }}" | tr -d '.')
         echo "Running tox environment: py${PY_VERSION}"
@@ -200,6 +207,14 @@ jobs:
         
     - name: Generate coverage report
       run: |
+        # Debug coverage data
+        echo "Coverage files found:"
+        ls -la .coverage* || echo "No .coverage files found"
+        echo "Working directory: $(pwd)"
+        echo "Source structure:"
+        find . -name "*.py" -path "./src/*" | head -5
+        
+        # Generate report
         tox -e coverage-report
         
     - name: Upload coverage reports to Codecov
