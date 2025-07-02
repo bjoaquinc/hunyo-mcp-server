@@ -1,229 +1,308 @@
-# OpenLineage Instrumentation for Marimo Notebooks
+# Hunyo MCP Server
 
-A comprehensive **zero-configuration** system that provides OpenLineage-compliant DataFrame tracking and runtime debugging for Marimo notebooks with perfect linking between execution context and data lineage.
+**Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP**
 
-## 🚀 Latest Features
+A single-command orchestrator that provides automatic marimo notebook instrumentation, real-time event capture, DuckDB ingestion, and LLM-accessible query tools via the Model Context Protocol (MCP).
 
-- **Single Import Setup**: `import marimo_live_lineage_interceptor` enables everything
-- **Dual Tracking System**: Runtime debugging + DataFrame lineage with perfect linking
-- **Smart Output Handling**: Large objects described (not stored) to prevent log bloat
-- **DataFrame ID Linking**: Connect runtime execution context to DataFrame operations
-- **OpenLineage Compliance**: Full compatibility with OpenLineage ecosystem
-- **Zero Performance Impact**: <5% overhead with intelligent monitoring
+## 🚀 Quick Start
 
-## 📦 Quick Start
+```bash
+# Install and run in one command
+pipx run hunyo-mcp-server --notebook analysis.py
 
-```python
-# Single import enables both runtime debugging AND DataFrame lineage tracking
-from capture.live_lineage_interceptor import enable_live_tracking
-enable_live_tracking()
-
-import pandas as pd
-
-# All DataFrame operations are automatically tracked
-df = pd.DataFrame({'x': [1,2,3], 'y': [4,5,6]})
-df_filtered = df[df.x > 1]
-df_summary = df.groupby('x').sum()
-
-# Check the generated logs:
-# - marimo_live_lineage.jsonl: DataFrame operations with OpenLineage events
-# - marimo_runtime.jsonl: Cell execution context with smart result capture
+# Or install globally  
+pipx install hunyo-mcp-server
+hunyo-mcp-server --notebook /path/to/your/notebook.py
 ```
 
-## 🎯 System Architecture
+**That's it!** No notebook modifications required. Your LLM assistant can now analyze DataFrame operations, performance metrics, and data lineage in real-time.
 
-### Core Components
+## 🎯 What It Does
 
-1. **`capture/live_lineage_interceptor.py`** - Main orchestrator
-   - Hooks into pandas operations via monkey patching
-   - Detects Marimo cell execution through `exec()` monitoring
-   - Generates OpenLineage-compliant events
-   - Manages runtime tracker integration
+**Hunyo MCP Server** automatically:
 
-2. **`capture/lightweight_runtime_tracker.py`** - Runtime debugging
-   - Tracks cell execution timing, memory usage, errors
-   - Smart result capture with DataFrame ID linking
-   - Thread-safe JSON Lines logging
-   - Lightweight design prevents deadlocks
+1. **📝 Instruments your notebook** - Zero-touch capture layer injection
+2. **🔍 Captures execution events** - DataFrame operations, runtime metrics, errors
+3. **💾 Stores in DuckDB** - Real-time ingestion with OpenLineage compliance  
+4. **🤖 Exposes MCP tools** - Rich querying interface for LLM analysis
 
-### Output Files
+### Example Workflow
 
-- **`marimo_live_lineage.jsonl`** - DataFrame operations
-- **`marimo_runtime.jsonl`** - Cell execution context
+```bash
+# Start the MCP server
+hunyo-mcp-server --notebook my_analysis.py
 
-## 🔗 Perfect Linking System
-
-The system provides **bidirectional linking** between runtime context and DataFrame operations:
-
-### Runtime → Lineage Linking
-```json
-// Runtime event with DataFrame result
-{
-  "event_type": "cell_execution_complete",
-  "execution_id": "abc123",
-  "result": {
-    "is_dataframe": true,
-    "dataframe_id": 4315721280,  // ← Links to lineage events
-    "description": "DataFrame with 4 rows and 5 columns"
-  }
-}
+# Your LLM can now ask questions like:
+# "What DataFrames were created in the last run?"
+# "Show me the performance metrics for the merge operations"
+# "Trace the lineage of the final results DataFrame"
+# "Which operations took the most memory?"
 ```
 
-### Lineage → Runtime Linking  
-```json
-// Lineage event with runtime context
-{
-  "event_type": "dataframe_transformed", 
-  "operation": "merge",
-  "output_dataframe_id": 4315721280,  // ← Same ID as runtime
-  "runtime_execution_id": "abc123",   // ← Links to runtime context
-  "output_shape": [4, 5]
-}
+## 🏗️ Architecture
+
+### Data Flow
+```
+Marimo Notebook → Capture Layer → JSONL Events → File Watcher → 
+DuckDB Database → MCP Query Tools → LLM Analysis
 ```
 
-## 🎨 Smart Output Handling
-
-The system intelligently handles different output types:
-
-- **Small values** (strings, numbers): Stored completely
-- **DataFrames**: Basic description only (detailed analysis in lineage events)
-- **Large collections** (>100 items): Described, not stored
-- **NumPy arrays**: Shape and dtype only
-- **Charts/plots**: Detected and described
-- **Large objects** (>10KB): Size-aware descriptions
-
-## 📊 Sample Events
-
-### DataFrame Lineage Event
-```json
-{
-  "event_id": "661e2796-b54b-4d61-bec8-975ea339ea39",
-  "session_id": "7b50581c", 
-  "timestamp": "2025-06-26T12:37:58.664877",
-  "event_type": "dataframe_transformed",
-  "operation": "merge",
-  "input_dataframe_id": 4315721280,
-  "output_dataframe_id": 4418890448,
-  "input_shape": [4, 4],
-  "output_shape": [4, 5], 
-  "input_columns": ["product", "region", "sales", "quantity"],
-  "output_columns": ["product", "region", "sales", "quantity", "target"],
-  "shape_change": {"rows_delta": 0, "cols_delta": 1},
-  "memory_delta_mb": 0.0,
-  "operation_args": [{"type": "DataFrame", "shape": [4, 2], "columns": ["region", "target"]}],
-  "runtime_execution_id": "def456"
-}
+### Storage Structure
+```
+# Production: ~/.hunyo/
+# Development: {repo}/.hunyo/
+├── events/
+│   ├── runtime/           # Cell execution metrics, timing, memory
+│   └── lineage/          # DataFrame operations, OpenLineage events
+├── database/
+│   └── lineage.duckdb    # Queryable database with rich schema
+└── config/
+    └── settings.yaml     # Configuration and preferences
 ```
 
-### Runtime Debugging Event
-```json
-{
-  "event_type": "cell_execution_complete",
-  "execution_id": "def456",
-  "duration_seconds": 0.023,
-  "success": true,
-  "end_memory_mb": 156.8,
-  "memory_delta_mb": 2.1,
-  "result": {
-    "type": "DataFrame",
-    "is_dataframe": true,
-    "dataframe_id": 4418890448,
-    "shape": [4, 5],
-    "columns_count": 5,
-    "description": "DataFrame with 4 rows and 5 columns"
-  }
-}
+## 🛠️ MCP Tools Available to LLMs
+
+Your LLM assistant gets access to these powerful analysis tools:
+
+### 📊 **Query Tool** - Direct SQL Analysis
+```sql
+-- Your LLM can run queries like:
+SELECT operation, AVG(duration_ms) as avg_time 
+FROM runtime_events 
+WHERE success = true 
+GROUP BY operation;
 ```
 
-## 🔧 Advanced Usage
+### 🔍 **Schema Tool** - Database Inspection  
+- Table structures and column definitions
+- Data type information and constraints
+- Example queries and usage patterns
+- Statistics and metadata
 
-### Manual Runtime Tracking
-```python
-from capture.lightweight_runtime_tracker import track_cell_execution
+### 🔗 **Lineage Tool** - DataFrame Tracking
+- Complete DataFrame transformation chains
+- Performance metrics per operation
+- Memory usage and optimization insights
+- Data flow visualization
 
-with track_cell_execution("df = pd.read_csv('data.csv')") as ctx:
-    df = pd.read_csv('data.csv')
-    ctx.set_result(df)  # Captures DataFrame ID for linking
+## 📋 Features
+
+### ✅ **Zero Configuration**
+- **No notebook modifications** - Automatic instrumentation
+- **Smart environment detection** - Dev vs production modes
+- **Automatic directory management** - Creates `.hunyo/` structure
+- **One-command startup** - `pipx run hunyo-mcp-server --notebook file.py`
+
+### ✅ **Comprehensive Tracking**
+- **DataFrame operations** - Create, transform, merge, filter, groupby
+- **Runtime metrics** - Execution time, memory usage, success/failure
+- **OpenLineage compliance** - Standard lineage format for interoperability
+- **Smart output handling** - Large objects described, not stored
+
+### ✅ **Real-Time Analysis**
+- **Background ingestion** - File watching with <100ms latency
+- **Live querying** - Database updates in real-time
+- **Performance monitoring** - Track operations as they happen
+- **Error context** - Link DataFrame issues to execution environment
+
+### ✅ **LLM-Friendly Interface**
+- **Rich MCP tools** - Structured data access for AI assistants
+- **Natural language queries** - Ask questions about your data pipeline
+- **Contextual analysis** - Link performance to specific operations
+- **Historical tracking** - Analyze patterns across multiple runs
+
+## 🔧 Installation & Usage
+
+### Prerequisites
+- **Python 3.10+** (3.11+ recommended)
+- **Marimo notebooks** - Works with `.py` marimo notebook files
+
+### Installation Options
+
+```bash
+# Option 1: Run directly without installation (recommended)
+pipx run hunyo-mcp-server --notebook analysis.py
+
+# Option 2: Install globally
+pipx install hunyo-mcp-server
+hunyo-mcp-server --notebook analysis.py
+
+# Option 3: Development installation
+git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
+cd hunyo-notebook-memories-mcp
+hatch shell
+hunyo-mcp-server --notebook examples/demo.py
 ```
 
-### Session Management
-```python
-from capture.live_lineage_interceptor import (
-    get_global_interceptor,
-    disable_live_tracking,
-)
+### Command-Line Options
 
-# Get tracking summary
-interceptor = get_global_interceptor()
-if interceptor:
-    summary = interceptor.get_session_summary()
-    print(f"Events logged: {summary['events_logged']}")
-    print(f"DataFrames tracked: {summary['dataframes_tracked']}")
+```bash
+hunyo-mcp-server --help
 
-# Disable tracking
-disable_live_tracking()
+Options:
+  --notebook PATH     Path to marimo notebook file [required]
+  --dev-mode         Force development mode (.hunyo in repo root)
+  --verbose, -v      Enable verbose logging
+  --standalone       Run standalone (for testing/development)
+  --help             Show this message and exit
 ```
 
-## 📋 Event Types
+### Usage Examples
 
-### Lineage Events
-- `dataframe_created`: New DataFrame creation (pd.DataFrame, pd.read_csv, etc.)
-- `dataframe_transformed`: DataFrame operations (merge, filter, groupby, etc.)
+```bash
+# Basic usage
+hunyo-mcp-server --notebook data_analysis.py
 
-### Runtime Events  
-- `cell_execution_start`: Cell begins execution
-- `cell_execution_complete`: Cell finishes with result/error context
+# Development mode with verbose logging
+hunyo-mcp-server --notebook ml_pipeline.py --dev-mode --verbose
 
-## 🎯 Integration Benefits
-
-- **Debugging**: Link DataFrame operations to execution timing and memory usage
-- **Lineage Tracking**: Full OpenLineage compliance for data governance
-- **Performance Analysis**: Identify slow operations and memory bottlenecks
-- **Error Context**: Connect DataFrame errors to execution environment
-- **Audit Trail**: Complete history of data transformations with execution context
-
-## 🛠️ Requirements
-
-```
-pandas>=1.0.0
-python>=3.7
+# Standalone mode (for testing)
+hunyo-mcp-server --notebook test.py --standalone
 ```
 
-## 🔍 Troubleshooting
+## 📊 Example LLM Interactions
 
-### No Events Generated
-- Ensure you call `enable_live_tracking()` before any pandas operations
-- Check that you're running in a Marimo notebook environment
-- Verify the output files are writable
+Once running, your LLM assistant can analyze your notebook with natural language:
 
-### Performance Issues
-- The system uses <5% overhead with smart output handling
-- Large objects are automatically described rather than stored
-- Thread-safe design prevents blocking
+### **Performance Analysis**
+> *"Which DataFrame operations in my notebook are the slowest?"*
 
-### Missing DataFrame IDs
-- DataFrame IDs are automatically captured using `id(df)`
-- Ensure the DataFrame is the result of a cell execution
-- Check both lineage and runtime logs for linking fields
-
-## 📚 File Structure
-
-```
-├── marimo_live_lineage_interceptor.py   # Main system orchestrator  
-├── marimo_lightweight_runtime_tracker.py # Runtime debugging tracker
-├── marimo_live_lineage.jsonl            # DataFrame lineage events
-├── marimo_runtime.jsonl                 # Cell execution context
-└── latest_demo.py                       # Demo script
+```sql
+SELECT operation, AVG(duration_ms) as avg_time, COUNT(*) as count
+FROM runtime_events 
+WHERE event_type = 'dataframe_operation'
+GROUP BY operation 
+ORDER BY avg_time DESC;
 ```
 
-## ✅ Latest System Status
+### **Memory Usage Tracking**
+> *"Show me memory usage patterns for large DataFrames"*
 
-- **Core Implementation**: Complete with DataFrame ID linking
-- **Smart Output Handling**: Prevents log bloat from large objects  
-- **OpenLineage Compliance**: Full event format compatibility
-- **Performance Optimized**: Lightweight runtime tracking prevents deadlocks
-- **Documentation**: Updated with latest capabilities
+```sql
+SELECT operation, input_shape, output_shape, memory_delta_mb
+FROM lineage_events 
+WHERE memory_delta_mb > 10
+ORDER BY memory_delta_mb DESC;
+```
+
+### **Data Lineage Analysis**
+> *"Trace the transformation chain for my final results DataFrame"*
+
+The lineage tool provides complete DataFrame ancestry and transformation history with visual representation.
+
+## 🎯 Use Cases
+
+### **🔬 Data Science Workflows**
+- Track DataFrame transformations across complex analysis pipelines
+- Monitor memory usage and performance bottlenecks
+- Debug data quality issues with execution context
+- Analyze patterns in iterative model development
+
+### **📈 Performance Optimization**
+- Identify slow operations and memory-intensive transformations
+- Compare execution metrics across different implementations
+- Track improvements after optimization changes
+- Monitor resource usage in production notebooks
+
+### **🐛 Debugging & Troubleshooting**
+- Link DataFrame errors to specific execution context
+- Trace data flow through complex transformation chains
+- Identify where data quality issues are introduced
+- Understand the impact of individual operations
+
+### **📚 Documentation & Knowledge Sharing**
+- Automatic documentation of data transformation logic
+- Share lineage analysis with team members
+- Understand inherited notebooks and data pipelines
+- Maintain data governance and compliance records
+
+## 🔧 Development
+
+### Local Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
+cd hunyo-notebook-memories-mcp
+
+# Set up development environment
+hatch shell
+
+# Run tests
+hatch run test
+
+# Check code quality
+hatch run style
+hatch run typing
+
+# Run with development notebook
+hunyo-mcp-server --notebook test/fixtures/openlineage_demo_notebook.py --dev-mode
+```
+
+### Project Structure
+
+```
+src/
+├── hunyo_mcp_server/           # Main MCP server package
+│   ├── server.py              # CLI entry point and FastMCP setup
+│   ├── orchestrator.py        # Component coordination
+│   ├── config.py              # Environment detection and paths
+│   ├── ingestion/             # Data pipeline components
+│   │   ├── duckdb_manager.py  # Database operations
+│   │   ├── event_processor.py # Event validation and transformation
+│   │   └── file_watcher.py    # Real-time file monitoring
+│   └── tools/                 # MCP tools for LLM access
+│       ├── query_tool.py      # Direct SQL querying
+│       ├── schema_tool.py     # Database inspection
+│       └── lineage_tool.py    # DataFrame lineage analysis
+└── capture/                   # Instrumentation layer
+    ├── live_lineage_interceptor.py    # DataFrame operation capture
+    ├── lightweight_runtime_tracker.py # Execution metrics tracking
+    ├── native_hooks_interceptor.py    # Advanced hooking system
+    └── websocket_interceptor.py       # Marimo integration
+```
+
+## 🤝 Contributing
+
+We welcome contributions! See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed development setup and guidelines.
+
+### Quick Contribution Setup
+```bash
+git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
+cd hunyo-notebook-memories-mcp
+hatch shell
+hatch run test  # Run test suite
+```
+
+## 📝 Requirements
+
+```
+Python >= 3.10
+mcp >= 1.0.0
+click >= 8.0.0
+duckdb >= 0.9.0
+pandas >= 2.0.0
+marimo >= 0.8.0
+```
+
+## 🔗 Links
+
+- **Documentation**: [GitHub README](https://github.com/hunyo-dev/hunyo-notebook-memories-mcp#readme)
+- **Issues**: [GitHub Issues](https://github.com/hunyo-dev/hunyo-notebook-memories-mcp/issues)
+- **Source Code**: [GitHub Repository](https://github.com/hunyo-dev/hunyo-notebook-memories-mcp)
+- **Model Context Protocol**: [MCP Specification](https://spec.modelcontextprotocol.io/)
+- **OpenLineage**: [OpenLineage.io](https://openlineage.io/)
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
-**Perfect for**: Data scientists, ML engineers, and anyone needing comprehensive DataFrame lineage tracking with execution context in Marimo notebooks. 
+**Ready to supercharge your notebook analysis?**
+
+```bash
+pipx run hunyo-mcp-server --notebook your_notebook.py
+```
+
+Your LLM assistant is now equipped with powerful DataFrame lineage and performance analysis capabilities! 🚀 
