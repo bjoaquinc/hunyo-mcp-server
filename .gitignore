@@ -61,10 +61,7 @@ logs/
 .env.local
 
 # Local data storage
-.hunyo/ 
-
-# Notebook for testing
-test_notebook.py
+.hunyo/
 
 # Test coverage reports and data files
 .coverage
