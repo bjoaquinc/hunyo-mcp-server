@@ -40,8 +40,8 @@ class TestEndToEndMCPServer:
 
     @pytest.fixture
     def test_notebook_path(self) -> Path:
-        """Use the existing test_notebook.py file"""
-        notebook_path = Path("test_notebook.py")
+        """Use the test notebook file from test fixtures"""
+        notebook_path = Path("test/fixtures/test_notebook.py")
         assert notebook_path.exists(), f"test_notebook.py not found at {notebook_path}"
         return notebook_path
 
