@@ -106,14 +106,14 @@ jobs:
         
     - name: Run tests with coverage
       shell: bash
+      working-directory: ${{ github.workspace }}
       env:
-        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
+        PYTHONPATH: ./src
       run: |
-        # Ensure consistent working directory and debug paths
-        cd ${{ github.workspace }}
+        # Debug paths and environment
         echo "Working directory: $(pwd)"
         echo "Source directory structure:"
-        find src/ -name "*.py" | head -10
+        find src/ -name "*.py" | head -10 || echo "No Python files found"
         echo "PYTHONPATH: $PYTHONPATH"
         
         # Convert Python version to tox environment name (e.g., 3.11 -> py311)
@@ -173,8 +173,9 @@ jobs:
         pip install hatch
         
     - name: Run integration tests
+      working-directory: ${{ github.workspace }}
       env:
-        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
+        PYTHONPATH: ./src
       run: |
         hatch run test test/integration/ -v --timeout=60
 
@@ -247,8 +248,9 @@ jobs:
         hatch build
         
     - name: Test package installation
+      working-directory: ${{ github.workspace }}
       env:
-        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
+        PYTHONPATH: ./src
       run: |
         pip install dist/*.whl
         python -c "import hunyo_mcp_server; print('✅ Package installed successfully')"
@@ -276,8 +278,9 @@ jobs:
         pip install hatch pytest-benchmark
         
     - name: Run performance tests
+      working-directory: ${{ github.workspace }}
       env:
-        PYTHONPATH: ${{ github.workspace }}/src:$PYTHONPATH
+        PYTHONPATH: ./src
       run: |
         hatch run python -c "
         import time
