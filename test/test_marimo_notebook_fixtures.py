@@ -195,16 +195,15 @@ class TestMarimoNotebookFixtures:
 
             # Try to validate the notebook structure by importing it
             # This doesn't execute the notebook but validates its structure
+            python_code = (
+                "import sys; sys.path.insert(0, '.'); "
+                "import importlib.util; "
+                f"spec = importlib.util.spec_from_file_location('test_nb', {str(temp_notebook)!r}); "
+                "module = importlib.util.module_from_spec(spec); "
+                "print('✅ Notebook structure valid')"
+            )
             result = subprocess.run(
-                [
-                    "python",
-                    "-c",
-                    f"import sys; sys.path.insert(0, '.'); "
-                    f"import importlib.util; "
-                    f"spec = importlib.util.spec_from_file_location('test_nb', '{temp_notebook}'); "
-                    f"module = importlib.util.module_from_spec(spec); "
-                    f"print('✅ Notebook structure valid')",
-                ],
+                ["python", "-c", python_code],
                 check=False,
                 capture_output=True,
                 text=True,

@@ -339,8 +339,10 @@ class TestEndToEndMCPServer:
                 stdout, stderr = process.communicate(timeout=10)
                 exit_code = process.returncode
 
-                # Should exit with 0 (graceful) or -15 (SIGTERM)
-                assert exit_code in [0, -15], f"Unexpected exit code: {exit_code}"
+                # Should exit with 0 (graceful), -15 (SIGTERM on Unix), or 1 (Windows termination)
+                # On Windows, process.terminate() can result in exit code 1
+                expected_codes = [0, -15, 1] if os.name == "nt" else [0, -15]
+                assert exit_code in expected_codes, f"Unexpected exit code: {exit_code}"
 
                 e2e_logger.success(
                     f"✅ Graceful shutdown successful (exit code: {exit_code})"
