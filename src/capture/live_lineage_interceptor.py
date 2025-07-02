@@ -596,34 +596,113 @@ class MarimoLiveInterceptor:
                 else:
                     runtime_execution_id = current_execution_id
 
-            # Generate lineage event
-            event = {
-                "event_id": str(uuid.uuid4()),
-                "session_id": self.session_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "event_type": "dataframe_created",
-                "operation": operation,
-                "dataframe_id": df_id,
-                "dataframe_name": name,
-                "shape": list(df.shape),
-                "columns": list(df.columns),
-                "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
-                "memory_usage_mb": round(
-                    df.memory_usage(deep=True).sum() / 1024 / 1024, 2
-                ),
-                "cell_context": dict(_cell_execution_context),
+            # Generate OpenLineage format event
+            event_time = datetime.now(timezone.utc).isoformat()
+            run_id = str(uuid.uuid4())
+
+            # Build schema facet for DataFrame
+            schema_fields = []
+            for col, dtype in df.dtypes.items():
+                schema_fields.append({"name": str(col), "type": str(dtype)})
+
+            # Build output dataset
+            dataset_name = name or f"dataframe_{df_id}"
+            output_dataset = {
+                "namespace": "marimo",
+                "name": dataset_name,
+                "facets": {
+                    "schema": {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "fields": schema_fields,
+                    }
+                },
             }
 
-            # Add runtime debugging context
-            if runtime_execution_id:
-                event["runtime_execution_id"] = runtime_execution_id
-                event["runtime_debugging_enabled"] = True
+            # Add column metrics if available (following OpenLineage spec)
+            try:
+                column_metrics = {}
+                for col in df.columns:
+                    try:
+                        series = df[col]
+                        col_metrics = {}
 
-            # Add sanitized arguments
-            if args:
-                event["creation_args"] = self._sanitize_args(args)
-            if kwargs:
-                event["creation_kwargs"] = self._sanitize_args(kwargs)
+                        # Only add metrics that exist in the schema
+                        if hasattr(series, "isnull"):
+                            col_metrics["nullCount"] = int(series.isnull().sum())
+                        if hasattr(series, "nunique"):
+                            col_metrics["distinctCount"] = int(series.nunique())
+
+                        # Add min/max for numeric columns only
+                        if series.dtype.kind in "biufc":  # numeric types
+                            try:
+                                col_metrics["min"] = (
+                                    float(series.min()) if not series.empty else None
+                                )
+                                col_metrics["max"] = (
+                                    float(series.max()) if not series.empty else None
+                                )
+                            except Exception as e:
+                                lineage_logger.debug(
+                                    f"Failed to calculate min/max for column {col}: {e}"
+                                )
+
+                        if col_metrics:  # Only add if we have metrics
+                            column_metrics[str(col)] = col_metrics
+
+                    except Exception as e:
+                        lineage_logger.debug(
+                            f"Failed to calculate metrics for column {col}: {e}"
+                        )
+
+                if column_metrics:
+                    output_dataset["facets"]["columnMetrics"] = {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "columnMetrics": column_metrics,
+                    }
+            except Exception as e:
+                lineage_logger.debug(f"Failed to calculate column metrics: {e}")
+
+            # Build run facets
+            run_facets = {
+                "marimoExecution": {
+                    "_producer": "marimo-lineage-tracker",
+                    "executionId": runtime_execution_id
+                    or f"auto_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+                    "sessionId": self.session_id,
+                }
+            }
+
+            # Add cell context if available
+            if _cell_execution_context:
+                run_facets["marimoCell"] = {
+                    "_producer": "marimo-lineage-tracker",
+                    "context": dict(_cell_execution_context),
+                }
+
+            # Generate OpenLineage event
+            event = {
+                "eventType": "START",
+                "eventTime": event_time,
+                "run": {"runId": run_id, "facets": run_facets},
+                "job": {"namespace": "marimo", "name": f"pandas_{operation}"},
+                "inputs": [],  # No inputs for creation operations
+                "outputs": [output_dataset],
+                "producer": "marimo-lineage-tracker",
+                "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                "session_id": self.session_id,
+                "emitted_at": event_time,
+            }
+
+            # Add operation arguments as job facets if available
+            if args or kwargs:
+                job_facets = {}
+                if args:
+                    job_facets["args"] = self._sanitize_args(args)
+                if kwargs:
+                    job_facets["kwargs"] = self._sanitize_args(kwargs)
+                event["job"]["facets"] = job_facets
 
             self._emit_event(event)
 
@@ -655,47 +734,157 @@ class MarimoLiveInterceptor:
                 # DataFrame might not be suitable for weak reference
                 pass
 
-            # Generate transformation event
-            event = {
-                "event_id": str(uuid.uuid4()),
-                "session_id": self.session_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "event_type": "dataframe_transformed",
-                "operation": operation,
-                "input_dataframe_id": input_id,
-                "output_dataframe_id": output_id,
-                "input_shape": list(input_df.shape),
-                "output_shape": list(output_df.shape),
-                "input_columns": list(input_df.columns),
-                "output_columns": list(output_df.columns),
-                "shape_change": {
-                    "rows_delta": output_df.shape[0] - input_df.shape[0],
-                    "cols_delta": output_df.shape[1] - input_df.shape[1],
+            # Generate OpenLineage format transformation event
+            event_time = datetime.now(timezone.utc).isoformat()
+            run_id = str(uuid.uuid4())
+
+            # Build input dataset
+            input_schema_fields = []
+            for col, dtype in input_df.dtypes.items():
+                input_schema_fields.append({"name": str(col), "type": str(dtype)})
+
+            input_dataset = {
+                "namespace": "marimo",
+                "name": f"dataframe_{input_id}",
+                "facets": {
+                    "schema": {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "fields": input_schema_fields,
+                    }
                 },
-                "memory_delta_mb": round(
-                    (
-                        output_df.memory_usage(deep=True).sum()
-                        - input_df.memory_usage(deep=True).sum()
-                    )
-                    / 1024
-                    / 1024,
-                    2,
-                ),
-                "cell_context": dict(_cell_execution_context),
             }
 
-            # Add runtime debugging context if available
-            if self.enable_runtime_debug and self.runtime_tracker:
-                execution_id = self.runtime_tracker.get_current_execution_id()
-                if execution_id:
-                    event["runtime_execution_id"] = execution_id
-                event["runtime_debugging_enabled"] = True
+            # Build output dataset
+            output_schema_fields = []
+            for col, dtype in output_df.dtypes.items():
+                output_schema_fields.append({"name": str(col), "type": str(dtype)})
 
-            # Add sanitized arguments
-            if args:
-                event["operation_args"] = self._sanitize_args(args)
-            if kwargs:
-                event["operation_kwargs"] = self._sanitize_args(kwargs)
+            output_dataset = {
+                "namespace": "marimo",
+                "name": f"dataframe_{output_id}",
+                "facets": {
+                    "schema": {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "fields": output_schema_fields,
+                    }
+                },
+            }
+
+            # Add column lineage if possible (simple case: same column names)
+            try:
+                common_columns = set(input_df.columns) & set(output_df.columns)
+                if common_columns:
+                    lineage_fields = {}
+                    for col in common_columns:
+                        lineage_fields[str(col)] = {
+                            "inputFields": [
+                                {
+                                    "namespace": "marimo",
+                                    "name": f"dataframe_{input_id}",
+                                    "field": str(col),
+                                }
+                            ]
+                        }
+
+                    output_dataset["facets"]["columnLineage"] = {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "fields": lineage_fields,
+                    }
+            except Exception as e:
+                lineage_logger.debug(f"Failed to calculate column lineage: {e}")
+
+            # Add column metrics for output dataset (following OpenLineage spec)
+            try:
+                column_metrics = {}
+                for col in output_df.columns:
+                    try:
+                        series = output_df[col]
+                        col_metrics = {}
+
+                        # Only add metrics that exist in the schema
+                        if hasattr(series, "isnull"):
+                            col_metrics["nullCount"] = int(series.isnull().sum())
+                        if hasattr(series, "nunique"):
+                            col_metrics["distinctCount"] = int(series.nunique())
+
+                        # Add min/max for numeric columns only
+                        if series.dtype.kind in "biufc":  # numeric types
+                            try:
+                                col_metrics["min"] = (
+                                    float(series.min()) if not series.empty else None
+                                )
+                                col_metrics["max"] = (
+                                    float(series.max()) if not series.empty else None
+                                )
+                            except Exception as e:
+                                lineage_logger.debug(
+                                    f"Failed to calculate min/max for output column {col}: {e}"
+                                )
+
+                        if col_metrics:  # Only add if we have metrics
+                            column_metrics[str(col)] = col_metrics
+
+                    except Exception as e:
+                        lineage_logger.debug(
+                            f"Failed to calculate metrics for output column {col}: {e}"
+                        )
+
+                if column_metrics:
+                    output_dataset["facets"]["columnMetrics"] = {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "columnMetrics": column_metrics,
+                    }
+            except Exception as e:
+                lineage_logger.debug(f"Failed to calculate output column metrics: {e}")
+
+            # Get runtime execution context
+            runtime_execution_id = None
+            if self.enable_runtime_debug and self.runtime_tracker:
+                runtime_execution_id = self.runtime_tracker.get_current_execution_id()
+
+            # Build run facets
+            run_facets = {
+                "marimoExecution": {
+                    "_producer": "marimo-lineage-tracker",
+                    "executionId": runtime_execution_id
+                    or f"auto_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
+                    "sessionId": self.session_id,
+                }
+            }
+
+            # Add cell context if available
+            if _cell_execution_context:
+                run_facets["marimoCell"] = {
+                    "_producer": "marimo-lineage-tracker",
+                    "context": dict(_cell_execution_context),
+                }
+
+            # Generate OpenLineage event
+            event = {
+                "eventType": "COMPLETE",  # Transformation is a completed operation
+                "eventTime": event_time,
+                "run": {"runId": run_id, "facets": run_facets},
+                "job": {"namespace": "marimo", "name": f"pandas_{operation}"},
+                "inputs": [input_dataset],
+                "outputs": [output_dataset],
+                "producer": "marimo-lineage-tracker",
+                "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                "session_id": self.session_id,
+                "emitted_at": event_time,
+            }
+
+            # Add operation arguments as job facets if available
+            if args or kwargs:
+                job_facets = {}
+                if args:
+                    job_facets["args"] = self._sanitize_args(args)
+                if kwargs:
+                    job_facets["kwargs"] = self._sanitize_args(kwargs)
+                event["job"]["facets"] = job_facets
 
             self._emit_event(event)
 

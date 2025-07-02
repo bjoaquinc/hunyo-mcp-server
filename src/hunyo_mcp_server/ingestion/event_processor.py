@@ -264,6 +264,8 @@ class EventProcessor:
 
     def _transform_runtime_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Transform runtime event to database schema format."""
+        import time
+
         # With schema validation, we can trust the event structure more
         # But still do basic validation for critical database fields
         required_fields = ["event_type", "session_id", "emitted_at"]
@@ -272,8 +274,12 @@ class EventProcessor:
                 msg = f"Missing required field: {field}"
                 raise ValueError(msg)
 
+        # Generate primary key
+        event_id = int(time.time() * 1000000)  # Microsecond timestamp
+
         # Transform event to match database schema
         transformed = {
+            "event_id": event_id,
             "event_type": event.get("event_type"),
             "execution_id": event.get("execution_id"),
             "cell_id": event.get("cell_id"),
@@ -292,6 +298,11 @@ class EventProcessor:
 
     def _transform_lineage_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Transform lineage event to database schema format."""
+        import time
+
+        # Generate primary key
+        ol_event_id = int(time.time() * 1000000)  # Microsecond timestamp
+
         # Handle OpenLineage event structure
         if "run" in event and "job" in event:
             # OpenLineage format
@@ -304,6 +315,7 @@ class EventProcessor:
             performance_info = facets.get("performance", {})
 
             transformed = {
+                "ol_event_id": ol_event_id,
                 "run_id": run_info.get("runId"),
                 "execution_id": execution_info.get("executionId"),
                 "event_type": event.get("eventType"),
@@ -321,6 +333,7 @@ class EventProcessor:
         else:
             # Simple lineage format (fallback)
             transformed = {
+                "ol_event_id": ol_event_id,
                 "run_id": event.get("run_id"),
                 "execution_id": event.get("execution_id"),
                 "event_type": event.get("event_type"),

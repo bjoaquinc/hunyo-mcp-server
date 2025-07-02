@@ -8,8 +8,8 @@ LOAD json;
 ------------------------------------------------------------
 -- 1. Runtime execution telemetry
 ------------------------------------------------------------
-CREATE TABLE runtime_events (
-    event_id            BIGINT      AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS runtime_events (
+    event_id            BIGINT      PRIMARY KEY,
     event_type          VARCHAR,        -- start | end | error
     execution_id        CHAR(8),
     cell_id             VARCHAR,
@@ -25,15 +25,15 @@ CREATE TABLE runtime_events (
 );
 
 -- Indexes for runtime_events
-CREATE INDEX idx_runtime_execution_id ON runtime_events(execution_id);
-CREATE INDEX idx_runtime_session_id ON runtime_events(session_id);
-CREATE INDEX idx_runtime_timestamp ON runtime_events(timestamp);
+CREATE INDEX IF NOT EXISTS idx_runtime_execution_id ON runtime_events(execution_id);
+CREATE INDEX IF NOT EXISTS idx_runtime_session_id ON runtime_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_runtime_timestamp ON runtime_events(timestamp);
 
 ------------------------------------------------------------
 -- 2. OpenLineage events with semi-structured facets
 ------------------------------------------------------------
-CREATE TABLE lineage_events (
-    ol_event_id         BIGINT      AUTO_INCREMENT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS lineage_events (
+    ol_event_id         BIGINT      PRIMARY KEY,
     run_id              UUID,
     execution_id        CHAR(8),        -- link to runtime_events.execution_id
     event_type          VARCHAR,        -- START | COMPLETE | ABORT | FAIL
@@ -52,18 +52,18 @@ CREATE TABLE lineage_events (
 );
 
 -- Indexes for lineage_events
-CREATE INDEX idx_lineage_execution_id ON lineage_events(execution_id);
-CREATE INDEX idx_lineage_run_id ON lineage_events(run_id);
-CREATE INDEX idx_lineage_session_id ON lineage_events(session_id);
-CREATE INDEX idx_lineage_event_time ON lineage_events(event_time);
-CREATE INDEX idx_lineage_job_name ON lineage_events(job_name);
+CREATE INDEX IF NOT EXISTS idx_lineage_execution_id ON lineage_events(execution_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_run_id ON lineage_events(run_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_session_id ON lineage_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_lineage_event_time ON lineage_events(event_time);
+CREATE INDEX IF NOT EXISTS idx_lineage_job_name ON lineage_events(job_name);
 
 ------------------------------------------------------------
 -- 3. Convenience views
 ------------------------------------------------------------
 
 -- Lineage I/O Summary View
-CREATE VIEW vw_lineage_io AS
+CREATE OR REPLACE VIEW vw_lineage_io AS
 SELECT
     ol_event_id,
     run_id,
@@ -79,7 +79,7 @@ SELECT
 FROM lineage_events;
 
 -- Performance Metrics View
-CREATE VIEW vw_performance_metrics AS
+CREATE OR REPLACE VIEW vw_performance_metrics AS
 SELECT
     r.execution_id,
     r.session_id,

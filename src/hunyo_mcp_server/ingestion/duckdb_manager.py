@@ -127,9 +127,30 @@ class DuckDBManager:
                 stmt.strip() for stmt in sql_content.split(";") if stmt.strip()
             ]
 
-            for statement in statements:
-                if statement and not statement.startswith("--"):
-                    self.connection.execute(statement)
+            for i, statement in enumerate(statements):
+                if statement:
+                    # Clean up the statement - remove comments properly
+                    lines = statement.split("\n")
+                    sql_lines = []
+
+                    for raw_line in lines:
+                        clean_line = raw_line.strip()
+                        # Skip empty lines and comment-only lines
+                        if clean_line and not clean_line.startswith("--"):
+                            # Remove inline comments (everything after --)
+                            if "--" in clean_line:
+                                clean_line = clean_line.split("--")[0].strip()
+                            if (
+                                clean_line
+                            ):  # Only add if there's still content after removing comments
+                                sql_lines.append(clean_line)
+
+                    if sql_lines:
+                        cleaned_statement = " ".join(sql_lines)
+                        db_logger.config(
+                            f"Executing statement {i+1}: {cleaned_statement[:50]}..."
+                        )
+                        self.connection.execute(cleaned_statement)
 
         except Exception as e:
             db_logger.error(f"Failed to execute SQL file {file_path}: {e}")
@@ -188,13 +209,14 @@ class DuckDBManager:
         """Insert a runtime event into the database."""
         query = """
         INSERT INTO runtime_events (
-            event_type, execution_id, cell_id, cell_source, cell_source_lines,
+            event_id, event_type, execution_id, cell_id, cell_source, cell_source_lines,
             start_memory_mb, end_memory_mb, duration_ms, timestamp,
             session_id, emitted_at, error_info
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         parameters = [
+            event_data.get("event_id"),
             event_data.get("event_type"),
             event_data.get("execution_id"),
             event_data.get("cell_id"),
@@ -220,13 +242,14 @@ class DuckDBManager:
         """Insert a lineage event into the database."""
         query = """
         INSERT INTO lineage_events (
-            run_id, execution_id, event_type, job_name, event_time,
+            ol_event_id, run_id, execution_id, event_type, job_name, event_time,
             duration_ms, session_id, emitted_at, inputs_json, outputs_json,
             column_lineage_json, column_metrics_json, other_facets_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         parameters = [
+            event_data.get("ol_event_id"),
             event_data.get("run_id"),
             event_data.get("execution_id"),
             event_data.get("event_type"),

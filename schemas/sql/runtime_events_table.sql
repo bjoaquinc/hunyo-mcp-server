@@ -2,7 +2,7 @@
 -- Purpose: Lightweight execution monitoring of cell execution within Marimo notebooks
 -- Focus: Performance metrics and execution metadata
 
-CREATE TABLE runtime_events (
+CREATE TABLE IF NOT EXISTS runtime_events (
     event_id            BIGINT      AUTO_INCREMENT PRIMARY KEY,
     event_type          VARCHAR,        -- start | end | error
     execution_id        CHAR(8),
@@ -19,6 +19,6 @@ CREATE TABLE runtime_events (
 );
 
 -- Index for common query patterns
-CREATE INDEX idx_runtime_execution_id ON runtime_events(execution_id);
-CREATE INDEX idx_runtime_session_id ON runtime_events(session_id);
-CREATE INDEX idx_runtime_timestamp ON runtime_events(timestamp); 
+CREATE INDEX IF NOT EXISTS idx_runtime_execution_id ON runtime_events(execution_id);
+CREATE INDEX IF NOT EXISTS idx_runtime_session_id ON runtime_events(session_id);
+CREATE INDEX IF NOT EXISTS idx_runtime_timestamp ON runtime_events(timestamp); 

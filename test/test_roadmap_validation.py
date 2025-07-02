@@ -35,49 +35,35 @@ class TestRoadmapValidation:
         assert roadmap_path.stat().st_size > 0, "ROADMAP.md should not be empty"
 
     def test_research_phase_marked_complete(self, roadmap_content: str):
-        """Test that research phase is properly marked as complete"""
-        # Look for the research phase completion markers
-        assert "✅ **Research Phase Complete**" in roadmap_content
-        assert (
-            "Comprehensive analysis of MCP implementation patterns" in roadmap_content
-        )
-        assert "✅ **Architecture Research**" in roadmap_content
-        assert (
-            "FastMCP framework patterns, CLI design, tool registration"
-            in roadmap_content
-        )
+        """Test that project is correctly marked as mostly complete"""
+        # The project is actually much further along than originally thought
+        assert "✅ **COMPLETE**" in roadmap_content
+        assert "Phase 1-4 Progress: ✅ **COMPLETE**" in roadmap_content
+        assert "All core functionality implemented" in roadmap_content
 
     def test_integration_analysis_documented(self, roadmap_content: str):
-        """Test that integration analysis is documented"""
-        assert "✅ **Integration Analysis**" in roadmap_content
+        """Test that core components are properly documented as implemented"""
+        assert "✅ **IMPLEMENTED** `server.py` (94 lines)" in roadmap_content
+        assert "✅ **IMPLEMENTED** `orchestrator.py` (232 lines)" in roadmap_content
         assert (
-            "Capture layer architecture, event generation, DuckDB schema"
-            in roadmap_content
+            "✅ **Implement full ingestion pipeline** and MCP tools" in roadmap_content
         )
-        assert "✅ **Component Mapping**" in roadmap_content
-        assert (
-            "Configuration system, data paths, testing infrastructure"
-            in roadmap_content
-        )
+        assert "Complete LLM query capabilities via MCP tools" in roadmap_content
 
     def test_next_steps_updated(self, roadmap_content: str):
-        """Test that next steps section is properly updated"""
-        # Check that research step is marked complete
-        assert "✅ **Research `server.py` architecture**" in roadmap_content
-        assert "MCP patterns, CLI design, component integration" in roadmap_content
+        """Test that next steps reflect current state - end-to-end testing"""
+        # Check that current task is end-to-end testing
+        assert "🔄 CURRENT: Test end-to-end" in roadmap_content
+        assert "Verify complete workflow with real notebook" in roadmap_content
 
-        # Check that implementation step is present
-        assert "**Implement `server.py`**" in roadmap_content
-        assert "CLI that accepts --notebook parameter" in roadmap_content
+        # Server implementation should be marked complete
+        assert "✅ **Implement `server.py`**" in roadmap_content
 
     def test_phase_progress_updated(self, roadmap_content: str):
-        """Test that Phase 1 progress tracking is updated"""
-        # Should still show 3/4 complete but with updated current task
-        assert "Phase 1 Progress: ✅ **3/4 items complete**" in roadmap_content
-        assert (
-            "server.py research complete ✅, beginning CLI implementation"
-            in roadmap_content
-        )
+        """Test that progress tracking reflects current complete state"""
+        # Should show phases 1-4 as complete
+        assert "Phase 1-4 Progress: ✅ **COMPLETE**" in roadmap_content
+        assert "All core functionality implemented" in roadmap_content
 
     def test_roadmap_structure_preserved(self, roadmap_content: str):
         """Test that overall roadmap structure is preserved"""
@@ -91,7 +77,10 @@ class TestRoadmapValidation:
 
     def test_testing_status_maintained(self, roadmap_content: str):
         """Test that excellent testing status is maintained"""
-        assert "✅ **70/70 tests passing** (100% success rate)" in roadmap_content
+        assert (
+            "✅ **172/174 tests passing** (99% success rate, 2 skipped)"
+            in roadmap_content
+        )
         assert "✅ **EXCELLENT QUALITY**" in roadmap_content
 
     @pytest.mark.parametrize(
@@ -100,7 +89,7 @@ class TestRoadmapValidation:
             "✅ **Create `pyproject.toml`**",
             "✅ **Implement `config.py`**",
             "✅ **Create basic project structure**",
-            "🚧 **IN PROGRESS - Create `src/hunyo_mcp_server/server.py`**",
+            "✅ **Implement `server.py`**",
         ],
     )
     def test_phase_1_items_properly_marked(self, roadmap_content: str, phase_item: str):

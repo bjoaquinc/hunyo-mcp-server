@@ -551,9 +551,22 @@ class TestMarimoLiveInterceptorReal:
                 # Should emit an event
                 mock_emit.assert_called_once()
                 event = mock_emit.call_args[0][0]
-                assert event["event_type"] == "dataframe_created"
-                assert event["operation"] == "read_csv"
-                assert event["shape"] == [3, 1]
+                # Check OpenLineage format
+                assert event["eventType"] == "START"
+                assert event["job"]["namespace"] == "marimo"
+                assert event["job"]["name"] == "pandas_read_csv"
+                assert event["producer"] == "marimo-lineage-tracker"
+                assert len(event["outputs"]) == 1
+                output = event["outputs"][0]
+                assert output["namespace"] == "marimo"
+                assert output["name"] == "df1"
+                assert "schema" in output["facets"]
+                assert len(output["facets"]["schema"]["fields"]) == 1
+                assert output["facets"]["schema"]["fields"][0]["name"] == "test"
+                # Check job facets for arguments
+                assert "facets" in event["job"]
+                assert "args" in event["job"]["facets"]
+                assert "kwargs" in event["job"]["facets"]
 
     def test_track_dataframe_transformation(self, tmp_path):
         """Test tracking of DataFrame transformations"""
@@ -583,8 +596,24 @@ class TestMarimoLiveInterceptorReal:
                 # Should emit an event
                 mock_emit.assert_called_once()
                 event = mock_emit.call_args[0][0]
-                assert event["event_type"] == "dataframe_transformed"
-                assert event["operation"] == "multiply"
+                # Check OpenLineage format for transformation
+                assert event["eventType"] == "COMPLETE"
+                assert event["job"]["namespace"] == "marimo"
+                assert event["job"]["name"] == "pandas_multiply"
+                assert event["producer"] == "marimo-lineage-tracker"
+                assert len(event["inputs"]) == 1
+                assert len(event["outputs"]) == 1
+                # Check input dataset
+                input_dataset = event["inputs"][0]
+                assert input_dataset["namespace"] == "marimo"
+                assert "schema" in input_dataset["facets"]
+                # Check output dataset
+                output_dataset = event["outputs"][0]
+                assert output_dataset["namespace"] == "marimo"
+                assert "schema" in output_dataset["facets"]
+                # Check job facets for arguments
+                assert "facets" in event["job"]
+                assert "args" in event["job"]["facets"]
 
     def test_sanitize_args(self, tmp_path):
         """Test argument sanitization"""
