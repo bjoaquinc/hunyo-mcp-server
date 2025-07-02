@@ -301,7 +301,7 @@ class TestCaptureIntegration:
             except Exception as e:
                 # Should not raise exceptions, but if it does, continue
                 # Log the exception for debugging but don't fail the test
-                print(f"Operation failed as expected: {e}")  # noqa: T201
+                print(f"Operation failed as expected: {e}")
 
         # At least the valid operation should succeed
         assert successful_operations >= 1

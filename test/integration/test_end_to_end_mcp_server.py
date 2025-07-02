@@ -135,7 +135,7 @@ class TestEndToEndMCPServer:
                 "HUNYO_DEV_MODE": "1",
                 "HUNYO_DATA_DIR": str(temp_hunyo_dir),
                 "PYTHONPATH": str(Path("src").absolute())
-                + ":"
+                + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
             }
         )
@@ -308,7 +308,7 @@ class TestEndToEndMCPServer:
                 "HUNYO_DEV_MODE": "1",
                 "HUNYO_DATA_DIR": str(temp_hunyo_dir),
                 "PYTHONPATH": str(Path("src").absolute())
-                + ":"
+                + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
             }
         )
@@ -370,7 +370,7 @@ class TestEndToEndMCPServer:
                 "HUNYO_DEV_MODE": "1",
                 "HUNYO_DATA_DIR": str(temp_hunyo_dir),
                 "PYTHONPATH": str(Path("src").absolute())
-                + ":"
+                + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
             }
         )

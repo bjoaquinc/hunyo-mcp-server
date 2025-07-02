@@ -92,7 +92,7 @@ class TestMarimoNotebookFixtures:
 
         for notebook_path in notebooks:
             # Read the file and check for marimo app structure
-            content = notebook_path.read_text()
+            content = notebook_path.read_text(encoding="utf-8")
 
             # Basic checks for marimo app structure
             assert (
@@ -158,7 +158,7 @@ class TestMarimoNotebookFixtures:
         ]
 
         for notebook_path, notebook_name in notebooks:
-            content = notebook_path.read_text()
+            content = notebook_path.read_text(encoding="utf-8")
 
             # Should NOT import the non-existent module
             assert (
@@ -189,7 +189,9 @@ class TestMarimoNotebookFixtures:
         try:
             # Copy the notebook to temp directory to avoid side effects
             temp_notebook = temp_dir / "test_notebook.py"
-            temp_notebook.write_text(runtime_notebook_path.read_text())
+            temp_notebook.write_text(
+                runtime_notebook_path.read_text(encoding="utf-8"), encoding="utf-8"
+            )
 
             # Try to validate the notebook structure by importing it
             # This doesn't execute the notebook but validates its structure
