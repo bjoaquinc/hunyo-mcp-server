@@ -214,7 +214,7 @@ class HunyoOrchestrator:
             # Generate proper file paths for this notebook
             from capture import get_event_filenames
             from capture.lightweight_runtime_tracker import enable_runtime_tracking
-            from capture.live_lineage_interceptor import enable_live_tracking
+            from capture.native_hooks_interceptor import enable_native_hook_tracking
 
             runtime_file, lineage_file = get_event_filenames(
                 str(self.notebook_path), str(self.data_dir)
@@ -223,15 +223,17 @@ class HunyoOrchestrator:
             orchestrator_logger.config(f"Runtime events: {Path(runtime_file).name}")
             orchestrator_logger.config(f"Lineage events: {Path(lineage_file).name}")
 
-            # Enable tracking with proper file paths
-            enable_runtime_tracking(output_file=runtime_file)
-            enable_live_tracking(
-                notebook_path=str(self.notebook_path),
-                output_file=lineage_file,
-                enable_runtime_debug=True,
+            # Enable tracking with notebook path for proper convention naming
+            enable_runtime_tracking(notebook_path=str(self.notebook_path))
+
+            # Use native Marimo hooks instead of Python exec() hooks (pass notebook_path for proper naming)
+            enable_native_hook_tracking(
+                lineage_file=lineage_file, notebook_path=str(self.notebook_path)
             )
 
-            orchestrator_logger.success("✅ Capture layer active - tracking enabled")
+            orchestrator_logger.success(
+                "✅ Capture layer active - native Marimo hooks enabled"
+            )
 
         except ImportError as e:
             orchestrator_logger.warning(f"Capture layer import failed: {e}")
@@ -242,10 +244,10 @@ class HunyoOrchestrator:
                 "  from capture.lightweight_runtime_tracker import enable_runtime_tracking"
             )
             orchestrator_logger.config(
-                "  from capture.live_lineage_interceptor import enable_live_tracking"
+                "  from capture.native_hooks_interceptor import enable_native_hook_tracking"
             )
             orchestrator_logger.config("  enable_runtime_tracking()")
-            orchestrator_logger.config("  enable_live_tracking()")
+            orchestrator_logger.config("  enable_native_hook_tracking()")
 
         except Exception as e:
             orchestrator_logger.error(f"Failed to start capture layer: {e}")

@@ -185,16 +185,9 @@ class MarimoLiveInterceptor:
         lineage_logger.config(f"Session: {self.session_id}")
 
         if self.enable_runtime_debug:
-            # Create runtime events file path based on notebook path
-            runtime_output_file = None
-            if notebook_path and RUNTIME_TRACKING_AVAILABLE:
-                runtime_events_file, _ = get_event_filenames(
-                    notebook_path, self.data_dir
-                )
-                runtime_output_file = runtime_events_file
-
+            # Enable runtime tracking with notebook path for proper naming convention
             self.runtime_tracker = enable_runtime_tracking(
-                output_file=runtime_output_file
+                notebook_path=notebook_path if RUNTIME_TRACKING_AVAILABLE else None
             )
             lineage_logger.tracking("Runtime debugging enabled")
 

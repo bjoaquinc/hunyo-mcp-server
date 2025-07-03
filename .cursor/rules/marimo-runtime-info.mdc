@@ -1,0 +1,466 @@
+---
+description: The report includes a multi-layered monitoring architecture, WebSocket interception techniques, Python runtime hooks, and production deployment strategies. It provides code examples for process wrappers, network monitoring, DataFrame tracking, and OpenLineage integration with a phased implementation roadmap.
+globs: 
+alwaysApply: false
+---
+# Building External Hooks for Marimo Cell Execution and DataFrame Lineage Tracking
+
+## Executive Summary
+
+Building external monitoring for marimo notebooks requires a multi-layered approach that leverages marimo's unique reactive architecture, Python runtime interception techniques, and external process monitoring. Unlike traditional Jupyter notebooks, marimo's static analysis-based execution model and WebSocket communication architecture provide specific opportunities for external interception. This technical implementation guide provides comprehensive strategies for building production-ready external monitoring that captures cell execution events and DataFrame lineage without modifying marimo or user notebooks.
+
+## Understanding Marimo's Unique Architecture
+
+### Reactive Runtime System
+Marimo fundamentally differs from traditional notebooks through its **static analysis-based reactive execution**. The system uses Python AST parsing to build directed acyclic graphs (DAGs) of cell dependencies, automatically executing cells when their dependencies change. This architecture provides unique interception opportunities:
+
+**Key Architectural Components:**
+- **Python Kernel**: Core execution engine running Python code
+- **TypeScript Frontend**: Issues control commands and manages UI
+- **WebSocket Server**: Bidirectional communication layer using JSON-based RPC
+- **Reactive Graph Engine**: DAG construction and topological sorting for execution order
+
+**Execution Flow Pattern:**
+```
+marimo edit notebook.py → Server Start → Kernel Initialization → AST Analysis → DAG Construction → Reactive Execution
+```
+
+### Critical Interception Points
+**WebSocket Communication Layer**: All cell execution commands flow through WebSocket messages between frontend and backend, providing a clean interception point for execution monitoring.
+
+**Static Analysis Pipeline**: Marimo's AST parsing and dependency graph construction happens predictably, offering opportunities to hook into the analysis phase.
+
+**Server Architecture**: The three-tier architecture (frontend, server, kernel) creates natural boundaries for external monitoring integration.
+
+## Recommended External Monitoring Architecture
+
+### Multi-Layer Monitoring Approach
+
+The most effective strategy combines **four complementary techniques**:
+
+1. **Process Wrapper + Network Interception** (Primary)
+2. **Python Runtime Hooks** (Secondary) 
+3. **DataFrame Operation Monitoring** (Specialized)
+4. **File System Monitoring** (Supporting)
+
+This layered approach ensures comprehensive coverage while maintaining system stability and performance.
+
+### Layer 1: External Process Monitoring
+
+**Primary Strategy**: Process wrapper with network interception for WebSocket communications.
+
+```python
+class MarimoExternalMonitor:
+    def __init__(self, marimo_command):
+        self.marimo_process = None
+        self.websocket_interceptor = WebSocketInterceptor()
+        self.lineage_tracker = DataFrameLineageTracker()
+        
+    def start_monitoring(self):
+        # Launch marimo with environment modifications
+        env = self._setup_monitoring_environment()
+        self.marimo_process = subprocess.Popen(
+            marimo_command,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        
+        # Start WebSocket interception
+        self._start_network_monitoring()
+        
+    def _setup_monitoring_environment(self):
+        env = os.environ.copy()
+        env['PYTHONPATH'] = f"{env.get('PYTHONPATH', '')}:/monitoring/hooks"
+        env['MARIMO_MONITORING_ENABLED'] = '1'
+        return env
+```
+
+**Benefits**: Complete isolation, cannot crash marimo, works with any marimo version.
+
+### Layer 2: WebSocket Communication Interception
+
+**Network-Level Monitoring**: Intercept WebSocket traffic between marimo frontend and backend to capture cell execution events.
+
+```python
+class WebSocketInterceptor:
+    def __init__(self, target_port=8001):
+        self.target_port = target_port
+        self.cell_executions = []
+        
+    async def intercept_websocket_traffic(self):
+        # Use mitmproxy or custom WebSocket proxy
+        proxy = WebSocketProxy(
+            target_host='localhost',
+            target_port=self.target_port,
+            intercept_callback=self.process_message
+        )
+        await proxy.start()
+        
+    def process_message(self, message):
+        """Process WebSocket messages for cell execution detection"""
+        try:
+            data = json.loads(message)
+            if data.get('type') == 'cell_execution_request':
+                self._handle_cell_execution_start(data)
+            elif data.get('type') == 'cell_execution_complete':
+                self._handle_cell_execution_complete(data)
+        except json.JSONDecodeError:
+            pass
+```
+
+### Layer 3: Python Runtime Hook Injection
+
+**Import Hook Strategy**: Inject monitoring code through Python's import system without modifying marimo.
+
+```python
+class MarimoImportHook:
+    def __init__(self, lineage_tracker):
+        self.lineage_tracker = lineage_tracker
+        
+    def find_spec(self, fullname, path, target=None):
+        # Intercept pandas imports to inject lineage tracking
+        if fullname == 'pandas':
+            return self._create_monitoring_spec(fullname)
+        return None
+        
+    def _create_monitoring_spec(self, module_name):
+        loader = MonitoringModuleLoader(
+            self.lineage_tracker,
+            original_module=importlib.import_module(module_name)
+        )
+        return importlib.util.spec_from_loader(module_name, loader)
+
+# Install hook before marimo starts
+sys.meta_path.insert(0, MarimoImportHook(lineage_tracker))
+```
+
+### Layer 4: DataFrame Operation Interception
+
+**Comprehensive Pandas Monitoring**: Use multiple techniques to ensure no DataFrame operations are missed.
+
+```python
+class DataFrameLineageTracker:
+    def __init__(self):
+        self.operation_graph = {}
+        self.pandas_interceptor = PandasInterceptor()
+        self.namespace_monitor = NamespaceMonitor()
+        
+    def initialize_monitoring(self):
+        # Monkey patch key pandas functions
+        self._patch_pandas_operations()
+        
+        # Install audit hooks for system-level monitoring
+        sys.addaudithook(self._audit_hook)
+        
+        # Start namespace monitoring
+        self._start_namespace_monitoring()
+        
+    def _patch_pandas_operations(self):
+        functions_to_patch = [
+            ('pandas', 'read_csv'),
+            ('pandas', 'read_json'), 
+            ('pandas', 'read_sql'),
+            ('pandas.core.frame.DataFrame', 'merge'),
+            ('pandas.core.frame.DataFrame', 'join'),
+            ('pandas.core.frame.DataFrame', 'groupby')
+        ]
+        
+        for module_path, func_name in functions_to_patch:
+            self.pandas_interceptor.patch_function(
+                module_path, func_name, self._lineage_wrapper
+            )
+```
+
+## Advanced Implementation Strategies
+
+### External Process Injection for Deep Monitoring
+
+For maximum visibility, use **py-spy-style external memory reading** to monitor marimo's internal state without code modification.
+
+```python
+class MarimoStateReader:
+    def __init__(self, marimo_pid):
+        self.marimo_pid = marimo_pid
+        self.memory_reader = ProcessMemoryReader(marimo_pid)
+        
+    def read_cell_execution_state(self):
+        """Read marimo's internal execution state directly from memory"""
+        try:
+            # Read Python interpreter state
+            interpreter_state = self.memory_reader.read_interpreter_state()
+            
+            # Extract current cell execution context
+            execution_context = self._extract_execution_context(interpreter_state)
+            
+            return {
+                'current_cell': execution_context.get('cell_id'),
+                'execution_stack': execution_context.get('stack'),
+                'variable_state': execution_context.get('globals')
+            }
+        except Exception as e:
+            # Graceful degradation
+            return None
+```
+
+### Network Protocol Analysis
+
+**WebSocket Message Pattern Analysis**: Based on research, marimo uses JSON-RPC over WebSocket. Key message types to intercept:
+
+```python
+MARIMO_MESSAGE_TYPES = {
+    'cell_execution_request': {
+        'pattern': {'type': 'execute_cell', 'cell_id': str},
+        'handler': 'handle_cell_start'
+    },
+    'cell_execution_result': {
+        'pattern': {'type': 'execution_result', 'cell_id': str, 'outputs': list},
+        'handler': 'handle_cell_complete'
+    },
+    'variable_update': {
+        'pattern': {'type': 'variable_state', 'updates': dict},
+        'handler': 'handle_variable_change'
+    }
+}
+
+class MarimoProtocolAnalyzer:
+    def analyze_message(self, websocket_message):
+        for msg_type, config in MARIMO_MESSAGE_TYPES.items():
+            if self._matches_pattern(websocket_message, config['pattern']):
+                handler = getattr(self, config['handler'])
+                handler(websocket_message)
+```
+
+### OpenLineage Event Generation
+
+**Production-Ready Lineage Events**: Generate industry-standard OpenLineage events for comprehensive data lineage tracking.
+
+```python
+from openlineage.client import OpenLineageClient
+from openlineage.client.event import RunEvent, Job, Run, Dataset
+
+class MarimoLineageEventGenerator:
+    def __init__(self, openlineage_endpoint):
+        self.client = OpenLineageClient(url=openlineage_endpoint)
+        self.namespace = "marimo_notebooks"
+        
+    def generate_cell_execution_event(self, cell_execution_data):
+        """Generate OpenLineage event for marimo cell execution"""
+        run_id = str(uuid.uuid4())
+        
+        # Create job representing the notebook cell
+        job = Job(
+            namespace=self.namespace,
+            name=f"cell_{cell_execution_data['cell_id']}"
+        )
+        
+        # Create run with execution metadata
+        run = Run(
+            runId=run_id,
+            facets={
+                "marimo_cell": {
+                    "_producer": "marimo-external-monitor",
+                    "_schemaURL": "custom/marimo-cell-facet",
+                    "cell_code": cell_execution_data['code'],
+                    "dependencies": cell_execution_data['dependencies'],
+                    "execution_time_ms": cell_execution_data['duration']
+                }
+            }
+        )
+        
+        # Generate input/output datasets from DataFrame operations
+        input_datasets = self._create_input_datasets(cell_execution_data)
+        output_datasets = self._create_output_datasets(cell_execution_data)
+        
+        # Emit the event
+        event = RunEvent(
+            eventType="COMPLETE",
+            eventTime=datetime.utcnow().isoformat(),
+            run=run,
+            job=job,
+            inputs=input_datasets,
+            outputs=output_datasets,
+            producer="marimo-external-monitor/1.0.0"
+        )
+        
+        self.client.emit(event)
+```
+
+## Production Deployment Architecture
+
+### Container-Based Deployment
+
+**Recommended Production Setup**: Deploy monitoring as sidecar containers for scalability and isolation.
+
+```yaml
+# docker-compose.yml for marimo monitoring
+version: '3.8'
+services:
+  marimo:
+    image: python:3.11
+    volumes:
+      - ./notebooks:/notebooks
+      - marimo-socket:/var/marimo/socket
+    command: marimo edit --host 0.0.0.0 --port 8001 /notebooks
+    environment:
+      - MARIMO_MONITORING_SOCKET=/var/marimo/socket/monitor.sock
+      
+  marimo-monitor:
+    build: ./monitor
+    depends_on:
+      - marimo
+    volumes:
+      - marimo-socket:/var/marimo/socket
+    environment:
+      - TARGET_SERVICE=marimo:8001
+      - OPENLINEAGE_ENDPOINT=http://lineage-backend:5000
+      - MONITORING_LOG_LEVEL=INFO
+    cap_add:
+      - SYS_PTRACE  # For py-spy style monitoring
+      
+  lineage-backend:
+    image: openmetadata/server
+    ports:
+      - "5000:5000"
+    environment:
+      - DB_CONNECTION_URL=postgresql://lineage:password@postgres:5432/lineage_db
+
+volumes:
+  marimo-socket:
+```
+
+### CLI Wrapper Implementation
+
+**Zero-Configuration Activation**: Create a transparent wrapper that activates monitoring automatically.
+
+```python
+#!/usr/bin/env python3
+# marimo-monitored wrapper script
+
+import os
+import sys
+import subprocess
+import tempfile
+from pathlib import Path
+
+class MarimoMonitoredWrapper:
+    def __init__(self):
+        self.monitoring_enabled = os.getenv('MARIMO_MONITORING_ENABLED', '1') == '1'
+        self.monitoring_config = self._load_monitoring_config()
+        
+    def _load_monitoring_config(self):
+        """Load monitoring configuration from environment or file"""
+        config = {
+            'openlineage_endpoint': os.getenv('OPENLINEAGE_ENDPOINT', 'http://localhost:5000'),
+            'profiling_frequency': int(os.getenv('PROFILING_FREQUENCY', '10')),
+            'lineage_tracking': os.getenv('LINEAGE_TRACKING', 'true').lower() == 'true',
+            'network_monitoring': os.getenv('NETWORK_MONITORING', 'true').lower() == 'true'
+        }
+        
+        # Override with config file if present
+        config_file = Path('marimo-monitor.json')
+        if config_file.exists():
+            import json
+            with open(config_file) as f:
+                config.update(json.load(f))
+                
+        return config
+        
+    def launch_marimo(self, args):
+        """Launch marimo with monitoring enabled"""
+        if not self.monitoring_enabled:
+            # Pass through to regular marimo
+            os.execvp('marimo-original', ['marimo'] + args)
+            
+        # Set up monitoring environment
+        env = self._setup_monitoring_environment()
+        
+        # Start monitoring services
+        monitor_process = self._start_monitoring_services()
+        
+        try:
+            # Launch marimo
+            marimo_process = subprocess.Popen(
+                ['marimo'] + args,
+                env=env
+            )
+            
+            # Wait for completion
+            marimo_process.wait()
+            
+        finally:
+            # Clean up monitoring
+            self._cleanup_monitoring(monitor_process)
+
+if __name__ == '__main__':
+    wrapper = MarimoMonitoredWrapper()
+    wrapper.launch_marimo(sys.argv[1:])
+```
+
+### Performance Optimization Strategies
+
+**Adaptive Monitoring**: Adjust monitoring intensity based on system load and activity.
+
+```python
+class AdaptiveMonitoringController:
+    def __init__(self):
+        self.current_sampling_rate = 100  # Hz
+        self.min_sampling_rate = 1
+        self.max_sampling_rate = 1000
+        
+    def adjust_monitoring_intensity(self):
+        """Dynamically adjust monitoring based on system conditions"""
+        system_load = psutil.cpu_percent()
+        active_cells = self._count_active_cells()
+        
+        if system_load > 80:
+            # Reduce monitoring overhead under high load
+            self.current_sampling_rate = max(
+                self.min_sampling_rate,
+                self.current_sampling_rate // 2
+            )
+        elif active_cells > 5:
+            # Increase monitoring during heavy notebook activity
+            self.current_sampling_rate = min(
+                self.max_sampling_rate,
+                self.current_sampling_rate * 2
+            )
+```
+
+## Implementation Roadmap
+
+### Phase 1: Basic External Monitoring (Week 1-2)
+- Implement process wrapper with WebSocket traffic capture
+- Basic cell execution detection through network monitoring
+- Simple DataFrame operation logging via monkey patching
+
+### Phase 2: Enhanced Lineage Tracking (Week 3-4)  
+- Comprehensive pandas operation interception
+- OpenLineage event generation
+- Integration with external lineage platforms
+
+### Phase 3: Production Hardening (Week 5-6)
+- Container deployment patterns
+- Performance optimization and adaptive monitoring
+- Error handling and graceful degradation
+- CLI wrapper implementation
+
+### Phase 4: Advanced Features (Week 7-8)
+- Deep memory inspection using py-spy techniques
+- Real-time dashboard and alerting
+- Multi-notebook session monitoring
+- Custom visualization and reporting
+
+## Critical Success Factors
+
+**Zero Code Modification**: The external monitoring system must work without any changes to marimo, user notebooks, or existing workflows.
+
+**Performance Impact**: Total monitoring overhead should remain under 5% in production environments through careful sampling and adaptive techniques.
+
+**Reliability**: Monitoring failures must never impact notebook execution. Implement comprehensive error handling and graceful degradation.
+
+**Scalability**: Architecture must support monitoring multiple concurrent notebook sessions and scale to enterprise environments.
+
+**Standards Compliance**: Use OpenLineage for lineage events and OpenTelemetry for monitoring to ensure vendor independence and integration capability.
+
+This comprehensive implementation guide provides a production-ready approach to building external monitoring for marimo notebooks, combining multiple technical strategies to achieve comprehensive visibility without system modification. The layered architecture ensures robustness while the container-based deployment enables enterprise scalability.

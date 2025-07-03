@@ -51,7 +51,11 @@ class MarimoNativeHooksInterceptor:
     Uses marimo's built-in hook system instead of Python exec interception
     """
 
-    def __init__(self, lineage_file: str = "marimo_lineage_events.jsonl"):
+    def __init__(
+        self,
+        lineage_file: str = "marimo_lineage_events.jsonl",
+        notebook_path: str | None = None,
+    ):
         self.lineage_file = Path(lineage_file)
         self.session_id = str(uuid.uuid4())[:8]
         self.interceptor_active = False
@@ -63,16 +67,39 @@ class MarimoNativeHooksInterceptor:
         # Execution context tracking
         self._execution_contexts = {}
 
+        # Generate proper runtime and lineage file paths using naming convention
+        if notebook_path:
+            from capture import get_event_filenames, get_user_data_dir
+
+            data_dir = get_user_data_dir()
+            runtime_file, proper_lineage_file = get_event_filenames(
+                notebook_path, data_dir
+            )
+            # Store both runtime and lineage file paths
+            self.runtime_file = Path(runtime_file)
+            self.lineage_file = Path(proper_lineage_file)
+        else:
+            # Fallback to proper lineage file name pattern
+            if "_lineage_events.jsonl" in lineage_file:
+                runtime_file = lineage_file.replace(
+                    "_lineage_events.jsonl", "_runtime_events.jsonl"
+                )
+            else:
+                runtime_file = "marimo_runtime_events.jsonl"
+            self.runtime_file = Path(runtime_file)
+
         # Runtime tracking integration (handles cell execution events)
         self.runtime_tracker = None
         if RUNTIME_TRACKING_AVAILABLE:
-            self.runtime_tracker = enable_runtime_tracking("marimo_runtime.jsonl")
+            self.runtime_tracker = enable_runtime_tracking(str(self.runtime_file))
 
-        # Ensure lineage file exists
+        # Ensure both runtime and lineage directories exist
+        self.runtime_file.parent.mkdir(parents=True, exist_ok=True)
+        self.lineage_file.parent.mkdir(parents=True, exist_ok=True)
         self.lineage_file.touch()
 
         hooks_logger.status("Marimo Native Hooks Interceptor v3.0 - OpenLineage")
-        hooks_logger.runtime("Runtime log: marimo_runtime.jsonl")
+        hooks_logger.runtime(f"Runtime log: {self.runtime_file.name}")
         hooks_logger.lineage(f"Lineage log: {self.lineage_file.name}")
         hooks_logger.config(f"Session: {self.session_id}")
         if self.runtime_tracker:
@@ -114,7 +141,7 @@ class MarimoNativeHooksInterceptor:
 
             self.interceptor_active = True
             hooks_logger.info("✅ Marimo native hooks installed!")
-            hooks_logger.info("   📁 Runtime log: marimo_runtime.jsonl")
+            hooks_logger.info(f"   📁 Runtime log: {self.runtime_file.name}")
             hooks_logger.info(f"   📊 Lineage log: {self.lineage_file.name}")
 
         except ImportError as e:
@@ -737,8 +764,15 @@ class MarimoNativeHooksInterceptor:
                 # Start runtime tracking if available (non-blocking)
                 if self.runtime_tracker:
                     try:
-                        execution_id = self.runtime_tracker.track_cell_execution_start(
-                            cell_id, cell_code
+                        # DO NOT overwrite execution_id! Use the one we generated above
+                        runtime_execution_id = (
+                            self.runtime_tracker.track_cell_execution_start(
+                                cell_id, cell_code
+                            )
+                        )
+                        # Optionally log the runtime tracker's ID for debugging
+                        hooks_logger.tracking(
+                            f"Runtime tracker ID: {runtime_execution_id}"
                         )
                     except Exception as rt_error:
                         # Logger handles marimo context automatically
@@ -874,22 +908,19 @@ class MarimoNativeHooksInterceptor:
                         hooks_logger.error(f"Result capture failed: {e}")
 
                 # End runtime tracking if available (non-blocking)
-                try:
-                    from capture.lightweight_runtime_tracker import get_runtime_tracker
-
-                    tracker = get_runtime_tracker()
-                    if tracker and execution_id:
-                        # End tracking with context
+                if self.runtime_tracker and execution_id:
+                    try:
+                        # Use our consistent execution_id for runtime tracking
                         if error:
-                            tracker.track_cell_execution_error(
+                            self.runtime_tracker.track_cell_execution_error(
                                 execution_id, cell_id, cell_code, start_time, error
                             )
                         else:
-                            tracker.track_cell_execution_end(
+                            self.runtime_tracker.track_cell_execution_end(
                                 execution_id, cell_id, cell_code, start_time
                             )
-                except Exception as e:
-                    hooks_logger.error(f"Runtime tracker end failed: {e}")
+                    except Exception as e:
+                        hooks_logger.error(f"Runtime tracker end failed: {e}")
 
                 # Note: DataFrame operations are tracked via pandas interception
 
@@ -906,11 +937,15 @@ class MarimoNativeHooksInterceptor:
         return post_execution_hook
 
     def _emit_real_cell_event(self, event_data):
-        """Emit real cell execution events directly to file (bypass logging)"""
+        """Emit real cell execution events directly to runtime file (bypass logging)"""
         try:
-            # Write directly to a separate real cell events file
-            real_cell_file = self.lineage_file.parent / "marimo_real_cell_events.jsonl"
-            with open(real_cell_file, "a") as f:
+            # Cell execution events are RUNTIME events - use runtime directory
+            runtime_file = self.runtime_file
+
+            # Ensure runtime directory exists
+            runtime_file.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(runtime_file, "a") as f:
                 f.write(json.dumps(event_data, default=str) + "\n")
         except Exception as e:
             # Fallback to logger if file write fails
@@ -1134,7 +1169,9 @@ class MarimoNativeHooksInterceptor:
         return summary
 
 
-def enable_native_hook_tracking(lineage_file: str = "marimo_lineage_events.jsonl"):
+def enable_native_hook_tracking(
+    lineage_file: str = "marimo_lineage_events.jsonl", notebook_path: str | None = None
+):
     """Enable native marimo hook-based tracking"""
     global _global_native_interceptor  # noqa: PLW0603
 
@@ -1145,7 +1182,9 @@ def enable_native_hook_tracking(lineage_file: str = "marimo_lineage_events.jsonl
         return _global_native_interceptor
 
     hooks_logger.info("🔧 Creating new interceptor instance...")
-    _global_native_interceptor = MarimoNativeHooksInterceptor(lineage_file)
+    _global_native_interceptor = MarimoNativeHooksInterceptor(
+        lineage_file, notebook_path
+    )
     _global_native_interceptor.install()
     return _global_native_interceptor
 

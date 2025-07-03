@@ -73,3 +73,6 @@ marimo_live_lineage.jsonl
 .coverage.*
 htmlcov/
 coverage.xml
+
+# Notebooks for testing
+sandbox/

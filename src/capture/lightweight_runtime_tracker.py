@@ -402,18 +402,41 @@ _runtime_tracker: LightweightRuntimeTracker | None = None
 def enable_runtime_tracking(
     output_file: str | Path | None = None,
     *,
+    notebook_path: str | None = None,
     enable_tracking: bool = True,
     buffer_size: int = DEFAULT_BUFFER_SIZE,
 ) -> LightweightRuntimeTracker:
     """
-    Enable lightweight runtime tracking.
+    Enable lightweight runtime tracking with naming convention matching lineage files.
 
     Args:
-        output_file: Path to output file (None for memory-only)
+        output_file: Path to output file (None for auto-generated convention-based path)
+        notebook_path: Path to notebook file (for convention-based naming)
         enable_tracking: Whether to enable event tracking
         buffer_size: Size of event buffer before flushing
     """
     global _runtime_tracker  # noqa: PLW0603
+
+    # If no output_file specified, use same convention as lineage files
+    if output_file is None:
+        try:
+            # Try to import the naming convention functions
+            from capture import get_event_filenames, get_user_data_dir
+
+            if notebook_path:
+                # Use exact same convention as lineage files
+                data_dir = get_user_data_dir()
+                runtime_events_file, _ = get_event_filenames(notebook_path, data_dir)
+                output_file = runtime_events_file
+            else:
+                # Fallback to generic naming in same directory structure
+                data_dir = get_user_data_dir()
+                output_file = str(
+                    Path(data_dir) / "events" / "runtime" / "runtime_events.jsonl"
+                )
+        except ImportError:
+            # Fallback: use generic file in current directory
+            output_file = "runtime_events.jsonl"
 
     if _runtime_tracker is None:
         _runtime_tracker = LightweightRuntimeTracker(

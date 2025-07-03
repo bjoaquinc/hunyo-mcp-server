@@ -67,10 +67,8 @@ class JSONLFileHandler(FileSystemEventHandler):
             self._pending_files.add(file_path)
             self._last_processed[file_path] = time.time()
 
-        # Trigger processing in the file watcher
-        task = asyncio.create_task(self.file_watcher._process_pending_files())
-        self.file_watcher._background_tasks.add(task)
-        task.add_done_callback(self.file_watcher._background_tasks.discard)
+        # Note: Don't create asyncio tasks here - we're in a thread without an event loop.
+        # The background processor will pick up pending files automatically.
 
     def get_pending_files(self) -> set[Path]:
         """Get and clear pending files."""
