@@ -91,6 +91,47 @@ jobs:
         hatch run test:python -c "import click; print('[OK] click available')"
         echo "[OK] All dependencies verified"
         
+    - name: Cache DuckDB extensions
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.duckdb/extensions
+          %APPDATA%/duckdb/extensions
+          ~/Library/Application Support/duckdb/extensions
+        key: duckdb-extensions-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          duckdb-extensions-${{ runner.os }}-
+          
+    - name: Pre-install DuckDB extensions
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
+      run: |
+        echo "Pre-installing DuckDB extensions to avoid race conditions..."
+        
+        # Create a temporary database and install extensions
+        echo "Installing JSON extension..."
+        hatch run test:python -c "
+        import duckdb
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(suffix='.duckdb', delete=False) as f:
+            temp_db = f.name
+        try:
+            conn = duckdb.connect(temp_db)
+            print('[INFO] Installing JSON extension...')
+            conn.execute('INSTALL json')
+            conn.execute('LOAD json') 
+            print('[OK] JSON extension installed successfully')
+            conn.close()
+        finally:
+            if os.path.exists(temp_db):
+                os.unlink(temp_db)
+        "
+        
+        echo "[OK] DuckDB extensions pre-installed - eliminating download race conditions"
+        
     - name: Run tests with coverage
       shell: bash
       run: |
@@ -158,6 +199,47 @@ jobs:
       run: |
         hatch env create test
         hatch run test:python -c "import marimo; print('[OK] marimo available')"
+        
+    - name: Cache DuckDB extensions
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.duckdb/extensions
+          %APPDATA%/duckdb/extensions
+          ~/Library/Application Support/duckdb/extensions
+        key: duckdb-extensions-${{ runner.os }}-${{ hashFiles('**/pyproject.toml') }}
+        restore-keys: |
+          duckdb-extensions-${{ runner.os }}-
+          
+    - name: Pre-install DuckDB extensions
+      shell: bash
+      env:
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
+      run: |
+        echo "Pre-installing DuckDB extensions to avoid race conditions..."
+        
+        # Create a temporary database and install extensions
+        echo "Installing JSON extension..."
+        hatch run test:python -c "
+        import duckdb
+        import tempfile
+        import os
+        with tempfile.NamedTemporaryFile(suffix='.duckdb', delete=False) as f:
+            temp_db = f.name
+        try:
+            conn = duckdb.connect(temp_db)
+            print('[INFO] Installing JSON extension...')
+            conn.execute('INSTALL json')
+            conn.execute('LOAD json') 
+            print('[OK] JSON extension installed successfully')
+            conn.close()
+        finally:
+            if os.path.exists(temp_db):
+                os.unlink(temp_db)
+        "
+        
+        echo "[OK] DuckDB extensions pre-installed - eliminating download race conditions"
         
     - name: Run integration tests
       run: |

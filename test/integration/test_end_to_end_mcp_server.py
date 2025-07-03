@@ -190,8 +190,8 @@ class TestEndToEndMCPServer:
                 )
                 e2e_logger.info(f"[WINDOWS-CI] Platform: {platform.platform()}")
 
-                # Windows CI gets longer timeout for INSTALL json download
-                timeout = 25.0
+                # With CI pre-installation, Windows timeout can be much shorter
+                timeout = 10.0
 
                 # Pre-flight checks for Windows CI
                 e2e_logger.info(f"[WINDOWS-CI] Temp directory: {temp_hunyo_dir}")
@@ -210,7 +210,7 @@ class TestEndToEndMCPServer:
                         f"[WINDOWS-CI] hunyo_mcp_server.server import failed: {e}"
                     )
             else:
-                timeout = 15.0
+                timeout = 8.0
 
             db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
 
@@ -311,10 +311,12 @@ class TestEndToEndMCPServer:
                     elapsed = time.time() - start_time
                     if elapsed >= 5 and int(elapsed) % 3 == 0:
                         e2e_logger.info(
-                            f"[WAIT] Schema still initializing after {elapsed:.0f}s (INSTALL json may be downloading...)"
+                            f"[WAIT] Schema still initializing after {elapsed:.0f}s..."
                         )
 
-                error_msg = f"[ERROR] Database schema initialization failed after {timeout}s (INSTALL json may have timed out)"
+                error_msg = (
+                    f"[ERROR] Database schema initialization failed after {timeout}s"
+                )
                 raise TimeoutError(error_msg)
 
             try:
