@@ -141,6 +141,7 @@ class TestEndToEndMCPServer:
                 "PYTHONPATH": str(Path("src").absolute())
                 + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
+                "PYTHONUNBUFFERED": "1",  # Disable Python I/O buffering (belt-and-braces)
             }
         )
 
@@ -157,6 +158,7 @@ class TestEndToEndMCPServer:
 
             cmd = [
                 sys.executable,
+                "-u",  # Disable Python stdout/stderr buffering
                 "-m",
                 "hunyo_mcp_server.server",
                 "--notebook",
@@ -522,11 +524,13 @@ class TestEndToEndMCPServer:
                 "PYTHONPATH": str(Path("src").absolute())
                 + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
+                "PYTHONUNBUFFERED": "1",  # Disable Python I/O buffering (belt-and-braces)
             }
         )
 
         cmd = [
             sys.executable,
+            "-u",  # Disable Python stdout/stderr buffering
             "-m",
             "hunyo_mcp_server.server",
             "--notebook",
@@ -590,12 +594,14 @@ class TestEndToEndMCPServer:
                 "PYTHONPATH": str(Path("src").absolute())
                 + os.pathsep
                 + test_env.get("PYTHONPATH", ""),
+                "PYTHONUNBUFFERED": "1",  # Disable Python I/O buffering (belt-and-braces)
             }
         )
 
         # Try with nonexistent notebook
         cmd = [
             sys.executable,
+            "-u",  # Disable Python stdout/stderr buffering
             "-m",
             "hunyo_mcp_server.server",
             "--notebook",
