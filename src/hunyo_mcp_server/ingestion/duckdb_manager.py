@@ -155,7 +155,7 @@ class DuckDBManager:
             db_logger.success("[OK] Database schema initialized successfully")
 
             # Simple marker for test parsing (bypasses rich logger formatting)
-            print("HUNYO_READY_MARKER: DATABASE_SCHEMA_READY")  # noqa: T201
+            print("HUNYO_READY_MARKER: DATABASE_SCHEMA_READY", flush=True)  # noqa: T201
 
         except Exception as e:
             db_logger.error(f"Failed to initialize database: {e}")

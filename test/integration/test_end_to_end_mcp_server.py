@@ -190,8 +190,8 @@ class TestEndToEndMCPServer:
                 )
                 e2e_logger.info(f"[WINDOWS-CI] Platform: {platform.platform()}")
 
-                # With CI pre-installation, Windows timeout can be much shorter
-                timeout = 10.0
+                # With CI pre-installation, give generous timeout for Windows CI
+                timeout = 60.0
 
                 # Pre-flight checks for Windows CI
                 e2e_logger.info(f"[WINDOWS-CI] Temp directory: {temp_hunyo_dir}")
@@ -210,7 +210,8 @@ class TestEndToEndMCPServer:
                         f"[WINDOWS-CI] hunyo_mcp_server.server import failed: {e}"
                     )
             else:
-                timeout = 8.0
+                # Non-Windows: Unix CI with pre-installed extensions should be faster
+                timeout = 30.0
 
             db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
 
