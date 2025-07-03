@@ -352,62 +352,6 @@ class TestMarimoLiveInterceptorReal:
             interceptor.uninstall()
             assert interceptor.interceptor_active is False
 
-    def test_hook_builtin_exec(self, tmp_path):
-        """Test hooking of builtin exec function"""
-        output_file = str(tmp_path / "lineage_events.jsonl")
-
-        with patch(
-            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
-        ):
-            interceptor = MarimoLiveInterceptor(
-                notebook_path="/test/notebook.py",
-                output_file=output_file,
-                enable_runtime_debug=False,
-            )
-
-            interceptor._hook_builtin_exec()
-
-            # Verify that exec was hooked (stored as "builtin_exec")
-            assert "builtin_exec" in interceptor.original_functions
-            # The original exec should be stored
-            assert interceptor.original_functions["builtin_exec"] is not None
-
-    def test_hook_builtin_compile(self, tmp_path):
-        """Test hooking of builtin compile function"""
-        output_file = str(tmp_path / "lineage_events.jsonl")
-
-        with patch(
-            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
-        ):
-            interceptor = MarimoLiveInterceptor(
-                notebook_path="/test/notebook.py",
-                output_file=output_file,
-                enable_runtime_debug=False,
-            )
-
-            interceptor._hook_builtin_compile()
-
-            # Verify that compile was hooked (stored as "builtin_compile")
-            assert "builtin_compile" in interceptor.original_functions
-
-    def test_hook_builtin_eval(self, tmp_path):
-        """Test hooking of builtin eval function"""
-        output_file = str(tmp_path / "lineage_events.jsonl")
-
-        with patch(
-            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
-        ):
-            interceptor = MarimoLiveInterceptor(
-                notebook_path="/test/notebook.py",
-                output_file=output_file,
-                enable_runtime_debug=False,
-            )
-
-            interceptor._hook_builtin_eval()
-
-            # Verify that eval was hooked (stored as "builtin_eval")
-            assert "builtin_eval" in interceptor.original_functions
-
     def test_hook_pandas_operations(self, tmp_path):
         """Test hooking of pandas operations"""
         output_file = str(tmp_path / "lineage_events.jsonl")
@@ -734,26 +678,6 @@ class TestMarimoLiveInterceptorReal:
 
                 # Should call track_cell_execution
                 mock_track.assert_called_once()
-
-    def test_error_handling_in_hooks(self, tmp_path):
-        """Test error handling in hooked functions"""
-        output_file = str(tmp_path / "lineage_events.jsonl")
-
-        with patch(
-            "capture.live_lineage_interceptor.RUNTIME_TRACKING_AVAILABLE", False
-        ):
-            interceptor = MarimoLiveInterceptor(
-                notebook_path="/test/notebook.py",
-                output_file=output_file,
-                enable_runtime_debug=False,
-            )
-
-            # Test error handling in exec hook
-            with patch("builtins.exec", side_effect=Exception("Test error")):
-                interceptor._hook_builtin_exec()
-
-                # Should not raise exception even if hooking fails
-                # The interceptor should handle errors gracefully
 
     def test_runtime_tracking_unavailable_fallback(self, tmp_path):
         """Test fallback behavior when runtime tracking is unavailable"""

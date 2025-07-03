@@ -7,7 +7,6 @@ This module provides automatic tracking of DataFrame operations in Marimo notebo
 by monkey-patching pandas operations and intercepting cell execution.
 """
 
-import builtins
 import json
 import sys
 import threading
@@ -28,7 +27,6 @@ try:
         get_user_data_dir,
     )
     from capture.lightweight_runtime_tracker import (
-        enable_runtime_tracking,
         track_cell_execution,
     )
     from capture.logger import lineage_logger
@@ -85,7 +83,6 @@ except ImportError:
 _tracked_dataframes: weakref.WeakKeyDictionary[Any, dict[str, Any]] = (
     weakref.WeakKeyDictionary()
 )
-_cell_execution_context: dict[str, Any] = {}
 _global_interceptor: "MarimoLiveInterceptor | None" = None
 
 # Constants for validation
@@ -184,13 +181,6 @@ class MarimoLiveInterceptor:
         lineage_logger.file_op(f"Lineage logs: {self.output_file.name}")
         lineage_logger.config(f"Session: {self.session_id}")
 
-        if self.enable_runtime_debug:
-            # Enable runtime tracking with notebook path for proper naming convention
-            self.runtime_tracker = enable_runtime_tracking(
-                notebook_path=notebook_path if RUNTIME_TRACKING_AVAILABLE else None
-            )
-            lineage_logger.tracking("Runtime debugging enabled")
-
     def _detect_notebook_path(self) -> str:
         """Attempt to detect the notebook path from the call stack or environment"""
         import os
@@ -224,203 +214,13 @@ class MarimoLiveInterceptor:
         lineage_logger.config("Installing live tracking hooks...")
 
         try:
-            self._hook_builtin_exec()
-            self._hook_builtin_compile()
-            self._hook_builtin_eval()
             self._hook_pandas_operations()
             self.interceptor_active = True
-            lineage_logger.success("Live tracking active!")
+            lineage_logger.success("Live tracking active! (DataFrame operations only)")
 
         except Exception as e:
             lineage_logger.error(f"Failed to install hooks: {e}")
             self.uninstall()
-
-    def _hook_builtin_exec(self) -> None:
-        """Hook into Python's builtin exec function to detect cell execution"""
-        original_exec = builtins.exec
-
-        def monitored_exec(source, globals_dict=None, locals_dict=None):
-            # More permissive detection of actual user cell execution
-            is_user_code = False
-
-            if (
-                isinstance(source, str)
-                and globals_dict is not None
-                and len(source.strip()) > 0
-            ):
-                # Exclude obvious internal code patterns
-                exclude_patterns = [
-                    "def __create_fn__",
-                    "__dataclass_",
-                    "FrozenInstanceError",
-                    "__generated_with",
-                    "__qualname__",
-                    "recursive_repr",
-                    "_feature_version",
-                    "from __future__ import",
-                    "__annotations__",
-                    "typing.get_type_hints",
-                    "import typing",
-                    "__pydantic",
-                    "field_validator",
-                ]
-
-                is_internal = any(pattern in source for pattern in exclude_patterns)
-
-                # Much more permissive user code detection
-                has_reasonable_size = (
-                    MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH
-                )
-                has_reasonable_lines = len(source.split("\n")) <= MAX_SOURCE_LINES
-                not_just_whitespace = source.strip() != ""
-
-                # Check if this looks like a cell execution context
-                has_marimo_context = (
-                    globals_dict
-                    and any(key.startswith("__") for key in globals_dict.keys())
-                    and len(globals_dict)
-                    > MIN_GLOBALS_COUNT  # Typical marimo cell has many builtins
-                )
-
-                # Determine if this is user code - much more permissive
-                is_user_code = (
-                    not is_internal
-                    and has_reasonable_size
-                    and has_reasonable_lines
-                    and not_just_whitespace
-                    and has_marimo_context
-                )
-
-            # Debug: Log ALL potential user code for analysis
-            if (
-                isinstance(source, str)
-                and globals_dict is not None
-                and len(source.strip()) > 0
-            ):
-                source_preview = source[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
-                globals_count = len(globals_dict) if globals_dict else 0
-
-                if is_user_code:
-                    lineage_logger.tracking(
-                        f"CAPTURING USER CODE: {source_preview}... (globals: {globals_count})"
-                    )
-                else:
-                    # Show why we rejected it
-                    rejection_reasons = []
-                    if any(
-                        pattern in source
-                        for pattern in ["__dataclass_", "def __create_fn__"]
-                    ):
-                        rejection_reasons.append("internal_pattern")
-                    if not (MIN_SOURCE_LENGTH <= len(source) <= MAX_SOURCE_LENGTH):
-                        rejection_reasons.append(f"size_{len(source)}")
-                    if not globals_dict or len(globals_dict) <= MIN_GLOBALS_COUNT:
-                        rejection_reasons.append(f"context_{globals_count}")
-
-                    lineage_logger.debug(
-                        f"REJECTED: {source_preview}... ({', '.join(rejection_reasons)})"
-                    )
-
-            # Track what looks like actual user code with much broader criteria
-            if is_user_code:
-                # Generate cell ID and set execution context
-                cell_id = str(uuid.uuid4())[:8]
-                _cell_execution_context.update(
-                    {
-                        "cell_id": cell_id,
-                        "source": source,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "globals_keys": (
-                            list(globals_dict.keys())
-                            if len(globals_dict) < MAX_GLOBALS_DISPLAY
-                            else f"<{len(globals_dict)} variables>"
-                        ),
-                    }
-                )
-
-                try:
-                    # Execute with runtime tracking if enabled
-                    if self.enable_runtime_debug and self.runtime_tracker:
-                        with track_cell_execution(source, cell_id) as ctx:
-                            result = original_exec(source, globals_dict, locals_dict)
-
-                            # Scan for new DataFrames after execution
-                            if globals_dict:
-                                self._discover_new_dataframes(globals_dict)
-
-                            # Capture result if possible (for DataFrame linking)
-                            if (
-                                globals_dict
-                                and "_" in globals_dict
-                                and globals_dict["_"] is not None
-                            ):
-                                ctx.set_result(globals_dict["_"])
-
-                            return result
-                    else:
-                        # No runtime tracking - just execute normally
-                        result = original_exec(source, globals_dict, locals_dict)
-
-                        # Scan for new DataFrames after execution
-                        if globals_dict:
-                            self._discover_new_dataframes(globals_dict)
-
-                        return result
-
-                finally:
-                    # Clear context after execution
-                    _cell_execution_context.clear()
-            else:
-                return original_exec(source, globals_dict, locals_dict)
-
-        # Install the hook
-        builtins.exec = monitored_exec
-        self.original_functions["builtin_exec"] = original_exec
-
-    def _hook_builtin_compile(self) -> None:
-        """Hook into Python's builtin compile function"""
-        original_compile = builtins.compile
-
-        def monitored_compile(
-            source,
-            filename,
-            mode,
-            flags=0,
-            dont_inherit=False,  # noqa: FBT002
-            optimize=-1,
-            **kwargs,
-        ):
-            # Debug compile calls
-            if isinstance(source, str) and len(source.strip()) > 0:
-                source_preview = source[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
-                lineage_logger.debug(
-                    f"COMPILE: {source_preview}... (filename: {filename}, mode: {mode})"
-                )
-
-            return original_compile(
-                source, filename, mode, flags, dont_inherit, optimize, **kwargs
-            )
-
-        builtins.compile = monitored_compile
-        self.original_functions["builtin_compile"] = original_compile
-
-    def _hook_builtin_eval(self) -> None:
-        """Hook into Python's builtin eval function"""
-        original_eval = builtins.eval
-
-        def monitored_eval(expression, globals_dict=None, locals_dict=None):
-            # Debug eval calls
-            if isinstance(expression, str):
-                expr_preview = expression[:MAX_GLOBALS_DISPLAY].replace("\n", "\\n")
-                globals_count = len(globals_dict) if globals_dict else 0
-                lineage_logger.debug(
-                    f"EVAL: {expr_preview}... (globals: {globals_count})"
-                )
-
-            return original_eval(expression, globals_dict, locals_dict)
-
-        builtins.eval = monitored_eval
-        self.original_functions["builtin_eval"] = original_eval
 
     def _hook_pandas_operations(self) -> None:
         """Hook into pandas DataFrame operations"""
@@ -592,20 +392,6 @@ class MarimoLiveInterceptor:
                 # DataFrame might not be suitable for weak reference, continue anyway
                 pass
 
-            # TRIGGER RUNTIME TRACKING - Since DataFrame operations happen during user interaction
-            # Create a pseudo cell execution for runtime tracking if no current execution
-            runtime_execution_id = None
-            if self.enable_runtime_debug and self.runtime_tracker:
-                current_execution_id = self.runtime_tracker.get_current_execution_id()
-                if not current_execution_id:
-                    # No current execution - create one for this DataFrame operation
-                    cell_source = f"# DataFrame operation: {operation}"
-                    with track_cell_execution(cell_source) as ctx:
-                        ctx.set_result(df)
-                        runtime_execution_id = ctx.execution_id
-                else:
-                    runtime_execution_id = current_execution_id
-
             # Generate OpenLineage format event
             event_time = datetime.now(timezone.utc).isoformat()
             run_id = str(uuid.uuid4())
@@ -676,20 +462,11 @@ class MarimoLiveInterceptor:
 
             # Build run facets
             run_facets = {
-                "marimoExecution": {
+                "marimoSession": {
                     "_producer": "marimo-lineage-tracker",
-                    "executionId": runtime_execution_id
-                    or f"auto_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
                     "sessionId": self.session_id,
                 }
             }
-
-            # Add cell context if available
-            if _cell_execution_context:
-                run_facets["marimoCell"] = {
-                    "_producer": "marimo-lineage-tracker",
-                    "context": dict(_cell_execution_context),
-                }
 
             # Generate OpenLineage event
             event = {
@@ -851,27 +628,13 @@ class MarimoLiveInterceptor:
             except Exception as e:
                 lineage_logger.debug(f"Failed to calculate output column metrics: {e}")
 
-            # Get runtime execution context
-            runtime_execution_id = None
-            if self.enable_runtime_debug and self.runtime_tracker:
-                runtime_execution_id = self.runtime_tracker.get_current_execution_id()
-
             # Build run facets
             run_facets = {
-                "marimoExecution": {
+                "marimoSession": {
                     "_producer": "marimo-lineage-tracker",
-                    "executionId": runtime_execution_id
-                    or f"auto_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
                     "sessionId": self.session_id,
                 }
             }
-
-            # Add cell context if available
-            if _cell_execution_context:
-                run_facets["marimoCell"] = {
-                    "_producer": "marimo-lineage-tracker",
-                    "context": dict(_cell_execution_context),
-                }
 
             # Generate OpenLineage event
             event = {
@@ -942,18 +705,6 @@ class MarimoLiveInterceptor:
         lineage_logger.config("Uninstalling live tracking hooks...")
 
         try:
-            # Restore builtin exec
-            if "builtin_exec" in self.original_functions:
-                builtins.exec = self.original_functions["builtin_exec"]
-
-            # Restore builtin compile
-            if "builtin_compile" in self.original_functions:
-                builtins.compile = self.original_functions["builtin_compile"]
-
-            # Restore builtin eval
-            if "builtin_eval" in self.original_functions:
-                builtins.eval = self.original_functions["builtin_eval"]
-
             # Restore pandas methods
             if "pandas_methods" in self.original_functions:
                 import pandas as pd
