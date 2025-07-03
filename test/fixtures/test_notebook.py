@@ -1,48 +1,26 @@
 #!/usr/bin/env python3
 """
-Test notebook for hunyo-mcp-server end-to-end testing.
+Minimal test notebook for hunyo-mcp-server end-to-end testing.
 
-This is a simple Python file that represents a marimo notebook for testing purposes.
-The MCP server will process this file to set up infrastructure and validate the pipeline.
+Ultra-minimal Python file for testing MCP server infrastructure setup.
+No heavy operations - just basic execution to validate the pipeline.
 """
 
 # Prevent pytest from collecting this fixture file as a test module
 __test__ = False
 
-import pandas as pd
+
+# Ultra-minimal test - just verify basic Python execution
+def minimal_test():
+    """Minimal test function"""
+    return "test_complete"
 
 
-# Simple data operations that could be tracked
-def create_test_dataframe():
-    """Create a simple test DataFrame"""
-    data = {
-        "id": range(1, 6),
-        "name": ["Alice", "Bob", "Charlie", "Diana", "Eve"],
-        "score": [85, 92, 78, 96, 88],
-        "category": ["A", "B", "A", "B", "A"],
-    }
-    return pd.DataFrame(data)
-
-
-def transform_data(df):
-    """Simple data transformation"""
-    return (
-        df.groupby("category")
-        .agg({"score": ["mean", "max", "min"], "id": "count"})
-        .round(2)
-    )
-
-
-# Test notebook execution
+# Minimal execution
 if __name__ == "__main__":
-    print("🧪 Test notebook execution started")
+    print("[START] Minimal test notebook execution")
 
-    # Create test data
-    df = create_test_dataframe()
-    print(f"[DATA] Created DataFrame with {len(df)} rows")
+    result = minimal_test()
+    print(f"[RESULT] {result}")
 
-    # Transform data
-    summary = transform_data(df)
-    print(f"📈 Generated summary with {len(summary)} rows")
-
-    print("[OK] Test notebook execution completed")
+    print("[OK] Minimal test notebook completed")

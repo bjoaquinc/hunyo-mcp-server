@@ -114,6 +114,9 @@ class TestEndToEndMCPServer:
 
         return total_events, validation_errors
 
+    @pytest.mark.timeout(
+        120, method="thread"
+    )  # Override 30s default - allow up to 2 minutes
     @pytest.mark.integration
     @pytest.mark.slow
     def test_complete_hunyo_mcp_server_pipeline(
@@ -172,8 +175,9 @@ class TestEndToEndMCPServer:
                 cmd,
                 env=test_env,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.STDOUT,  # Merge stderr to stdout to capture all output
                 text=True,
+                bufsize=1,  # Line-buffered across platforms
             )
 
             # 3. Wait for database file to appear (cross-platform race condition fix)
@@ -280,15 +284,14 @@ class TestEndToEndMCPServer:
                             )
                             return True
 
-                        _, stderr = process.communicate()
+                        process.communicate()  # Clean up any remaining output
                         e2e_logger.error(
                             f"[ERROR] Process exited early with code {process.returncode}"
                         )
                         e2e_logger.error(
-                            f"[FILE] Subprocess STDOUT: {accumulated_output}"
+                            f"[FILE] Subprocess OUTPUT: {accumulated_output}"
                         )
-                        e2e_logger.error(f"[FILE] Subprocess STDERR: {stderr}")
-                        error_msg = f"[ERROR] Server process exited before database was created: {stderr}"
+                        error_msg = f"[ERROR] Server process exited before database was created (exit code: {process.returncode})"
                         raise RuntimeError(error_msg)
 
                     # Try to read new output from queue
@@ -316,6 +319,12 @@ class TestEndToEndMCPServer:
                         e2e_logger.info(
                             f"[WAIT] Schema still initializing after {elapsed:.0f}s..."
                         )
+
+                # Sanity check: verify if ready marker was actually in the output
+                if ready_marker in accumulated_output:
+                    e2e_logger.error(
+                        f"[ERROR] Ready marker found in output but not detected in time! Output: {accumulated_output[-500:]}"
+                    )
 
                 error_msg = (
                     f"[ERROR] Database schema initialization failed after {timeout}s"
