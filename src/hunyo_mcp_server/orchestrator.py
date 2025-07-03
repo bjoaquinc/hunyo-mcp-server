@@ -84,7 +84,7 @@ class HunyoOrchestrator:
             self._start_ingestion_components()
 
             orchestrator_logger.success("[OK] All components started successfully")
-            self.active = True
+            self.running = True
 
         except Exception as e:
             orchestrator_logger.error(f"[ERROR] Failed to start components: {e}")

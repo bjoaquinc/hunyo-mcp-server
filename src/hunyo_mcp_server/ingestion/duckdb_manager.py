@@ -61,6 +61,9 @@ class DuckDBManager:
             # Verify schema creation
             self._verify_schema()
 
+            # Explicitly commit to ensure database file is created on disk (Windows compatibility)
+            self.connection.commit()
+
             self._schema_initialized = True
             db_logger.success("[OK] Database schema initialized successfully")
 
