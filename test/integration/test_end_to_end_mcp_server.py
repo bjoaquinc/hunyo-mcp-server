@@ -217,32 +217,57 @@ class TestEndToEndMCPServer:
             def wait_for_database_ready(
                 db_path: Path, timeout: float = timeout
             ) -> bool:
-                """Wait for database schema initialization by monitoring process output."""
-                import fcntl
-                import select
+                """Wait for database schema initialization using cross-platform process monitoring."""
+                import queue
+                import threading
 
                 start_time = time.time()
 
                 # Look for the ready marker that the server emits when schema is complete
                 ready_marker = "HUNYO_READY_MARKER: DATABASE_SCHEMA_READY"
 
-                # Set stdout to non-blocking mode for reading
-                stdout_fd = process.stdout.fileno()
-                flags = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
-                fcntl.fcntl(stdout_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-
+                # Cross-platform approach: Use threading to read process output
+                output_queue = queue.Queue()
                 accumulated_output = ""
+
+                def read_output():
+                    """Background thread to read process output continuously."""
+                    try:
+                        while process.poll() is None:
+                            line = process.stdout.readline()
+                            if line:
+                                output_queue.put(line)
+                            else:
+                                time.sleep(0.1)
+                        # Read any remaining output
+                        for line in process.stdout:
+                            output_queue.put(line)
+                    except Exception as e:
+                        e2e_logger.debug(f"[DEBUG] Output reader thread error: {e}")
+                    finally:
+                        output_queue.put(None)  # Signal end
+
+                # Start background reader thread
+                reader_thread = threading.Thread(target=read_output, daemon=True)
+                reader_thread.start()
 
                 while time.time() - start_time < timeout:
                     # Check if process died early
                     if process.poll() is not None:
-                        # Read any remaining output
+                        # Collect any remaining output
                         try:
-                            remaining = process.stdout.read()
-                            if remaining:
-                                accumulated_output += remaining
-                        except (OSError, ValueError) as e:
-                            e2e_logger.debug(f"[DEBUG] Error reading final output: {e}")
+                            while True:
+                                try:
+                                    line = output_queue.get_nowait()
+                                    if line is None:
+                                        break
+                                    accumulated_output += line
+                                except queue.Empty:
+                                    break
+                        except Exception as e:
+                            e2e_logger.debug(
+                                f"[DEBUG] Error collecting final output: {e}"
+                            )
 
                         # Check if ready marker appeared in output
                         if ready_marker in accumulated_output:
@@ -263,24 +288,23 @@ class TestEndToEndMCPServer:
                         error_msg = f"[ERROR] Server process exited before database was created: {stderr}"
                         raise RuntimeError(error_msg)
 
-                    # Try to read new output (non-blocking)
+                    # Try to read new output from queue
                     try:
-                        # Use select to check if data is available
-                        ready, _, _ = select.select([stdout_fd], [], [], 0.1)
-                        if ready:
-                            chunk = process.stdout.read()
-                            if chunk:
-                                accumulated_output += chunk
+                        line = output_queue.get(timeout=0.1)
+                        if line is None:
+                            # Reader thread finished
+                            break
+                        accumulated_output += line
 
-                                # Check if ready marker appeared
-                                if ready_marker in accumulated_output:
-                                    elapsed = time.time() - start_time
-                                    e2e_logger.success(
-                                        f"[OK] Database schema ready: {db_path} (initialized in {elapsed:.1f}s)"
-                                    )
-                                    return True
-                    except (BlockingIOError, OSError):
-                        # No data available yet
+                        # Check if ready marker appeared
+                        if ready_marker in accumulated_output:
+                            elapsed = time.time() - start_time
+                            e2e_logger.success(
+                                f"[OK] Database schema ready: {db_path} (initialized in {elapsed:.1f}s)"
+                            )
+                            return True
+                    except queue.Empty:
+                        # No new output yet
                         pass
 
                     # Progress logging
@@ -289,8 +313,6 @@ class TestEndToEndMCPServer:
                         e2e_logger.info(
                             f"[WAIT] Schema still initializing after {elapsed:.0f}s (INSTALL json may be downloading...)"
                         )
-
-                    time.sleep(0.5)
 
                 error_msg = f"[ERROR] Database schema initialization failed after {timeout}s (INSTALL json may have timed out)"
                 raise TimeoutError(error_msg)
