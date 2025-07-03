@@ -200,7 +200,7 @@ class TestMarimoNotebookFixtures:
                 "import importlib.util; "
                 f"spec = importlib.util.spec_from_file_location('test_nb', {str(temp_notebook)!r}); "
                 "module = importlib.util.module_from_spec(spec); "
-                "print('✅ Notebook structure valid')"
+                "print('[OK] Notebook structure valid')"
             )
             result = subprocess.run(
                 ["python", "-c", python_code],
@@ -214,7 +214,7 @@ class TestMarimoNotebookFixtures:
                 result.returncode == 0
             ), f"Failed to import notebook structure: {result.stderr}"
             assert (
-                "✅ Notebook structure valid" in result.stdout
+                "[OK] Notebook structure valid" in result.stdout
             ), "Notebook structure should be valid"
 
         except (subprocess.TimeoutExpired, FileNotFoundError) as e:

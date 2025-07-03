@@ -64,7 +64,7 @@ class EventProcessor:
             with open(schema_path) as f:
                 schema = json.load(f)
 
-            processor_logger.success(f"✅ Loaded schema: {schema_filename}")
+            processor_logger.success(f"[OK] Loaded schema: {schema_filename}")
             return schema
 
         except Exception as e:
@@ -144,7 +144,7 @@ class EventProcessor:
             self.processed_events += successful
 
             if successful > 0:
-                processor_logger.success(f"✅ Processed {successful} runtime events")
+                processor_logger.success(f"[OK] Processed {successful} runtime events")
 
         except Exception as e:
             self.db_manager.rollback_transaction()
@@ -200,7 +200,7 @@ class EventProcessor:
             self.processed_events += successful
 
             if successful > 0:
-                processor_logger.success(f"✅ Processed {successful} lineage events")
+                processor_logger.success(f"[OK] Processed {successful} lineage events")
 
         except Exception as e:
             self.db_manager.rollback_transaction()

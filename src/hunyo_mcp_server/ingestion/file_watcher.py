@@ -54,7 +54,7 @@ class JSONLFileHandler(FileSystemEventHandler):
             last_processed = self._last_processed.get(file_path, 0)
 
             if current_time - last_processed >= self._debounce_delay:
-                watcher_logger.tracking(f"📝 JSONL file modified: {file_path.name}")
+                watcher_logger.tracking(f"[FILE] JSONL file modified: {file_path.name}")
                 self._queue_for_processing(file_path)
             else:
                 # Add to pending files for later processing
@@ -117,7 +117,7 @@ class FileWatcher:
         self.files_processed = 0
         self.events_processed = 0
 
-        watcher_logger.status("File Watcher initialized")
+        watcher_logger.status("[SCAN] Starting file watcher...")
         watcher_logger.info(f"Runtime directory: {self.runtime_dir}")
         watcher_logger.info(f"Lineage directory: {self.lineage_dir}")
 
@@ -127,7 +127,7 @@ class FileWatcher:
             watcher_logger.warning("File watcher already running")
             return
 
-        watcher_logger.status("🔍 Starting file watcher...")
+        watcher_logger.status("[SCAN] Starting file watcher...")
 
         try:
             # Ensure directories exist
@@ -145,7 +145,7 @@ class FileWatcher:
             self._processing_task = asyncio.create_task(self._background_processor())
 
             self.running = True
-            watcher_logger.success("✅ File watcher started")
+            watcher_logger.success("[OK] File watcher started")
 
             # Process any existing files
             await self._process_existing_files()
@@ -164,7 +164,7 @@ class FileWatcher:
         if not self.running:
             return
 
-        watcher_logger.status("🛑 Stopping file watcher...")
+        watcher_logger.status("[SCAN] Stopping file watcher...")
 
         self.running = False
 
@@ -181,7 +181,7 @@ class FileWatcher:
             except asyncio.CancelledError:
                 pass
 
-        watcher_logger.success("✅ File watcher stopped")
+        watcher_logger.success("[OK] File watcher stopped")
 
     async def _process_existing_files(self) -> None:
         """Process any existing JSONL files on startup."""
@@ -201,7 +201,7 @@ class FileWatcher:
 
         if runtime_files or lineage_files:
             watcher_logger.success(
-                f"✅ Processed {len(runtime_files)} runtime + {len(lineage_files)} lineage files"
+                f"[OK] Processed {len(runtime_files)} runtime + {len(lineage_files)} lineage files"
             )
         else:
             watcher_logger.info("No existing JSONL files found")
@@ -252,6 +252,22 @@ class FileWatcher:
             return
 
         try:
+            # Validate the file is actually complete (not currently being written)
+            try:
+                # Quick check: file size should be stable
+                size_before = file_path.stat().st_size
+                await asyncio.sleep(0.1)  # Brief wait
+                size_after = file_path.stat().st_size
+
+                if size_before != size_after:
+                    watcher_logger.debug(
+                        f"File {file_path.name} still being written, skipping"
+                    )
+                    return
+            except Exception as e:
+                watcher_logger.error(f"Error validating file {file_path}: {e}")
+                return
+
             # Process file with event processor
             events_count = self.event_processor.process_jsonl_file(
                 file_path, event_type
@@ -263,7 +279,7 @@ class FileWatcher:
 
                 if self.verbose:
                     watcher_logger.success(
-                        f"✅ Processed {events_count} events from {file_path.name}"
+                        f"[OK] Processed {events_count} events from {file_path.name}"
                     )
                 else:
                     watcher_logger.tracking(

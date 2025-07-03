@@ -131,10 +131,10 @@ print(df)
             result = cli_runner.invoke(main, ["--notebook", str(temp_notebook_file)])
 
             assert result.exit_code == 0
-            assert "🎯 Starting Hunyo MCP Server" in result.output
-            assert f"📝 Notebook: {temp_notebook_file}" in result.output
-            assert "🛑 Keyboard interrupt received..." in result.output
-            assert "✅ Shutdown complete" in result.output
+            assert "[START] Starting Hunyo MCP Server" in result.output
+            assert f"[INFO] Notebook: {temp_notebook_file}" in result.output
+            assert "[STOP] Keyboard interrupt received..." in result.output
+            assert "[OK] Shutdown complete" in result.output
 
     def test_cli_dev_mode_flag(self, cli_runner, temp_notebook_file):
         """Test --dev-mode flag sets environment variable"""
@@ -262,7 +262,7 @@ print(df)
             result = cli_runner.invoke(main, ["--notebook", str(temp_notebook_file)])
 
             assert result.exit_code != 0
-            assert "❌ Error: Orchestrator startup failed" in result.output
+            assert "[ERROR] Error: Orchestrator startup failed" in result.output
             # Orchestrator stop should still be called for cleanup
             mock_orchestrator_instance.stop.assert_called_once()
 
@@ -295,8 +295,8 @@ print(df)
             result = cli_runner.invoke(main, ["--notebook", str(temp_notebook_file)])
 
             assert result.exit_code == 0
-            assert "🛑 Keyboard interrupt received..." in result.output
-            assert "✅ Shutdown complete" in result.output
+            assert "[STOP] Keyboard interrupt received..." in result.output
+            assert "[OK] Shutdown complete" in result.output
             mock_orchestrator_instance.stop.assert_called_once()
 
     def test_mcp_server_configuration(self):

@@ -59,15 +59,15 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
     # Ensure data directory structure exists
     ensure_directory_structure()
 
-    click.echo("🎯 Starting Hunyo MCP Server")
-    click.echo(f"📝 Notebook: {notebook}")
-    click.echo(f"📁 Data directory: {get_hunyo_data_dir()}")
+    click.echo("[START] Starting Hunyo MCP Server")
+    click.echo(f"[INFO] Notebook: {notebook}")
+    click.echo(f"[INFO] Data directory: {get_hunyo_data_dir()}")
 
     orchestrator = None
 
     def signal_handler(signum, _frame):
         """Handle termination signals gracefully."""
-        click.echo(f"\n🛑 Received signal {signum}, shutting down gracefully...")
+        click.echo(f"\n[STOP] Received signal {signum}, shutting down gracefully...")
         if orchestrator:
             orchestrator.stop()
         sys.exit(0)
@@ -86,11 +86,11 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
         # Start all components
         orchestrator.start()
 
-        click.echo("🚀 MCP server starting...")
+        click.echo("[START] MCP server starting...")
 
         # Check if we're running in standalone mode
         if standalone:
-            click.echo("📡 Running in standalone mode - waiting for connections...")
+            click.echo("[INFO] Running in standalone mode - waiting for connections...")
             # Keep-alive loop for standalone operation (testing/development)
             try:
                 while True:
@@ -101,17 +101,17 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
                 raise
         else:
             # Normal MCP protocol mode (with client via stdin/stdout)
-            click.echo("💬 Running in MCP protocol mode...")
+            click.echo("[INFO] Running in MCP protocol mode...")
             mcp.run()
 
     except KeyboardInterrupt:
         try:
-            click.echo("\n🛑 Keyboard interrupt received...")
+            click.echo("\n[STOP] Keyboard interrupt received...")
         except (OSError, ValueError):
             pass
     except Exception as e:
         try:
-            click.echo(f"❌ Error: {e}")
+            click.echo(f"[ERROR] Error: {e}")
         except (OSError, ValueError):
             pass
         raise
@@ -122,7 +122,7 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
 
         # Safe echo during shutdown (may fail if stdout is closed)
         try:
-            click.echo("✅ Shutdown complete")
+            click.echo("[OK] Shutdown complete")
         except (OSError, ValueError):
             # stdout/stderr may be closed during process termination
             pass

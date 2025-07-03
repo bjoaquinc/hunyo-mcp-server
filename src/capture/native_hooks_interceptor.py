@@ -111,7 +111,7 @@ class MarimoNativeHooksInterceptor:
     def install(self):
         """Install marimo's native execution hooks"""
         if self.interceptor_active:
-            hooks_logger.warning("⚠️  Native hooks already installed")
+            hooks_logger.warning("[WARN] Native hooks already installed")
             return
 
         try:
@@ -140,14 +140,13 @@ class MarimoNativeHooksInterceptor:
             self.installed_hooks.append(("ON_FINISH_HOOKS", finish_hook))
 
             self.interceptor_active = True
-            hooks_logger.info("✅ Marimo native hooks installed!")
-            hooks_logger.info(f"   📁 Runtime log: {self.runtime_file.name}")
-            hooks_logger.info(f"   📊 Lineage log: {self.lineage_file.name}")
+            hooks_logger.info("[OK] Marimo native hooks installed!")
+            hooks_logger.info(f"   [DATA] Lineage log: {self.lineage_file.name}")
 
         except ImportError as e:
-            hooks_logger.error(f"❌ Failed to import marimo hooks: {e}")
+            hooks_logger.error(f"[ERROR] Failed to import marimo hooks: {e}")
         except Exception as e:
-            hooks_logger.error(f"❌ Failed to install native hooks: {e}")
+            hooks_logger.error(f"[ERROR] Failed to install native hooks: {e}")
 
     def _install_pandas_interception(self):
         """Install pandas method interception for OpenLineage tracking"""
@@ -499,7 +498,7 @@ class MarimoNativeHooksInterceptor:
 
         except Exception as e:
             hooks_logger.warning(
-                f"⚠️  Could not calculate column lineage for '{operation}': {e}"
+                f"[WARN] Could not calculate column lineage for '{operation}': {e}"
             )
             return None
 
@@ -649,7 +648,7 @@ class MarimoNativeHooksInterceptor:
                 }
             except Exception as e:
                 hooks_logger.warning(
-                    f"⚠️  Could not generate digest for {source_path}: {e}"
+                    f"[WARN] Could not generate digest for {source_path}: {e}"
                 )
 
         # Add column lineage facet if available
@@ -728,7 +727,7 @@ class MarimoNativeHooksInterceptor:
 
         # Use marimo-aware logger that handles context properly
         hooks_logger.info(
-            f"🔗 OpenLineage {event_type}: {job_name} (run: {run_id[:8]})"
+            f"[LINK] OpenLineage {event_type}: {job_name} (run: {run_id[:8]})"
         )
 
     def _create_pre_execution_hook(self):
@@ -894,7 +893,10 @@ class MarimoNativeHooksInterceptor:
                     }
 
                     if error:
-                        event_data["error"] = str(error)
+                        event_data["error_info"] = {
+                            "error_type": type(error).__name__,
+                            "error_message": str(error),
+                        }
 
                     self._emit_real_cell_event(event_data)
 
@@ -978,7 +980,7 @@ class MarimoNativeHooksInterceptor:
                 )
             except Exception as e:
                 # Use marimo-aware logger that handles context properly
-                hooks_logger.warning(f"⚠️  Error in finish hook: {e}")
+                hooks_logger.warning(f"[WARN] Error in finish hook: {e}")
 
         return finish_hook
 
@@ -1088,7 +1090,7 @@ class MarimoNativeHooksInterceptor:
                     f.write(json.dumps(event, default=str) + "\n")
         except Exception as e:
             # Use marimo-aware logger that handles context properly
-            hooks_logger.warning(f"⚠️  Failed to emit lineage event: {e}")
+            hooks_logger.warning(f"[WARN] Failed to emit lineage event: {e}")
 
     def uninstall(self):
         """Remove all installed hooks and restore original pandas methods"""
@@ -1122,10 +1124,10 @@ class MarimoNativeHooksInterceptor:
 
             self.installed_hooks.clear()
             self.interceptor_active = False
-            hooks_logger.info("✅ Native hooks uninstalled")
+            hooks_logger.info("[OK] Native hooks uninstalled")
 
         except Exception as e:
-            hooks_logger.warning(f"⚠️  Error during hook uninstall: {e}")
+            hooks_logger.warning(f"[WARN] Error during hook uninstall: {e}")
 
     def _restore_pandas_methods(self):
         """Restore original pandas methods"""
@@ -1150,7 +1152,7 @@ class MarimoNativeHooksInterceptor:
             hooks_logger.info("🐼 Pandas methods restored")
 
         except Exception as e:
-            hooks_logger.warning(f"⚠️  Error restoring pandas methods: {e}")
+            hooks_logger.warning(f"[WARN] Error restoring pandas methods: {e}")
 
     def get_session_summary(self):
         """Get session summary"""
@@ -1177,7 +1179,7 @@ def enable_native_hook_tracking(
 
     if _global_native_interceptor is not None:
         hooks_logger.warning(
-            f"⚠️  Native hook tracking already enabled (session: {_global_native_interceptor.session_id})"
+            f"[WARN] Native hook tracking already enabled (session: {_global_native_interceptor.session_id})"
         )
         return _global_native_interceptor
 
@@ -1198,7 +1200,7 @@ def disable_native_hook_tracking():
         _global_native_interceptor = None
         hooks_logger.info("🔇 Native hook tracking disabled")
     else:
-        hooks_logger.warning("⚠️  Native hook tracking was not active")
+        hooks_logger.warning("[WARN] Native hook tracking was not active")
 
 
 def is_native_tracking_active():

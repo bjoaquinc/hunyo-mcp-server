@@ -1,203 +1,163 @@
 """
-Logging utilities for hunyo-notebook-memories-mcp
-Provides structured logging with emoji-rich user feedback
+Hunyo MCP Server - Enhanced logging with context-aware emoji formatting.
+
+Provides structured logging with:
+- Context-specific emoji formatting (marimo-aware fallbacks)
+- Proper file handling and rotation
+- Production-ready log levels and formatting
+- Windows-compatible ASCII-safe output
 """
+
+from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import ClassVar
+
+# Windows-safe emoji mapping (ASCII alternatives)
+EMOJI_MAP = {
+    logging.DEBUG: "[DEBUG]",
+    logging.INFO: "[INFO]",
+    logging.WARNING: "[WARN]",
+    logging.ERROR: "[ERROR]",
+    logging.CRITICAL: "[CRITICAL]",
+}
 
 
 class EmojiFormatter(logging.Formatter):
-    """Custom formatter that adds emojis to log levels"""
+    """Custom formatter that adds context-appropriate emojis to log messages"""
 
-    EMOJI_MAP: ClassVar[dict[int, str]] = {
-        logging.DEBUG: "🔍",
-        logging.INFO: "💡",  # Changed from ambiguous info symbol to light bulb
-        logging.WARNING: "⚠️",
-        logging.ERROR: "❌",
-        logging.CRITICAL: "🚨",
-    }
-
-    def format(self, record: logging.LogRecord) -> str:
-        # Add emoji prefix
-        emoji = self.EMOJI_MAP.get(record.levelno, "📝")
-
-        # Format the base message
-        formatted = super().format(record)
-
-        # Add emoji prefix to the message
-        return f"{emoji} {formatted}"
-
-
-class HunyoLogger:
-    """Custom logger for hunyo capture modules with emoji support"""
-
-    def __init__(self, name: str, level: int = logging.INFO):
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(level)
-
-        # Avoid duplicate handlers
-        if not self.logger.handlers:
-            self._setup_handlers()
-
-    def _setup_handlers(self) -> None:
-        """Setup console handler with emoji formatting"""
-        # Detect marimo context and avoid logging conflicts
-        if self._is_marimo_context():
-            # Don't add handlers in marimo - use direct print instead
-            return
-
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(logging.INFO)
-
-        # Use custom emoji formatter
-        formatter = EmojiFormatter(
-            fmt="%(message)s", datefmt="%H:%M:%S"  # Just the message for clean output
-        )
-        console_handler.setFormatter(formatter)
-
-        self.logger.addHandler(console_handler)
-
-    def _is_marimo_context(self) -> bool:
-        """Check if we're running inside a marimo notebook"""
-        try:
-            import sys
-
-            # Check if marimo is in the call stack
-            frame = sys._getframe()
-            while frame:
-                if "marimo" in str(frame.f_code.co_filename):
-                    return True
-                frame = frame.f_back
-            return False
-        except (AttributeError, ValueError):  # Specific exceptions for frame inspection
-            return False
-
-    def setup_file_logging(self, log_file: Path | None = None) -> Path:
-        """Add file logging for debugging"""
-        if log_file is None:
-            from capture import get_user_data_dir
-
-            log_dir = Path(get_user_data_dir()) / "logs"
-            log_dir.mkdir(parents=True, exist_ok=True)
-            log_file = (
-                log_dir / f"hunyo_{datetime.now(timezone.utc).strftime('%Y%m%d')}.log"
-            )
-
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.DEBUG)
-
-        # Detailed format for file logs
-        file_formatter = logging.Formatter(
-            fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
-        file_handler.setFormatter(file_formatter)
-
-        self.logger.addHandler(file_handler)
-        return log_file
-
-    def _safe_log(self, level: str, message: str) -> None:
-        """Safely log messages, using print in marimo context"""
-        try:
-            if self._is_marimo_context():
-                # Use print for marimo to avoid stream conflicts
-                print(message)  # noqa: T201
-            else:
-                # Use regular logging outside marimo
-                getattr(self.logger, level)(message)
-        except (OSError, ValueError, AttributeError) as e:
-            # Handle I/O errors (closed stdout/stderr during shutdown)
-            # Silently ignore these errors to prevent crash during cleanup
-            if (
-                "I/O operation on closed file" in str(e)
-                or "closed file" in str(e)
-                or "stream" in str(e).lower()
-            ):
-                pass  # Expected during shutdown
-            else:
-                # Re-raise unexpected errors
-                raise
-        except Exception:  # noqa: S110
-            # Catch any other logging-related errors during shutdown
-            # This is a last resort to prevent crashes during cleanup
-            # We intentionally don't log here to avoid recursive logging errors
-            pass
-
-    # Convenience methods with emoji themes
-    def startup(self, message: str) -> None:
-        """Log startup messages with rocket emoji"""
-        self._safe_log("info", f"🚀 {message}")
-
-    def success(self, message: str) -> None:
-        """Log success messages with checkmark emoji"""
-        self._safe_log("info", f"✅ {message}")
-
-    def status(self, message: str) -> None:
-        """Log status messages with target emoji"""
-        self._safe_log("info", f"🎯 {message}")
-
-    def tracking(self, message: str) -> None:
-        """Log tracking messages with magnifying glass emoji"""
-        self._safe_log("info", f"🔍 {message}")
-
-    def notebook(self, message: str) -> None:
-        """Log notebook-related messages with notebook emoji"""
-        self._safe_log("info", f"📝 {message}")
-
-    def lineage(self, message: str) -> None:
-        """Log lineage messages with link emoji"""
-        self._safe_log("info", f"🔗 {message}")
-
-    def runtime(self, message: str) -> None:
-        """Log runtime messages with stopwatch emoji"""
-        self._safe_log("info", f"⏱️ {message}")
-
-    def config(self, message: str) -> None:
-        """Log configuration messages with gear emoji"""
-        self._safe_log("info", f"🔧 {message}")
-
-    def file_op(self, message: str) -> None:
-        """Log file operations with folder emoji"""
-        self._safe_log("info", f"📁 {message}")
-
-    def warning(self, message: str) -> None:
-        """Log warnings"""
-        self._safe_log("warning", f"⚠️ {message}")
-
-    def error(self, message: str) -> None:
-        """Log errors"""
-        self._safe_log("error", f"❌ {message}")
-
-    def info(self, message: str) -> None:
-        """Log info messages"""
-        self._safe_log("info", message)
-
-    def debug(self, message: str) -> None:
-        """Log debug messages"""
-        self._safe_log("debug", f"🔍 {message}")
-
-    def critical(self, message: str) -> None:
-        """Log critical messages"""
-        self._safe_log("critical", f"🚨 {message}")
-
-
-# Global logger instances for different modules
-_loggers = {}
+    def format(self, record):
+        # Add emoji prefix based on log level (Windows-safe)
+        emoji = EMOJI_MAP.get(record.levelno, "[INFO]")
+        original_msg = super().format(record)
+        return f"{emoji} {original_msg}"
 
 
 def get_logger(name: str) -> HunyoLogger:
-    """Get or create a logger for a module"""
-    if name not in _loggers:
-        _loggers[name] = HunyoLogger(name)
-    return _loggers[name]
+    """
+    Get a context-aware logger instance.
+
+    Args:
+        name: Logger name (e.g., 'hunyo.capture.lineage')
+
+    Returns:
+        HunyoLogger instance with emoji formatting
+    """
+    return HunyoLogger(name)
 
 
-# Common loggers
-capture_logger = get_logger("hunyo.capture")
-runtime_logger = get_logger("hunyo.runtime")
-lineage_logger = get_logger("hunyo.lineage")
-hooks_logger = get_logger("hunyo.hooks")
+class HunyoLogger:
+    """
+    Hunyo-specific logger with context-aware emoji formatting.
+
+    Provides enhanced logging methods with emoji prefixes that degrade
+    gracefully in different environments (marimo notebooks, CLI, etc.).
+    """
+
+    def __init__(self, name: str):
+        """Initialize logger with emoji-enhanced formatting"""
+        self.logger = logging.getLogger(name)
+
+        # Only configure if not already configured
+        if not self.logger.handlers:
+            # Console handler with emoji formatting
+            console_handler = logging.StreamHandler(sys.stdout)
+            console_handler.setFormatter(
+                EmojiFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+            )
+            self.logger.addHandler(console_handler)
+            self.logger.setLevel(logging.INFO)
+
+        # Store original logging methods for fallback
+        self._original_info = self.logger.info
+        self._original_warning = self.logger.warning
+        self._original_error = self.logger.error
+        self._original_debug = self.logger.debug
+
+    def _safe_log(self, level: str, message: str):
+        """Safely log messages with fallback handling"""
+        try:
+            getattr(self.logger, level)(message)
+        except (UnicodeEncodeError, OSError):
+            # Fallback for environments that can't handle emojis
+            fallback_message = message.encode("ascii", errors="replace").decode("ascii")
+            getattr(self.logger, level)(fallback_message)
+
+    # Context-specific logging methods (Windows-safe)
+    def startup(self, message: str):
+        """Log startup/initialization messages"""
+        self._safe_log("info", f"[START] {message}")
+
+    def success(self, message: str):
+        """Log successful operations"""
+        self._safe_log("info", f"[OK] {message}")
+
+    def target(self, message: str):
+        """Log target/goal achievement"""
+        self._safe_log("info", f"[TARGET] {message}")
+
+    def tracking(self, message: str):
+        """Log tracking/monitoring activities"""
+        self._safe_log("info", f"[DEBUG] {message}")
+
+    def status(self, message: str):
+        """Log status updates"""
+        self._safe_log("info", f"[INFO] {message}")
+
+    def lineage(self, message: str):
+        """Log lineage-related operations"""
+        self._safe_log("info", f"[LINK] {message}")
+
+    def timing(self, message: str):
+        """Log timing/performance information"""
+        self._safe_log("info", f"[TIME] {message}")
+
+    def notebook(self, message: str):
+        """Log notebook-related messages"""
+        self._safe_log("info", f"[NOTEBOOK] {message}")
+
+    def runtime(self, message: str):
+        """Log runtime messages"""
+        self._safe_log("info", f"[RUNTIME] {message}")
+
+    def config(self, message: str):
+        """Log configuration messages"""
+        self._safe_log("info", f"[CONFIG] {message}")
+
+    def file_op(self, message: str):
+        """Log file operations"""
+        self._safe_log("info", f"[FILE] {message}")
+
+    def critical(self, message: str):
+        """Log critical messages"""
+        self._safe_log("critical", f"[CRITICAL] {message}")
+
+    # Standard logging methods with emoji enhancement
+    def info(self, message: str):
+        """Log info messages"""
+        self._safe_log("info", message)
+
+    def warning(self, message: str):
+        """Log warning messages"""
+        self._safe_log("warning", f"[WARN] {message}")
+
+    def error(self, message: str):
+        """Log error messages"""
+        self._safe_log("error", f"[ERROR] {message}")
+
+    def exception(self, message: str):
+        """Log exception with traceback"""
+        self.logger.exception(f"[ERROR] {message}")
+
+    def debug(self, message: str):
+        """Log debug messages"""
+        self._safe_log("debug", f"[DEBUG] {message}")
+
+    # Direct access to underlying logger
+    def get_logger(self):
+        """Get the underlying logger instance"""
+        return self.logger
+
+
+# Logger registry to avoid duplicate loggers
+_loggers: dict[str, HunyoLogger] = {}

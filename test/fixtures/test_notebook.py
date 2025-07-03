@@ -39,10 +39,10 @@ if __name__ == "__main__":
 
     # Create test data
     df = create_test_dataframe()
-    print(f"📊 Created DataFrame with {len(df)} rows")
+    print(f"[DATA] Created DataFrame with {len(df)} rows")
 
     # Transform data
     summary = transform_data(df)
     print(f"📈 Generated summary with {len(summary)} rows")
 
-    print("✅ Test notebook execution completed")
+    print("[OK] Test notebook execution completed")

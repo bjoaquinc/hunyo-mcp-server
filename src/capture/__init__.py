@@ -9,13 +9,13 @@ import hashlib
 import os
 from pathlib import Path
 
-from .logger import (
-    capture_logger,
-    get_logger,
-    hooks_logger,
-    lineage_logger,
-    runtime_logger,
-)
+from .logger import get_logger
+
+# Create common logger instances that were previously exported
+capture_logger = get_logger("hunyo.capture")
+runtime_logger = get_logger("hunyo.runtime")
+lineage_logger = get_logger("hunyo.lineage")
+hooks_logger = get_logger("hunyo.hooks")
 
 
 def get_notebook_file_hash(notebook_path: str) -> str:

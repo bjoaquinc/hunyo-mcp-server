@@ -62,7 +62,7 @@ class DuckDBManager:
             self._verify_schema()
 
             self._schema_initialized = True
-            db_logger.success("✅ Database schema initialized successfully")
+            db_logger.success("[OK] Database schema initialized successfully")
 
         except Exception as e:
             db_logger.error(f"Failed to initialize database: {e}")

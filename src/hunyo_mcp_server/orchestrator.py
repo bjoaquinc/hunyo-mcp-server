@@ -11,6 +11,7 @@ Manages the startup, coordination, and shutdown of all system components:
 
 import asyncio
 import threading
+import time
 from pathlib import Path
 
 # Import logging utility
@@ -69,27 +70,25 @@ class HunyoOrchestrator:
             orchestrator_logger.warning("Orchestrator already running")
             return
 
-        orchestrator_logger.startup("🚀 Starting Hunyo MCP Server components...")
+        orchestrator_logger.startup("[START] Starting Hunyo MCP Server components...")
 
+        # Create event directories
+        runtime_dir = get_hunyo_data_dir() / "events" / "runtime"
+        lineage_dir = get_hunyo_data_dir() / "events" / "lineage"
+        runtime_dir.mkdir(parents=True, exist_ok=True)
+        lineage_dir.mkdir(parents=True, exist_ok=True)
+
+        # Start ingestion components
         try:
-            # 1. Initialize database
-            self._start_database()
-
-            # 2. Initialize event processor
-            self._start_event_processor()
-
-            # 3. Start file watching in background
-            self._start_file_watcher()
-
-            # 4. Initialize capture layer (inject into notebook)
             self._start_capture_layer()
+            self._start_ingestion_components()
 
-            self.running = True
-            orchestrator_logger.success("✅ All components started successfully")
+            orchestrator_logger.success("[OK] All components started successfully")
+            self.active = True
 
         except Exception as e:
-            orchestrator_logger.error(f"Failed to start components: {e}")
-            self.stop()  # Clean up any partially started components
+            orchestrator_logger.error(f"[ERROR] Failed to start components: {e}")
+            self.stop()  # Clean up any partial startup
             raise
 
     def stop(self) -> None:
@@ -97,9 +96,25 @@ class HunyoOrchestrator:
         if not self.running:
             return
 
-        orchestrator_logger.startup("🛑 Stopping Hunyo MCP Server components...")
+        orchestrator_logger.startup("[STOP] Stopping Hunyo MCP Server components...")
 
         try:
+            # Stop file watcher first (this sets running=False and stops the main loop)
+            if self.file_watcher:
+                orchestrator_logger.startup("[STOP] Stopping file watcher...")
+                # Schedule the stop method to run in the event loop
+                if self._event_loop and not self._event_loop.is_closed():
+                    # Create a future to run file_watcher.stop() in the event loop
+                    future = asyncio.run_coroutine_threadsafe(
+                        self.file_watcher.stop(), self._event_loop
+                    )
+                    try:
+                        future.result(timeout=3.0)  # Wait for file watcher to stop
+                    except Exception as e:
+                        orchestrator_logger.warning(
+                            f"[WARN] File watcher stop error: {e}"
+                        )
+
             # Stop file watcher and background tasks
             if self._event_loop and not self._event_loop.is_closed():
                 # Cancel all tasks first
@@ -107,29 +122,34 @@ class HunyoOrchestrator:
                     if not task.done():
                         task.cancel()
 
-                # Stop the event loop gracefully
+                # Stop the event loop gracefully by calling stop
                 self._event_loop.call_soon_threadsafe(self._event_loop.stop)
+
+                # Give tasks a moment to complete cancellation
+                time.sleep(0.1)
 
             # Wait for background thread to finish with reasonable timeout
             if self._background_thread and self._background_thread.is_alive():
                 orchestrator_logger.startup(
-                    "⏳ Waiting for background thread to finish..."
+                    "[WAIT] Waiting for background thread to finish..."
                 )
-                self._background_thread.join(timeout=10.0)
 
-                # If thread is still alive after timeout, something is stuck
+                # Use short timeout since it's a daemon thread (will be terminated when main exits)
+                self._background_thread.join(timeout=1.0)
+
+                # If thread is still alive after timeout, that's OK since it's daemon
                 if self._background_thread.is_alive():
-                    orchestrator_logger.warning(
-                        "⚠️ Background thread did not finish gracefully"
+                    orchestrator_logger.info(
+                        "[INFO] Background thread still running (daemon - will exit with main process)"
                     )
 
             # Close database connections
             if self.db_manager:
-                orchestrator_logger.startup("📊 Closing database connections...")
+                orchestrator_logger.startup("[DATA] Closing database connections...")
                 self.db_manager.close()
 
             self.running = False
-            orchestrator_logger.success("✅ All components stopped")
+            orchestrator_logger.success("[OK] All components stopped")
 
         except Exception as e:
             orchestrator_logger.error(f"Error during shutdown: {e}")
@@ -144,7 +164,7 @@ class HunyoOrchestrator:
 
     def _start_database(self) -> None:
         """Initialize the DuckDB database and schema."""
-        orchestrator_logger.startup("📊 Initializing DuckDB database...")
+        orchestrator_logger.startup("[DATA] Initializing DuckDB database...")
 
         self.db_manager = DuckDBManager(self.database_path)
         self.db_manager.initialize_database()
@@ -153,7 +173,7 @@ class HunyoOrchestrator:
 
     def _start_event_processor(self) -> None:
         """Initialize the event processor."""
-        orchestrator_logger.startup("⚙️ Initializing event processor...")
+        orchestrator_logger.startup("[SETUP] Initializing event processor...")
 
         if not self.db_manager:
             msg = "Database manager must be started before event processor"
@@ -164,7 +184,7 @@ class HunyoOrchestrator:
 
     def _start_file_watcher(self) -> None:
         """Start the file watcher in a background thread."""
-        orchestrator_logger.startup("👁️ Starting file watcher...")
+        orchestrator_logger.startup("[WATCH] Starting file watcher...")
 
         if not self.event_processor:
             msg = "Event processor must be started before file watcher"
@@ -198,16 +218,14 @@ class HunyoOrchestrator:
                         task.cancel()
                 self._event_loop.close()
 
-        self._background_thread = threading.Thread(
-            target=run_file_watcher, daemon=False
-        )
+        self._background_thread = threading.Thread(target=run_file_watcher, daemon=True)
         self._background_thread.start()
 
         orchestrator_logger.success("File watcher started in background")
 
     def _start_capture_layer(self) -> None:
         """Initialize the capture layer for the notebook."""
-        orchestrator_logger.startup("🔧 Initializing capture layer...")
+        orchestrator_logger.startup("[SETUP] Initializing capture layer...")
 
         try:
             # Import and start runtime tracking directly
@@ -220,8 +238,8 @@ class HunyoOrchestrator:
                 str(self.notebook_path), str(self.data_dir)
             )
 
-            orchestrator_logger.config(f"Runtime events: {Path(runtime_file).name}")
-            orchestrator_logger.config(f"Lineage events: {Path(lineage_file).name}")
+            orchestrator_logger.status(f"Runtime events: {Path(runtime_file).name}")
+            orchestrator_logger.status(f"Lineage events: {Path(lineage_file).name}")
 
             # Enable tracking with notebook path for proper convention naming
             enable_runtime_tracking(notebook_path=str(self.notebook_path))
@@ -232,29 +250,40 @@ class HunyoOrchestrator:
             )
 
             orchestrator_logger.success(
-                "✅ Capture layer active - native Marimo hooks enabled"
+                "[OK] Capture layer active - native Marimo hooks enabled"
             )
 
         except ImportError as e:
             orchestrator_logger.warning(f"Capture layer import failed: {e}")
             orchestrator_logger.warning(
-                "⚠️ Runtime tracking not available. Please add these imports to your notebook manually:"
+                "[WARN] Runtime tracking not available. Please add these imports to your notebook manually:"
             )
-            orchestrator_logger.config(
+            orchestrator_logger.status(
                 "  from capture.lightweight_runtime_tracker import enable_runtime_tracking"
             )
-            orchestrator_logger.config(
+            orchestrator_logger.status(
                 "  from capture.native_hooks_interceptor import enable_native_hook_tracking"
             )
-            orchestrator_logger.config("  enable_runtime_tracking()")
-            orchestrator_logger.config("  enable_native_hook_tracking()")
+            orchestrator_logger.status("  enable_runtime_tracking()")
+            orchestrator_logger.status("  enable_native_hook_tracking()")
 
         except Exception as e:
             orchestrator_logger.error(f"Failed to start capture layer: {e}")
             orchestrator_logger.warning("Falling back to manual import instructions...")
-            orchestrator_logger.config(
+            orchestrator_logger.status(
                 "Please add tracking imports to your notebook manually (see logs above)"
             )
+
+    def _start_ingestion_components(self) -> None:
+        """Start all ingestion components in proper order."""
+        orchestrator_logger.startup("[SETUP] Starting ingestion components...")
+
+        # Start components in dependency order
+        self._start_database()
+        self._start_event_processor()
+        self._start_file_watcher()
+
+        orchestrator_logger.success("[OK] All ingestion components started")
 
 
 # Global orchestrator instance for MCP tools to access
