@@ -110,24 +110,16 @@ jobs:
       run: |
         echo "Pre-installing DuckDB extensions to avoid race conditions..."
         
-        # Create a temporary database and install extensions
+        # Pre-install JSON extension using in-memory database
         echo "Installing JSON extension..."
         hatch run test:python -c "
         import duckdb
-        import tempfile
-        import os
-        with tempfile.NamedTemporaryFile(suffix='.duckdb', delete=False) as f:
-            temp_db = f.name
-        try:
-            conn = duckdb.connect(temp_db)
-            print('[INFO] Installing JSON extension...')
-            conn.execute('INSTALL json')
-            conn.execute('LOAD json') 
-            print('[OK] JSON extension installed successfully')
-            conn.close()
-        finally:
-            if os.path.exists(temp_db):
-                os.unlink(temp_db)
+        print('[INFO] Installing JSON extension...')
+        conn = duckdb.connect(':memory:')
+        conn.execute('INSTALL json')
+        conn.execute('LOAD json') 
+        print('[OK] JSON extension installed and cached successfully')
+        conn.close()
         "
         
         echo "[OK] DuckDB extensions pre-installed - eliminating download race conditions"
@@ -219,24 +211,16 @@ jobs:
       run: |
         echo "Pre-installing DuckDB extensions to avoid race conditions..."
         
-        # Create a temporary database and install extensions
+        # Pre-install JSON extension using in-memory database
         echo "Installing JSON extension..."
         hatch run test:python -c "
         import duckdb
-        import tempfile
-        import os
-        with tempfile.NamedTemporaryFile(suffix='.duckdb', delete=False) as f:
-            temp_db = f.name
-        try:
-            conn = duckdb.connect(temp_db)
-            print('[INFO] Installing JSON extension...')
-            conn.execute('INSTALL json')
-            conn.execute('LOAD json') 
-            print('[OK] JSON extension installed successfully')
-            conn.close()
-        finally:
-            if os.path.exists(temp_db):
-                os.unlink(temp_db)
+        print('[INFO] Installing JSON extension...')
+        conn = duckdb.connect(':memory:')
+        conn.execute('INSTALL json')
+        conn.execute('LOAD json') 
+        print('[OK] JSON extension installed and cached successfully')
+        conn.close()
         "
         
         echo "[OK] DuckDB extensions pre-installed - eliminating download race conditions"
