@@ -3,7 +3,7 @@
 File Watcher - Monitors JSONL event files for changes and triggers processing.
 
 Uses watchdog to monitor runtime and lineage event directories for new files
-and file modifications, triggering the event processor for real-time ingestion.
+and file modifications, triggering the event processor for real-time ingestions.
 """
 
 import asyncio
