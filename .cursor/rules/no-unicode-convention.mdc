@@ -1,0 +1,28 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+No Unicode characters for Windows compatibility → All source files
+
+# Avoid Unicode characters (emojis, symbols, accented chars) for Windows CI/CD compatibility
+# Use ASCII alternatives instead
+
+# ❌ BAD - Unicode characters
+logger.startup("🔄 Initializing database...")
+logger.success("✅ Database ready")
+logger.warning("⚠ Connection failed")
+logger.error("❌ Fatal error")
+
+# ✅ GOOD - ASCII replacements
+logger.startup("[INIT] Initializing database...")  
+logger.success("[OK] Database ready")
+logger.warning("[WARN] Connection failed") 
+logger.error("[ERROR] Fatal error")
+
+# Other common replacements:
+# 🚀 → [START] or [LAUNCH]
+# 🔍 → [SEARCH] or [SCAN]  
+# 🔗 → [LINK] or [CONNECT]
+# 📄 → [FILE] or [DOC]
+# ⚡ → [EXEC] or [RUN]

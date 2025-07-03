@@ -144,6 +144,9 @@ class TestEndToEndMCPServer:
         e2e_logger.info(f"📝 Test notebook: {test_notebook_path}")
 
         process = None
+        stdout_buffer = []
+        stderr_buffer = []
+
         try:
             # 2. Execute hunyo-mcp-server as subprocess
             e2e_logger.info("⚡ Starting hunyo-mcp-server subprocess...")
@@ -167,17 +170,73 @@ class TestEndToEndMCPServer:
                 text=True,
             )
 
-            # 3. Wait for startup and initial processing
+            # 3. Wait for startup and initial processing with live monitoring
             e2e_logger.info("⏳ Waiting for server startup and event processing...")
-            time.sleep(8)  # Give it time to start and process the notebook
 
-            # Check if process is still running (it should be blocked on mcp.run())
-            if process.poll() is not None:
-                stdout, stderr = process.communicate()
-                e2e_logger.error(f"Process exited early with code {process.returncode}")
-                e2e_logger.error(f"STDOUT: {stdout}")
-                e2e_logger.error(f"STDERR: {stderr}")
-                pytest.fail(f"hunyo-mcp-server exited early: {stderr}")
+            # Monitor subprocess output for up to 8 seconds
+            import platform
+            import select
+
+            start_time = time.time()
+            timeout = 8.0
+
+            while time.time() - start_time < timeout:
+                # Check if process has terminated
+                if process.poll() is not None:
+                    stdout, stderr = process.communicate()
+                    e2e_logger.error(
+                        f"Process exited early with code {process.returncode}"
+                    )
+                    e2e_logger.error(f"STDOUT: {stdout}")
+                    e2e_logger.error(f"STDERR: {stderr}")
+                    pytest.fail(f"hunyo-mcp-server exited early: {stderr}")
+
+                # On Windows, use different approach for non-blocking read
+                if platform.system() == "Windows":
+                    time.sleep(0.5)  # Small sleep to let process work
+                else:
+                    # Unix-style non-blocking read
+                    ready, _, _ = select.select(
+                        [process.stdout, process.stderr], [], [], 0.5
+                    )
+
+                    for stream in ready:
+                        if stream == process.stdout:
+                            line = stream.readline()
+                            if line:
+                                stdout_buffer.append(line.strip())
+                                e2e_logger.info(f"[SUBPROCESS STDOUT] {line.strip()}")
+                        elif stream == process.stderr:
+                            line = stream.readline()
+                            if line:
+                                stderr_buffer.append(line.strip())
+                                e2e_logger.warning(
+                                    f"[SUBPROCESS STDERR] {line.strip()}"
+                                )
+
+            # 3.5. Check database state while process is still running
+            e2e_logger.info("🔍 Checking database state while process is running...")
+
+            db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
+            database_dir = temp_hunyo_dir / "database"
+
+            e2e_logger.info(f"Database directory exists: {database_dir.exists()}")
+            e2e_logger.info(f"Database file exists: {db_path.exists()}")
+
+            if database_dir.exists():
+                db_dir_contents = list(database_dir.iterdir())
+                e2e_logger.info(
+                    f"Database directory contents: {[f.name for f in db_dir_contents]}"
+                )
+
+            # Try to list all files in the temp directory for debugging
+            all_files = []
+            for root, _dirs, files in os.walk(temp_hunyo_dir):
+                for file in files:
+                    rel_path = Path(root).relative_to(temp_hunyo_dir) / file
+                    all_files.append(str(rel_path))
+
+            e2e_logger.info(f"All files in temp directory: {all_files}")
 
             # 4. Gracefully terminate the server
             e2e_logger.info("🛑 Terminating server...")
@@ -185,10 +244,33 @@ class TestEndToEndMCPServer:
 
             try:
                 stdout, stderr = process.communicate(timeout=10)
+                # Combine with our buffered output
+                if stdout:
+                    stdout_buffer.extend(stdout.strip().split("\n"))
+                if stderr:
+                    stderr_buffer.extend(stderr.strip().split("\n"))
+
             except subprocess.TimeoutExpired:
                 e2e_logger.warning("⚠️ Process didn't terminate gracefully, killing...")
                 process.kill()
                 stdout, stderr = process.communicate()
+                if stdout:
+                    stdout_buffer.extend(stdout.strip().split("\n"))
+                if stderr:
+                    stderr_buffer.extend(stderr.strip().split("\n"))
+
+            # Log all captured output
+            if stdout_buffer:
+                e2e_logger.info("📋 Complete subprocess STDOUT:")
+                for line in stdout_buffer:
+                    if line.strip():
+                        e2e_logger.info(f"  {line}")
+
+            if stderr_buffer:
+                e2e_logger.warning("📋 Complete subprocess STDERR:")
+                for line in stderr_buffer:
+                    if line.strip():
+                        e2e_logger.warning(f"  {line}")
 
             e2e_logger.info("✅ Server terminated")
 

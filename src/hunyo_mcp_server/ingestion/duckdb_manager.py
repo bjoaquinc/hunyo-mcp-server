@@ -49,7 +49,7 @@ class DuckDBManager:
             db_logger.warning("Database already initialized")
             return
 
-        db_logger.startup("🔄 Initializing DuckDB database and schema...")
+        db_logger.startup("[INIT] Initializing DuckDB database and schema...")
 
         try:
             # Connect to database
@@ -63,6 +63,20 @@ class DuckDBManager:
 
             # Explicitly commit to ensure database file is created on disk (Windows compatibility)
             self.connection.commit()
+
+            # Force checkpoint on Windows to ensure physical file creation
+            import platform
+
+            if platform.system() == "Windows":
+                try:
+                    self.connection.execute("CHECKPOINT")
+                    db_logger.success(
+                        "[OK] Windows checkpoint completed - database file forced to disk"
+                    )
+                except Exception as e:
+                    db_logger.warning(
+                        f"Windows checkpoint failed (may not be critical): {e}"
+                    )
 
             self._schema_initialized = True
             db_logger.success("[OK] Database schema initialized successfully")
@@ -169,9 +183,9 @@ class DuckDBManager:
             try:
                 # Check if table exists by running a simple query
                 self.connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()
-                db_logger.success(f"✓ Table '{table}' exists and accessible")
+                db_logger.success(f"[OK] Table '{table}' exists and accessible")
             except Exception as e:
-                db_logger.error(f"✗ Table '{table}' verification failed: {e}")
+                db_logger.error(f"[ERROR] Table '{table}' verification failed: {e}")
                 raise
 
         # Check views (optional - they might not all exist yet)
@@ -179,9 +193,11 @@ class DuckDBManager:
             try:
                 # Check if view exists by running a simple query
                 self.connection.execute(f"SELECT COUNT(*) FROM {view}").fetchone()
-                db_logger.success(f"✓ View '{view}' exists and accessible")
+                db_logger.success(f"[OK] View '{view}' exists and accessible")
             except Exception:
-                db_logger.warning(f"⚠ View '{view}' not found (may be created later)")
+                db_logger.warning(
+                    f"[WARN] View '{view}' not found (may be created later)"
+                )
 
     def execute_query(
         self, query: str, parameters: list | None = None
