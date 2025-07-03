@@ -190,8 +190,8 @@ class TestEndToEndMCPServer:
                 )
                 e2e_logger.info(f"[WINDOWS-CI] Platform: {platform.platform()}")
 
-                # Windows CI gets slightly longer timeout for connection-based validation
-                timeout = 15.0
+                # Windows CI gets longer timeout for INSTALL json download
+                timeout = 25.0
 
                 # Pre-flight checks for Windows CI
                 e2e_logger.info(f"[WINDOWS-CI] Temp directory: {temp_hunyo_dir}")
@@ -210,64 +210,89 @@ class TestEndToEndMCPServer:
                         f"[WINDOWS-CI] hunyo_mcp_server.server import failed: {e}"
                     )
             else:
-                timeout = 10.0
+                timeout = 15.0
 
             db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
 
             def wait_for_database_ready(
                 db_path: Path, timeout: float = timeout
             ) -> bool:
-                """Wait for database to be ready using connection-based validation"""
-                import duckdb
+                """Wait for database schema initialization by monitoring process output."""
+                import fcntl
+                import select
 
                 start_time = time.time()
+
+                # Look for the ready marker that the server emits when schema is complete
+                ready_marker = "HUNYO_READY_MARKER: DATABASE_SCHEMA_READY"
+
+                # Set stdout to non-blocking mode for reading
+                stdout_fd = process.stdout.fileno()
+                flags = fcntl.fcntl(stdout_fd, fcntl.F_GETFL)
+                fcntl.fcntl(stdout_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+                accumulated_output = ""
 
                 while time.time() - start_time < timeout:
                     # Check if process died early
                     if process.poll() is not None:
-                        stdout, stderr = process.communicate()
+                        # Read any remaining output
+                        try:
+                            remaining = process.stdout.read()
+                            if remaining:
+                                accumulated_output += remaining
+                        except (OSError, ValueError) as e:
+                            e2e_logger.debug(f"[DEBUG] Error reading final output: {e}")
+
+                        # Check if ready marker appeared in output
+                        if ready_marker in accumulated_output:
+                            elapsed = time.time() - start_time
+                            e2e_logger.success(
+                                f"[OK] Database schema ready: {db_path} (initialized in {elapsed:.1f}s)"
+                            )
+                            return True
+
+                        _, stderr = process.communicate()
                         e2e_logger.error(
                             f"[ERROR] Process exited early with code {process.returncode}"
                         )
-                        e2e_logger.error(f"[FILE] Subprocess STDOUT: {stdout}")
+                        e2e_logger.error(
+                            f"[FILE] Subprocess STDOUT: {accumulated_output}"
+                        )
                         e2e_logger.error(f"[FILE] Subprocess STDERR: {stderr}")
                         error_msg = f"[ERROR] Server process exited before database was created: {stderr}"
                         raise RuntimeError(error_msg)
 
-                    # Test actual database functionality instead of file existence
+                    # Try to read new output (non-blocking)
                     try:
-                        conn = duckdb.connect(str(db_path))
-                        conn.execute("SELECT 1")  # Simple test query
-                        conn.close()
+                        # Use select to check if data is available
+                        ready, _, _ = select.select([stdout_fd], [], [], 0.1)
+                        if ready:
+                            chunk = process.stdout.read()
+                            if chunk:
+                                accumulated_output += chunk
 
-                        elapsed = time.time() - start_time
-                        e2e_logger.success(
-                            f"[OK] Database ready: {db_path} (connected in {elapsed:.1f}s)"
+                                # Check if ready marker appeared
+                                if ready_marker in accumulated_output:
+                                    elapsed = time.time() - start_time
+                                    e2e_logger.success(
+                                        f"[OK] Database schema ready: {db_path} (initialized in {elapsed:.1f}s)"
+                                    )
+                                    return True
+                    except (BlockingIOError, OSError):
+                        # No data available yet
+                        pass
+
+                    # Progress logging
+                    elapsed = time.time() - start_time
+                    if elapsed >= 5 and int(elapsed) % 3 == 0:
+                        e2e_logger.info(
+                            f"[WAIT] Schema still initializing after {elapsed:.0f}s (INSTALL json may be downloading...)"
                         )
-                        return True
-
-                    except Exception as db_error:
-                        # Database not ready yet, continue waiting
-                        elapsed = time.time() - start_time
-
-                        # Log progress less frequently and only for significant delays
-                        if (
-                            is_windows
-                            and is_ci
-                            and int(elapsed) % 10 == 0
-                            and elapsed >= 10
-                        ):
-                            e2e_logger.info(
-                                f"[WINDOWS-CI] Database connection failed after {elapsed:.0f}s: {db_error}"
-                            )
-                        elif elapsed >= 5 and int(elapsed) % 5 == 0:
-                            e2e_logger.info(
-                                f"[INFO] Still waiting for database connection after {elapsed:.0f}s"
-                            )
 
                     time.sleep(0.5)
 
-                error_msg = f"[ERROR] Database connection failed after {timeout}s"
+                error_msg = f"[ERROR] Database schema initialization failed after {timeout}s (INSTALL json may have timed out)"
                 raise TimeoutError(error_msg)
 
             try:

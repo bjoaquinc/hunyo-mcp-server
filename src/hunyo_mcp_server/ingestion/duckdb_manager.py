@@ -367,6 +367,28 @@ class DuckDBManager:
                             db_logger.config(
                                 f"[SQL] Statement {i + 1} executed successfully"
                             )
+                        except RuntimeError as stmt_error:
+                            # Handle interrupted installs gracefully
+                            if (
+                                "Query interrupted" in str(stmt_error)
+                                and "INSTALL" in cleaned_statement.upper()
+                            ):
+                                db_logger.warning(
+                                    f"[SQL] Extension install interrupted: {stmt_error}"
+                                )
+                                db_logger.warning(
+                                    "[SQL] This is likely due to process termination during extension download"
+                                )
+                                # Re-raise as we can't complete schema initialization
+                                raise
+                            else:
+                                db_logger.error(
+                                    f"[SQL] Statement {i + 1} failed: {stmt_error}"
+                                )
+                                db_logger.error(
+                                    f"[SQL] Failing statement: {cleaned_statement}"
+                                )
+                                raise
                         except Exception as stmt_error:
                             db_logger.error(
                                 f"[SQL] Statement {i + 1} failed: {stmt_error}"
