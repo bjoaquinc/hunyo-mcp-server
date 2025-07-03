@@ -434,23 +434,20 @@ print(f"Python path src: {{src_path}}")
 print(f"Src path exists: {{Path(src_path).exists()}}")
 
 try:
-    from capture.lightweight_runtime_tracker import enable_runtime_tracking
     from capture.native_hooks_interceptor import enable_native_hook_tracking
     from unittest.mock import MagicMock
     import time
 
     print("Successfully imported capture modules")
 
-    # Enable tracking with REAL marimo hook system
-    runtime_tracker = enable_runtime_tracking(
-        output_file=r"{runtime_events_file}",
-        enable_tracking=True
+    # Use native hooks interceptor (handles BOTH runtime AND lineage events)
+    native_interceptor = enable_native_hook_tracking(
+        lineage_file=r"{lineage_events_file}",
+        notebook_path=r"{temp_notebook_file}"
     )
 
-    # Use native hooks interceptor (which properly uses marimo's hooks)
-    native_interceptor = enable_native_hook_tracking(
-        lineage_file=r"{lineage_events_file}"
-    )
+    print(f"Native interceptor runtime file: {{native_interceptor.runtime_file}}")
+    print(f"Native interceptor lineage file: {{native_interceptor.lineage_file}}")
 
     try:
         # Properly simulate marimo's hook system instead of using exec()
@@ -484,9 +481,16 @@ try:
         print("Marimo hook simulation completed")
 
     finally:
-        # Stop tracking
-        if runtime_tracker:
-            runtime_tracker.stop_tracking(flush_events=True)
+        # Copy runtime events from native interceptor's file to expected test location
+        try:
+            if native_interceptor and native_interceptor.runtime_file.exists():
+                import shutil
+                shutil.copy2(native_interceptor.runtime_file, r"{runtime_events_file}")
+                print(f"Copied runtime events from {{native_interceptor.runtime_file}} to {{r'{runtime_events_file}'}}")
+        except Exception as copy_error:
+            print(f"Failed to copy runtime events: {{copy_error}}")
+
+        # Stop tracking (native interceptor handles everything)
         if native_interceptor:
             native_interceptor.uninstall()
 

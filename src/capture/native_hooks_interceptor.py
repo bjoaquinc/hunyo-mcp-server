@@ -17,13 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# Runtime tracking integration
-try:
-    from capture.lightweight_runtime_tracker import enable_runtime_tracking
-
-    RUNTIME_TRACKING_AVAILABLE = True
-except ImportError:
-    RUNTIME_TRACKING_AVAILABLE = False
+# Note: Runtime events are handled directly by Native Hooks (no external tracker needed)
 
 # Global tracking state
 _tracked_dataframes = weakref.WeakKeyDictionary()
@@ -85,10 +79,7 @@ class MarimoNativeHooksInterceptor:
                 runtime_file = "marimo_runtime_events.jsonl"
             self.runtime_file = Path(runtime_file)
 
-        # Runtime tracking integration (handles cell execution events)
-        self.runtime_tracker = None
-        if RUNTIME_TRACKING_AVAILABLE:
-            self.runtime_tracker = enable_runtime_tracking(str(self.runtime_file))
+        # Runtime events are handled directly by this interceptor (no external tracker needed)
 
         # Ensure both runtime and lineage directories exist
         self.runtime_file.parent.mkdir(parents=True, exist_ok=True)
@@ -101,8 +92,7 @@ class MarimoNativeHooksInterceptor:
         hooks_logger.runtime(f"Runtime log: {self.runtime_file.name}")
         hooks_logger.lineage(f"Lineage log: {self.lineage_file.name}")
         hooks_logger.config(f"Session: {self.session_id}")
-        if self.runtime_tracker:
-            hooks_logger.tracking("Runtime tracking enabled")
+        hooks_logger.tracking("Direct runtime event emission enabled")
 
     def install(self):
         """Install marimo's native execution hooks"""
@@ -174,22 +164,7 @@ class MarimoNativeHooksInterceptor:
                     }
                 )
 
-                # Start runtime tracking if available (non-blocking)
-                if self.runtime_tracker:
-                    try:
-                        # DO NOT overwrite execution_id! Use the one we generated above
-                        runtime_execution_id = (
-                            self.runtime_tracker.track_cell_execution_start(
-                                cell_id, cell_code
-                            )
-                        )
-                        # Optionally log the runtime tracker's ID for debugging
-                        hooks_logger.tracking(
-                            f"Runtime tracker ID: {runtime_execution_id}"
-                        )
-                    except Exception as rt_error:
-                        # Logger handles marimo context automatically
-                        hooks_logger.warning(f"Runtime tracking error: {rt_error}")
+                # Runtime events are emitted directly above via _emit_real_cell_event()
 
                 # Store execution context for post-hook using multiple keys for safety
                 if not hasattr(self, "_execution_contexts"):
@@ -323,22 +298,9 @@ class MarimoNativeHooksInterceptor:
                         # Capture failed, but don't break execution
                         hooks_logger.error(f"Result capture failed: {e}")
 
-                # End runtime tracking if available (non-blocking)
-                if self.runtime_tracker and execution_id:
-                    try:
-                        # Use our consistent execution_id for runtime tracking
-                        if error:
-                            self.runtime_tracker.track_cell_execution_error(
-                                execution_id, cell_id, cell_code, start_time, error
-                            )
-                        else:
-                            self.runtime_tracker.track_cell_execution_end(
-                                execution_id, cell_id, cell_code, start_time
-                            )
-                    except Exception as e:
-                        hooks_logger.error(f"Runtime tracker end failed: {e}")
+            # Runtime events are emitted directly above via _emit_real_cell_event()
 
-                # Note: DataFrame operations are tracked via pandas interception
+            # Note: DataFrame operations are tracked via pandas interception
 
             except Exception as e:
                 # Top-level error handling
@@ -542,19 +504,15 @@ class MarimoNativeHooksInterceptor:
 
     def get_session_summary(self):
         """Get session summary"""
-        summary = {
+        return {
             "session_id": self.session_id,
             "interceptor_active": self.interceptor_active,
             "lineage_file": str(self.lineage_file),
-            "runtime_file": "marimo_runtime.jsonl",
+            "runtime_file": str(self.runtime_file),
             "hooks_installed": len(self.installed_hooks),
             "dataframes_tracked": len(_tracked_dataframes),
+            "runtime_events_direct": True,  # Events emitted directly (no external tracker)
         }
-
-        if self.runtime_tracker:
-            summary["runtime_summary"] = self.runtime_tracker.get_session_summary()
-
-        return summary
 
 
 def enable_native_hook_tracking(

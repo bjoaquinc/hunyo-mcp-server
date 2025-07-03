@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
 """Lightweight Runtime Tracker for OpenLineage Events"""
 
+# NOTE: This component is currently NOT USED in the main Marimo monitoring system.
+# It remains available as a standalone runtime tracking option for:
+# - Non-Marimo environments (Jupyter, IPython, standalone Python scripts)
+# - Manual integration scenarios where Marimo's native hook system is unavailable
+# - Development and testing of runtime tracking features
+#
+# For Marimo notebooks, runtime events are handled directly by the Native Hooks Interceptor
+# (see native_hooks_interceptor.py) which provides better integration with Marimo's execution model.
+
 import inspect
 import json
 import time

@@ -651,20 +651,13 @@ if __name__ == "__main__":
                 else:
                     test_logger.warning(f"Could not find our hooks for {cell_id}")
 
-            # Check captured events
+            # Check captured events (runtime events are now emitted directly to interceptor.runtime_file)
             runtime_events = []
-            if interceptor.runtime_tracker and interceptor.runtime_tracker.output_file:
-                # Force flush of runtime events
-                if interceptor.runtime_tracker.is_active:
-                    interceptor.runtime_tracker.stop_tracking(flush_events=True)
-
-                if interceptor.runtime_tracker.output_file.exists():
-                    with open(
-                        interceptor.runtime_tracker.output_file, encoding="utf-8"
-                    ) as f:
-                        runtime_events = [
-                            json.loads(line.strip()) for line in f if line.strip()
-                        ]
+            if interceptor.runtime_file and interceptor.runtime_file.exists():
+                with open(interceptor.runtime_file, encoding="utf-8") as f:
+                    runtime_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
 
             lineage_events = []
             if lineage_file.exists():
@@ -733,13 +726,9 @@ if __name__ == "__main__":
                 if lineage_file.exists():
                     lineage_file.unlink()
 
-                # Also clean up any runtime tracker output file if it exists
-                if (
-                    interceptor.runtime_tracker
-                    and interceptor.runtime_tracker.output_file
-                    and interceptor.runtime_tracker.output_file.exists()
-                ):
-                    interceptor.runtime_tracker.output_file.unlink()
+                # Also clean up runtime file if it exists
+                if interceptor.runtime_file and interceptor.runtime_file.exists():
+                    interceptor.runtime_file.unlink()
 
                 # Clean up any stray marimo_runtime.jsonl in project root
                 project_runtime_file = Path("marimo_runtime.jsonl")
