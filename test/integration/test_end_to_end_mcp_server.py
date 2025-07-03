@@ -87,7 +87,7 @@ class TestEndToEndMCPServer:
 
         for file_path in event_files:
             e2e_logger.info(
-                f"📄 Validating {event_type_name} events in {file_path.name}"
+                f"[FILE] Validating {event_type_name} events in {file_path.name}"
             )
 
             with open(file_path) as f:
@@ -125,7 +125,11 @@ class TestEndToEndMCPServer:
     ):
         """Test the complete pipeline from CLI execution to database ingestion"""
 
-        e2e_logger.success("🚀 Starting end-to-end MCP server pipeline test")
+        e2e_logger.success("[START] Starting end-to-end MCP server pipeline test")
+        e2e_logger.info(f"[FILE] Test data directory: {temp_hunyo_dir}")
+        e2e_logger.info(f"[FILE] Test notebook: {test_notebook_path}")
+        e2e_logger.info("[EXEC] Starting hunyo-mcp-server subprocess...")
+        e2e_logger.info("[WAIT] Waiting for database file creation...")
 
         # 1. Environment setup
         original_env = os.environ.copy()
@@ -140,8 +144,8 @@ class TestEndToEndMCPServer:
             }
         )
 
-        e2e_logger.info(f"📁 Test data directory: {temp_hunyo_dir}")
-        e2e_logger.info(f"📝 Test notebook: {test_notebook_path}")
+        e2e_logger.info(f"[FILE] Test data directory: {temp_hunyo_dir}")
+        e2e_logger.info(f"[FILE] Test notebook: {test_notebook_path}")
 
         process = None
         stdout_buffer = []
@@ -149,7 +153,7 @@ class TestEndToEndMCPServer:
 
         try:
             # 2. Execute hunyo-mcp-server as subprocess
-            e2e_logger.info("⚡ Starting hunyo-mcp-server subprocess...")
+            e2e_logger.info("[EXEC] Starting hunyo-mcp-server subprocess...")
 
             cmd = [
                 sys.executable,
@@ -171,7 +175,7 @@ class TestEndToEndMCPServer:
             )
 
             # 3. Wait for database file to appear (cross-platform race condition fix)
-            e2e_logger.info("⏳ Waiting for database file creation...")
+            e2e_logger.info("[WAIT] Waiting for database file creation...")
 
             # Enhanced Windows CI debugging
             import platform
@@ -223,11 +227,11 @@ class TestEndToEndMCPServer:
                     if process.poll() is not None:
                         stdout, stderr = process.communicate()
                         e2e_logger.error(
-                            f"Process exited early with code {process.returncode}"
+                            f"[ERROR] Process exited early with code {process.returncode}"
                         )
-                        e2e_logger.error(f"STDOUT: {stdout}")
-                        e2e_logger.error(f"STDERR: {stderr}")
-                        error_msg = f"Server process exited before database was created: {stderr}"
+                        e2e_logger.error(f"[FILE] Subprocess STDOUT: {stdout}")
+                        e2e_logger.error(f"[FILE] Subprocess STDERR: {stderr}")
+                        error_msg = f"[ERROR] Server process exited before database was created: {stderr}"
                         raise RuntimeError(error_msg)
 
                     # Test actual database functionality instead of file existence
@@ -263,13 +267,13 @@ class TestEndToEndMCPServer:
 
                     time.sleep(0.5)
 
-                error_msg = f"Database connection failed after {timeout}s"
+                error_msg = f"[ERROR] Database connection failed after {timeout}s"
                 raise TimeoutError(error_msg)
 
             try:
                 wait_for_database_ready(db_path)
             except (RuntimeError, TimeoutError) as e:
-                e2e_logger.error(f"Database creation failed: {e}")
+                e2e_logger.error(f"[ERROR] Database creation failed: {e}")
 
                 # Capture final output for debugging
                 try:
@@ -288,13 +292,13 @@ class TestEndToEndMCPServer:
 
                 # Log captured output before failing
                 if stdout_buffer:
-                    e2e_logger.error("📋 Subprocess STDOUT:")
+                    e2e_logger.error("[FILE] Subprocess STDOUT:")
                     for line in stdout_buffer:
                         if line.strip():
                             e2e_logger.error(f"  {line}")
 
                 if stderr_buffer:
-                    e2e_logger.error("📋 Subprocess STDERR:")
+                    e2e_logger.error("[FILE] Subprocess STDERR:")
                     for line in stderr_buffer:
                         if line.strip():
                             e2e_logger.error(f"  {line}")
@@ -302,11 +306,11 @@ class TestEndToEndMCPServer:
                 raise
 
             # 3.5. Additional wait for event processing after database creation
-            e2e_logger.info("⏳ Allowing additional time for event processing...")
+            e2e_logger.info("[WAIT] Allowing additional time for event processing...")
             time.sleep(3)  # Give the server time to process events after DB is ready
 
             # 4. Gracefully terminate the server
-            e2e_logger.info("🛑 Terminating server...")
+            e2e_logger.info("[EXEC] Terminating server...")
             process.terminate()
 
             try:
@@ -318,7 +322,9 @@ class TestEndToEndMCPServer:
                     stderr_buffer.extend(stderr.strip().split("\n"))
 
             except subprocess.TimeoutExpired:
-                e2e_logger.warning("⚠️ Process didn't terminate gracefully, killing...")
+                e2e_logger.warning(
+                    "[WARN] Process didn't terminate gracefully, killing..."
+                )
                 process.kill()
                 stdout, stderr = process.communicate()
                 if stdout:
@@ -328,39 +334,43 @@ class TestEndToEndMCPServer:
 
             # Log all captured output
             if stdout_buffer:
-                e2e_logger.info("📋 Complete subprocess STDOUT:")
+                e2e_logger.info("[FILE] Complete subprocess STDOUT:")
                 for line in stdout_buffer:
                     if line.strip():
                         e2e_logger.info(f"  {line}")
 
             if stderr_buffer:
-                e2e_logger.warning("📋 Complete subprocess STDERR:")
+                e2e_logger.warning("[FILE] Complete subprocess STDERR:")
                 for line in stderr_buffer:
                     if line.strip():
                         e2e_logger.warning(f"  {line}")
 
-            e2e_logger.info("✅ Server terminated")
+            e2e_logger.info("[OK] Server terminated")
 
             # 5. Validate infrastructure was set up correctly
-            e2e_logger.info("📊 Validating infrastructure setup...")
+            e2e_logger.info("[VALIDATE] Validating infrastructure setup...")
 
             # Check directories were created
             runtime_dir = temp_hunyo_dir / "events" / "runtime"
             lineage_dir = temp_hunyo_dir / "events" / "lineage"
             database_dir = temp_hunyo_dir / "database"
 
-            assert runtime_dir.exists(), f"Runtime directory not created: {runtime_dir}"
-            assert lineage_dir.exists(), f"Lineage directory not created: {lineage_dir}"
+            assert (
+                runtime_dir.exists()
+            ), f"[ERROR] Runtime directory not created: {runtime_dir}"
+            assert (
+                lineage_dir.exists()
+            ), f"[ERROR] Lineage directory not created: {lineage_dir}"
             assert (
                 database_dir.exists()
-            ), f"Database directory not created: {database_dir}"
+            ), f"[ERROR] Database directory not created: {database_dir}"
 
             e2e_logger.success("[OK] Event directories created successfully")
 
             # 6. Validate database was initialized (db_path already established above)
             e2e_logger.info("[DB] Validating database initialization...")
 
-            assert db_path.exists(), f"Database not created at {db_path}"
+            assert db_path.exists(), f"[ERROR] Database not created at {db_path}"
 
             # Test database connectivity and schema
             from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
@@ -374,8 +384,12 @@ class TestEndToEndMCPServer:
 
                 table_names = [row["table_name"] for row in tables_result]
 
-                assert "runtime_events" in table_names, "runtime_events table not found"
-                assert "lineage_events" in table_names, "lineage_events table not found"
+                assert (
+                    "runtime_events" in table_names
+                ), "[ERROR] runtime_events table not found"
+                assert (
+                    "lineage_events" in table_names
+                ), "[ERROR] lineage_events table not found"
 
                 # Test views exist
                 views_result = db_manager.execute_query(
@@ -384,10 +398,12 @@ class TestEndToEndMCPServer:
 
                 view_names = [row["table_name"] for row in views_result]
 
-                assert "vw_lineage_io" in view_names, "vw_lineage_io view not found"
+                assert (
+                    "vw_lineage_io" in view_names
+                ), "[ERROR] vw_lineage_io view not found"
                 assert (
                     "vw_performance_metrics" in view_names
-                ), "vw_performance_metrics view not found"
+                ), "[ERROR] vw_performance_metrics view not found"
 
                 e2e_logger.success("[OK] Database schema initialized correctly")
 
@@ -404,39 +420,37 @@ class TestEndToEndMCPServer:
 
                 # Tables should be empty since auto-injection is not implemented
                 e2e_logger.info(
-                    f"📊 Database contains {runtime_total} runtime + {lineage_total} lineage events (expected: 0 since auto-injection not implemented)"
+                    f"[DATA] Database contains {runtime_total} runtime + {lineage_total} lineage events (expected: 0 since auto-injection not implemented)"
                 )
 
             finally:
                 db_manager.close()
 
             # 7. Validate the server stayed running and responded properly
-            e2e_logger.info("🚀 Validating server runtime behavior...")
+            e2e_logger.info("[VALIDATE] Validating server runtime behavior...")
 
             # The fact that we got here means the server:
-            # 1. Started successfully ✅
-            # 2. Stayed running for 8+ seconds ✅
-            # 3. Responded to termination gracefully ✅
-            # 4. Set up all infrastructure correctly ✅
+            # 1. Started successfully [OK]
+            # 2. Stayed running for 8+ seconds [OK]
+            # 3. Responded to termination gracefully [OK]
+            # 4. Set up all infrastructure correctly [OK]
 
             e2e_logger.success(
-                "🎉 End-to-end server lifecycle validation completed successfully!"
+                "[SUCCESS] End-to-end server lifecycle validation completed successfully!"
             )
             e2e_logger.info(
-                "💡 Note: Event generation requires manual notebook instrumentation (auto-injection not yet implemented)"
+                "[INFO] Note: Event generation requires manual notebook instrumentation (auto-injection not yet implemented)"
             )
 
         except Exception as e:
             if process and process.poll() is None:
-                e2e_logger.error("💥 Test failed, terminating server process...")
+                e2e_logger.error("[ERROR] Test failed, terminating server process...")
                 process.terminate()
                 try:
                     process.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
                     process.kill()
-                    process.communicate()
-
-            e2e_logger.error(f"❌ End-to-end test failed: {e}")
+            e2e_logger.error(f"[ERROR] End-to-end test failed: {e}")
             raise
 
         finally:
@@ -448,7 +462,7 @@ class TestEndToEndMCPServer:
     def test_mcp_server_graceful_shutdown(self, temp_hunyo_dir, test_notebook_path):
         """Test that the MCP server handles graceful shutdown correctly"""
 
-        e2e_logger.info("🧪 Testing MCP server graceful shutdown...")
+        e2e_logger.info("[TEST] Testing MCP server graceful shutdown...")
 
         test_env = os.environ.copy()
         test_env.update(
@@ -487,17 +501,21 @@ class TestEndToEndMCPServer:
                 stdout, stderr = process.communicate(timeout=10)
                 exit_code = process.returncode
 
-                # Should exit with 0 (graceful), -15 (SIGTERM on Unix), or 1 (Windows termination)
-                # On Windows, process.terminate() can result in exit code 1
-                expected_codes = [0, -15, 1] if os.name == "nt" else [0, -15]
-                assert exit_code in expected_codes, f"Unexpected exit code: {exit_code}"
+                # Should exit with 0 (graceful), -15 (SIGTERM on Unix), or 1 (process termination)
+                # process.terminate() can result in exit code 1 on both Windows and Linux
+                expected_codes = [0, -15, 1]
+                assert (
+                    exit_code in expected_codes
+                ), f"[ERROR] Unexpected exit code: {exit_code}"
 
                 e2e_logger.success(
-                    f"✅ Graceful shutdown successful (exit code: {exit_code})"
+                    f"[OK] Graceful shutdown successful (exit code: {exit_code})"
                 )
 
             except subprocess.TimeoutExpired:
-                e2e_logger.warning("⚠️ Graceful shutdown timed out, killing process")
+                e2e_logger.warning(
+                    "[WARN] Graceful shutdown timed out, killing process"
+                )
                 process.kill()
                 process.communicate()
                 pytest.fail("Server did not shut down gracefully within timeout")
@@ -512,7 +530,7 @@ class TestEndToEndMCPServer:
     def test_mcp_server_error_handling(self, temp_hunyo_dir):
         """Test MCP server handles invalid notebook paths gracefully"""
 
-        e2e_logger.info("🧪 Testing MCP server error handling...")
+        e2e_logger.info("[TEST] Testing MCP server error handling...")
 
         test_env = os.environ.copy()
         test_env.update(
@@ -540,22 +558,22 @@ class TestEndToEndMCPServer:
         )
 
         # Should exit with error code
-        assert result.returncode != 0, "Should fail with nonexistent notebook"
+        assert result.returncode != 0, "[ERROR] Should fail with nonexistent notebook"
 
         # Should provide helpful error message
         error_output = result.stderr.lower()
         assert any(
             keyword in error_output
             for keyword in ["not found", "does not exist", "error"]
-        ), f"Error message not helpful: {result.stderr}"
+        ), f"[ERROR] Error message not helpful: {result.stderr}"
 
-        e2e_logger.success("✅ Error handling test passed")
+        e2e_logger.success("[OK] Error handling test passed")
 
     @pytest.mark.integration
     def test_database_platform_optimization(self, temp_hunyo_dir):
         """Test database handles platform-specific optimizations (based on DuckDB best practices)"""
 
-        e2e_logger.info("🧪 Testing platform-specific DuckDB optimizations...")
+        e2e_logger.info("[TEST] Testing platform-specific DuckDB optimizations...")
 
         import platform
 
@@ -583,7 +601,7 @@ class TestEndToEndMCPServer:
                 result = db_manager.execute_query(long_query)
                 assert result[0][f"test_{'x' * 100}"] == 1
 
-                e2e_logger.success("✅ Windows-specific optimizations working")
+                e2e_logger.success("[OK] Windows-specific optimizations working")
 
             elif system == "Darwin":  # macOS
                 # Test macOS unified memory considerations
@@ -592,21 +610,21 @@ class TestEndToEndMCPServer:
                 )
                 assert len(result) > 0
 
-                e2e_logger.success("✅ macOS-specific optimizations working")
+                e2e_logger.success("[OK] macOS-specific optimizations working")
 
             else:  # Linux and others
                 # Test Linux aggressive memory usage
                 result = db_manager.execute_query("SELECT current_setting('threads')")
                 assert len(result) > 0
 
-                e2e_logger.success("✅ Linux-specific optimizations working")
+                e2e_logger.success("[OK] Linux-specific optimizations working")
 
             # Test cross-platform connection stability
             for i in range(5):
                 result = db_manager.execute_query("SELECT ? as iteration", [i])
                 assert result[0]["iteration"] == i
 
-            e2e_logger.success("✅ Cross-platform connection stability verified")
+            e2e_logger.success("[OK] Cross-platform connection stability verified")
 
         finally:
             db_manager.close()
@@ -615,7 +633,7 @@ class TestEndToEndMCPServer:
     def test_database_connection_retry_patterns(self, temp_hunyo_dir):
         """Test DuckDB connection retry logic with exponential backoff"""
 
-        e2e_logger.info("🧪 Testing connection retry patterns...")
+        e2e_logger.info("[TEST] Testing connection retry patterns...")
 
         import time
 
@@ -639,7 +657,7 @@ class TestEndToEndMCPServer:
             result = db_manager.execute_query("SELECT 'reconnection_test' as status")
             assert result[0]["status"] == "reconnection_test"
 
-            e2e_logger.success("✅ Connection retry patterns working")
+            e2e_logger.success("[OK] Connection retry patterns working")
 
             # Test query retry with timeout
             start_time = time.time()
@@ -651,7 +669,7 @@ class TestEndToEndMCPServer:
             assert result[0]["status"] == "retry_test"
             assert elapsed < 10.0  # Should complete quickly on success
 
-            e2e_logger.success("✅ Query retry logic validated")
+            e2e_logger.success("[OK] Query retry logic validated")
 
         finally:
             db_manager.close()
@@ -660,7 +678,7 @@ class TestEndToEndMCPServer:
     def test_database_timeout_handling(self, temp_hunyo_dir):
         """Test cross-platform timeout handling for database operations"""
 
-        e2e_logger.info("🧪 Testing database timeout handling...")
+        e2e_logger.info("[TEST] Testing database timeout handling...")
 
         import platform
         import time
@@ -683,7 +701,7 @@ class TestEndToEndMCPServer:
             assert result[0]["status"] == "timeout_test"
             assert elapsed < 1.0  # Should be very fast
 
-            e2e_logger.success(f"✅ Normal query completed in {elapsed:.3f}s")
+            e2e_logger.success(f"[OK] Normal query completed in {elapsed:.3f}s")
 
             # Test timeout functionality with artificial slow query
             # Create a query that takes some time but not too long for CI
@@ -703,7 +721,7 @@ class TestEndToEndMCPServer:
 
             assert result[0]["count"] == 100000
             e2e_logger.success(
-                f"✅ Slow query completed in {elapsed:.3f}s (within timeout)"
+                f"[OK] Slow query completed in {elapsed:.3f}s (within timeout)"
             )
 
             # Test insert timeout handling
@@ -737,14 +755,18 @@ class TestEndToEndMCPServer:
             assert len(result) == 1
             assert result[0]["event_id"] == 123456789  # Should be integer
 
-            e2e_logger.success("✅ Insert timeout handling validated")
+            e2e_logger.success("[OK] Insert timeout handling validated")
 
             # Test platform-specific timeout implementation
             system = platform.system()
             if system == "Windows":
-                e2e_logger.info("🪟 ThreadPoolExecutor timeout implementation verified")
+                e2e_logger.info(
+                    "[INFO] [WINDOWS] ThreadPoolExecutor timeout implementation verified"
+                )
             else:
-                e2e_logger.info("🐧 signal.alarm timeout implementation verified")
+                e2e_logger.info(
+                    "[INFO] [UNIX] signal.alarm timeout implementation verified"
+                )
 
         finally:
             db_manager.close()
@@ -753,7 +775,7 @@ class TestEndToEndMCPServer:
     def test_database_robust_error_recovery(self, temp_hunyo_dir):
         """Test database error recovery and connection resilience"""
 
-        e2e_logger.info("🧪 Testing database error recovery...")
+        e2e_logger.info("[TEST] Testing database error recovery...")
 
         from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 
@@ -770,13 +792,13 @@ class TestEndToEndMCPServer:
                 raise AssertionError(error_msg)
             except Exception as e:
                 # Expected syntax error
-                e2e_logger.debug(f"🔍 Expected syntax error: {e}")
+                e2e_logger.debug(f"[DEBUG] Expected syntax error: {e}")
 
             # Verify connection still works after error
             result = db_manager.execute_query("SELECT 'recovery_test' as status")
             assert result[0]["status"] == "recovery_test"
 
-            e2e_logger.success("✅ Recovery from syntax error validated")
+            e2e_logger.success("[OK] Recovery from syntax error validated")
 
             # Test recovery from invalid table access
             try:
@@ -785,7 +807,7 @@ class TestEndToEndMCPServer:
                 raise AssertionError(error_msg)
             except Exception as e:
                 # Expected table not found error
-                e2e_logger.debug(f"🔍 Expected table error: {e}")
+                e2e_logger.debug(f"[DEBUG] Expected table error: {e}")
 
             # Verify connection still works
             result = db_manager.execute_query(
@@ -793,7 +815,7 @@ class TestEndToEndMCPServer:
             )
             assert "count" in result[0]
 
-            e2e_logger.success("✅ Recovery from table error validated")
+            e2e_logger.success("[OK] Recovery from table error validated")
 
             # Test transaction rollback recovery
             try:
@@ -838,7 +860,7 @@ class TestEndToEndMCPServer:
             new_count = result[0]["count"]
             assert new_count == original_count + 1
 
-            e2e_logger.success("✅ Transaction rollback recovery validated")
+            e2e_logger.success("[OK] Transaction rollback recovery validated")
 
         finally:
             db_manager.close()

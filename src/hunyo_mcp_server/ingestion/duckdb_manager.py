@@ -260,19 +260,49 @@ class DuckDBManager:
     def _create_schema(self) -> None:
         """Create database schema from SQL files."""
         # Get project root and schema directory
-        project_root = get_repository_root()
+        try:
+            project_root = get_repository_root()
+            db_logger.config(f"[SCHEMA] Project root: {project_root}")
+        except Exception as e:
+            db_logger.error(f"[SCHEMA] Failed to get repository root: {e}")
+            raise
+
         schema_dir = project_root / "schemas" / "sql"
+        db_logger.config(f"[SCHEMA] Schema directory: {schema_dir}")
+        db_logger.config(f"[SCHEMA] Schema directory exists: {schema_dir.exists()}")
 
         if not schema_dir.exists():
+            # Additional debugging for Windows CI
+            parent_exists = schema_dir.parent.exists()
+            db_logger.error(f"[SCHEMA] Parent directory exists: {parent_exists}")
+            if parent_exists:
+                try:
+                    contents = list(schema_dir.parent.iterdir())
+                    db_logger.error(f"[SCHEMA] Parent directory contents: {contents}")
+                except Exception as ex:
+                    db_logger.error(f"[SCHEMA] Cannot list parent directory: {ex}")
+
             msg = f"Schema directory not found: {schema_dir}"
             raise FileNotFoundError(msg)
 
         # Execute main initialization script
         init_script = schema_dir / "init_database.sql"
+        db_logger.config(f"[SCHEMA] Init script path: {init_script}")
+        db_logger.config(f"[SCHEMA] Init script exists: {init_script.exists()}")
+
         if init_script.exists():
             db_logger.config(f"Executing schema: {init_script.name}")
             self._execute_sql_file(init_script)
         else:
+            # Additional debugging - list schema directory contents
+            try:
+                schema_files = list(schema_dir.iterdir())
+                db_logger.warning(
+                    f"[SCHEMA] Available files in {schema_dir}: {schema_files}"
+                )
+            except Exception as ex:
+                db_logger.error(f"[SCHEMA] Cannot list schema directory: {ex}")
+
             # Fallback: execute individual schema files
             db_logger.warning("Main init script not found, using individual files")
 
@@ -296,13 +326,18 @@ class DuckDBManager:
     def _execute_sql_file(self, file_path: Path) -> None:
         """Execute SQL commands from a file."""
         try:
+            db_logger.config(f"[SQL] Reading file: {file_path}")
             with open(file_path, encoding="utf-8") as f:
                 sql_content = f.read()
+
+            db_logger.config(f"[SQL] File content length: {len(sql_content)} chars")
 
             # Split on semicolons and execute each statement
             statements = [
                 stmt.strip() for stmt in sql_content.split(";") if stmt.strip()
             ]
+
+            db_logger.config(f"[SQL] Found {len(statements)} statements to execute")
 
             for i, statement in enumerate(statements):
                 if statement:
@@ -325,9 +360,21 @@ class DuckDBManager:
                     if sql_lines:
                         cleaned_statement = " ".join(sql_lines)
                         db_logger.config(
-                            f"Executing statement {i + 1}: {cleaned_statement[:50]}..."
+                            f"[SQL] Executing statement {i + 1}: {cleaned_statement[:50]}..."
                         )
-                        self.connection.execute(cleaned_statement)
+                        try:
+                            self.connection.execute(cleaned_statement)
+                            db_logger.config(
+                                f"[SQL] Statement {i + 1} executed successfully"
+                            )
+                        except Exception as stmt_error:
+                            db_logger.error(
+                                f"[SQL] Statement {i + 1} failed: {stmt_error}"
+                            )
+                            db_logger.error(
+                                f"[SQL] Failing statement: {cleaned_statement}"
+                            )
+                            raise
 
         except Exception as e:
             db_logger.error(f"Failed to execute SQL file {file_path}: {e}")

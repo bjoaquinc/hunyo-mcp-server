@@ -117,17 +117,37 @@ def get_repository_root() -> Path:
         RuntimeError: If repository root cannot be found
     """
     current = Path(__file__).resolve()
+    mcp_logger.config(f"[ROOT] Starting from: {current}")
 
     # Walk up the directory tree
-    for parent in [current, *list(current.parents)]:
-        if (parent / ".git").exists() or (parent / "pyproject.toml").exists():
+    for i, parent in enumerate([current, *list(current.parents)]):
+        mcp_logger.config(f"[ROOT] Checking {i}: {parent}")
+        git_exists = (parent / ".git").exists()
+        pyproject_exists = (parent / "pyproject.toml").exists()
+        mcp_logger.config(
+            f"[ROOT] .git exists: {git_exists}, pyproject.toml exists: {pyproject_exists}"
+        )
+
+        if git_exists or pyproject_exists:
+            mcp_logger.config(f"[ROOT] Found repository root: {parent}")
             return parent
 
     # Fallback: assume current working directory
     cwd = Path.cwd()
-    if (cwd / ".git").exists() or (cwd / "pyproject.toml").exists():
+    mcp_logger.config(f"[ROOT] Fallback to cwd: {cwd}")
+    git_exists = (cwd / ".git").exists()
+    pyproject_exists = (cwd / "pyproject.toml").exists()
+    mcp_logger.config(
+        f"[ROOT] CWD .git exists: {git_exists}, pyproject.toml exists: {pyproject_exists}"
+    )
+
+    if git_exists or pyproject_exists:
+        mcp_logger.config(f"[ROOT] Using CWD as repository root: {cwd}")
         return cwd
 
+    mcp_logger.error(
+        f"[ROOT] Repository root not found. Current: {current}, CWD: {cwd}"
+    )
     msg = "Could not find repository root (no .git or pyproject.toml found)"
     raise RuntimeError(msg)
 
