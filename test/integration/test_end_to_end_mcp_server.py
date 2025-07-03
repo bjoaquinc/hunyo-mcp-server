@@ -170,73 +170,80 @@ class TestEndToEndMCPServer:
                 text=True,
             )
 
-            # 3. Wait for startup and initial processing with live monitoring
-            e2e_logger.info("⏳ Waiting for server startup and event processing...")
+            # 3. Wait for database file to appear (cross-platform race condition fix)
+            e2e_logger.info("⏳ Waiting for database file creation...")
 
-            # Monitor subprocess output for up to 8 seconds
             import platform
-            import select
-
-            start_time = time.time()
-            timeout = 8.0
-
-            while time.time() - start_time < timeout:
-                # Check if process has terminated
-                if process.poll() is not None:
-                    stdout, stderr = process.communicate()
-                    e2e_logger.error(
-                        f"Process exited early with code {process.returncode}"
-                    )
-                    e2e_logger.error(f"STDOUT: {stdout}")
-                    e2e_logger.error(f"STDERR: {stderr}")
-                    pytest.fail(f"hunyo-mcp-server exited early: {stderr}")
-
-                # On Windows, use different approach for non-blocking read
-                if platform.system() == "Windows":
-                    time.sleep(0.5)  # Small sleep to let process work
-                else:
-                    # Unix-style non-blocking read
-                    ready, _, _ = select.select(
-                        [process.stdout, process.stderr], [], [], 0.5
-                    )
-
-                    for stream in ready:
-                        if stream == process.stdout:
-                            line = stream.readline()
-                            if line:
-                                stdout_buffer.append(line.strip())
-                                e2e_logger.info(f"[SUBPROCESS STDOUT] {line.strip()}")
-                        elif stream == process.stderr:
-                            line = stream.readline()
-                            if line:
-                                stderr_buffer.append(line.strip())
-                                e2e_logger.warning(
-                                    f"[SUBPROCESS STDERR] {line.strip()}"
-                                )
-
-            # 3.5. Check database state while process is still running
-            e2e_logger.info("🔍 Checking database state while process is running...")
 
             db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
-            database_dir = temp_hunyo_dir / "database"
 
-            e2e_logger.info(f"Database directory exists: {database_dir.exists()}")
-            e2e_logger.info(f"Database file exists: {db_path.exists()}")
+            def wait_for_database_file(db_path: Path, timeout: float) -> bool:
+                """Wait for database file to appear, polling every 0.5s"""
+                start_time = time.time()
 
-            if database_dir.exists():
-                db_dir_contents = list(database_dir.iterdir())
-                e2e_logger.info(
-                    f"Database directory contents: {[f.name for f in db_dir_contents]}"
-                )
+                while time.time() - start_time < timeout:
+                    # Check if process died early
+                    if process.poll() is not None:
+                        stdout, stderr = process.communicate()
+                        e2e_logger.error(
+                            f"Process exited early with code {process.returncode}"
+                        )
+                        e2e_logger.error(f"STDOUT: {stdout}")
+                        e2e_logger.error(f"STDERR: {stderr}")
+                        error_msg = f"Server process exited before database was created: {stderr}"
+                        raise RuntimeError(error_msg)
 
-            # Try to list all files in the temp directory for debugging
-            all_files = []
-            for root, _dirs, files in os.walk(temp_hunyo_dir):
-                for file in files:
-                    rel_path = Path(root).relative_to(temp_hunyo_dir) / file
-                    all_files.append(str(rel_path))
+                    # Check if database file exists
+                    if db_path.exists():
+                        e2e_logger.success(f"✅ Database file created: {db_path}")
+                        return True
 
-            e2e_logger.info(f"All files in temp directory: {all_files}")
+                    time.sleep(0.5)
+
+                error_msg = f"Database file {db_path} not created within {timeout}s"
+                raise TimeoutError(error_msg)
+
+            # Use longer timeout on Windows due to slower I/O and import times
+            timeout = 25.0 if platform.system() == "Windows" else 15.0
+
+            try:
+                wait_for_database_file(db_path, timeout)
+            except (RuntimeError, TimeoutError) as e:
+                e2e_logger.error(f"Database creation failed: {e}")
+
+                # Capture final output for debugging
+                try:
+                    stdout, stderr = process.communicate(timeout=5)
+                    if stdout:
+                        stdout_buffer.extend(stdout.strip().split("\n"))
+                    if stderr:
+                        stderr_buffer.extend(stderr.strip().split("\n"))
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    if stdout:
+                        stdout_buffer.extend(stdout.strip().split("\n"))
+                    if stderr:
+                        stderr_buffer.extend(stderr.strip().split("\n"))
+
+                # Log captured output before failing
+                if stdout_buffer:
+                    e2e_logger.error("📋 Subprocess STDOUT:")
+                    for line in stdout_buffer:
+                        if line.strip():
+                            e2e_logger.error(f"  {line}")
+
+                if stderr_buffer:
+                    e2e_logger.error("📋 Subprocess STDERR:")
+                    for line in stderr_buffer:
+                        if line.strip():
+                            e2e_logger.error(f"  {line}")
+
+                raise
+
+            # 3.5. Additional wait for event processing after database creation
+            e2e_logger.info("⏳ Allowing additional time for event processing...")
+            time.sleep(3)  # Give the server time to process events after DB is ready
 
             # 4. Gracefully terminate the server
             e2e_logger.info("🛑 Terminating server...")
@@ -288,12 +295,11 @@ class TestEndToEndMCPServer:
                 database_dir.exists()
             ), f"Database directory not created: {database_dir}"
 
-            e2e_logger.success("✅ Event directories created successfully")
+            e2e_logger.success("[OK] Event directories created successfully")
 
-            # 6. Validate database was initialized
-            e2e_logger.info("🗄️ Validating database initialization...")
+            # 6. Validate database was initialized (db_path already established above)
+            e2e_logger.info("[DB] Validating database initialization...")
 
-            db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
             assert db_path.exists(), f"Database not created at {db_path}"
 
             # Test database connectivity and schema
@@ -323,7 +329,7 @@ class TestEndToEndMCPServer:
                     "vw_performance_metrics" in view_names
                 ), "vw_performance_metrics view not found"
 
-                e2e_logger.success("✅ Database schema initialized correctly")
+                e2e_logger.success("[OK] Database schema initialized correctly")
 
                 # Test that tables are empty (as expected since no auto-injection)
                 runtime_count = db_manager.execute_query(

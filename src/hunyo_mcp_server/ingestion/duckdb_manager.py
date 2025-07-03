@@ -61,22 +61,24 @@ class DuckDBManager:
             # Verify schema creation
             self._verify_schema()
 
-            # Explicitly commit to ensure database file is created on disk (Windows compatibility)
+            # Explicitly commit to ensure database file is created on disk (Windows NTFS compatibility)
             self.connection.commit()
 
-            # Force checkpoint on Windows to ensure physical file creation
-            import platform
+            # Force checkpoint to merge WAL → main file (critical for Windows NTFS directory entry)
+            try:
+                self.connection.execute("CHECKPOINT")
+                db_logger.success(
+                    "[OK] Database checkpoint completed - file materialized to disk"
+                )
+            except Exception as e:
+                db_logger.warning(f"Database checkpoint failed: {e}")
 
-            if platform.system() == "Windows":
-                try:
-                    self.connection.execute("CHECKPOINT")
-                    db_logger.success(
-                        "[OK] Windows checkpoint completed - database file forced to disk"
-                    )
-                except Exception as e:
-                    db_logger.warning(
-                        f"Windows checkpoint failed (may not be critical): {e}"
-                    )
+            # Enable automatic checkpointing on shutdown for future connections
+            try:
+                self.connection.execute("PRAGMA enable_checkpoint_on_shutdown")
+                db_logger.success("[OK] Auto-checkpoint on shutdown enabled")
+            except Exception as e:
+                db_logger.warning(f"Failed to enable auto-checkpoint: {e}")
 
             self._schema_initialized = True
             db_logger.success("[OK] Database schema initialized successfully")
