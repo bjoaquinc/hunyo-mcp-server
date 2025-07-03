@@ -173,12 +173,49 @@ class TestEndToEndMCPServer:
             # 3. Wait for database file to appear (cross-platform race condition fix)
             e2e_logger.info("⏳ Waiting for database file creation...")
 
+            # Enhanced Windows CI debugging
             import platform
+
+            is_windows = platform.system() == "Windows"
+            is_ci = os.environ.get("CI") == "true"
+
+            if is_windows and is_ci:
+                e2e_logger.info("[WINDOWS-CI] Enhanced debugging mode enabled")
+                e2e_logger.info(
+                    f"[WINDOWS-CI] Python version: {platform.python_version()}"
+                )
+                e2e_logger.info(f"[WINDOWS-CI] Platform: {platform.platform()}")
+
+                # Windows CI gets slightly longer timeout for connection-based validation
+                timeout = 15.0
+
+                # Pre-flight checks for Windows CI
+                e2e_logger.info(f"[WINDOWS-CI] Temp directory: {temp_hunyo_dir}")
+                e2e_logger.info(
+                    f"[WINDOWS-CI] Test notebook exists: {test_notebook_path.exists()}"
+                )
+                e2e_logger.info(f"[WINDOWS-CI] Python executable: {sys.executable}")
+
+                # Check if hunyo_mcp_server module is importable
+                try:
+                    import hunyo_mcp_server.server  # noqa: F401
+
+                    e2e_logger.info("[WINDOWS-CI] hunyo_mcp_server.server import: OK")
+                except Exception as e:
+                    e2e_logger.error(
+                        f"[WINDOWS-CI] hunyo_mcp_server.server import failed: {e}"
+                    )
+            else:
+                timeout = 10.0
 
             db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
 
-            def wait_for_database_file(db_path: Path, timeout: float) -> bool:
-                """Wait for database file to appear, polling every 0.5s"""
+            def wait_for_database_ready(
+                db_path: Path, timeout: float = timeout
+            ) -> bool:
+                """Wait for database to be ready using connection-based validation"""
+                import duckdb
+
                 start_time = time.time()
 
                 while time.time() - start_time < timeout:
@@ -193,21 +230,44 @@ class TestEndToEndMCPServer:
                         error_msg = f"Server process exited before database was created: {stderr}"
                         raise RuntimeError(error_msg)
 
-                    # Check if database file exists
-                    if db_path.exists():
-                        e2e_logger.success(f"✅ Database file created: {db_path}")
+                    # Test actual database functionality instead of file existence
+                    try:
+                        conn = duckdb.connect(str(db_path))
+                        conn.execute("SELECT 1")  # Simple test query
+                        conn.close()
+
+                        elapsed = time.time() - start_time
+                        e2e_logger.success(
+                            f"[OK] Database ready: {db_path} (connected in {elapsed:.1f}s)"
+                        )
                         return True
+
+                    except Exception as db_error:
+                        # Database not ready yet, continue waiting
+                        elapsed = time.time() - start_time
+
+                        # Log progress less frequently and only for significant delays
+                        if (
+                            is_windows
+                            and is_ci
+                            and int(elapsed) % 10 == 0
+                            and elapsed >= 10
+                        ):
+                            e2e_logger.info(
+                                f"[WINDOWS-CI] Database connection failed after {elapsed:.0f}s: {db_error}"
+                            )
+                        elif elapsed >= 5 and int(elapsed) % 5 == 0:
+                            e2e_logger.info(
+                                f"[INFO] Still waiting for database connection after {elapsed:.0f}s"
+                            )
 
                     time.sleep(0.5)
 
-                error_msg = f"Database file {db_path} not created within {timeout}s"
+                error_msg = f"Database connection failed after {timeout}s"
                 raise TimeoutError(error_msg)
 
-            # Use longer timeout on Windows due to slower I/O and import times
-            timeout = 25.0 if platform.system() == "Windows" else 15.0
-
             try:
-                wait_for_database_file(db_path, timeout)
+                wait_for_database_ready(db_path)
             except (RuntimeError, TimeoutError) as e:
                 e2e_logger.error(f"Database creation failed: {e}")
 
