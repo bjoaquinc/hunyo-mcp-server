@@ -64,7 +64,7 @@ class MockLightweightRuntimeTracker:
         import json
 
         events_file = self.config.events_dir / "runtime_events.jsonl"
-        with open(events_file, "a") as f:
+        with open(events_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")
 
 
@@ -142,7 +142,7 @@ class MockLiveLineageInterceptor:
         events_file = self.config.events_dir / "runtime_events.jsonl"
         events_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(events_file, "a") as f:
+        with open(events_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(event) + "\n")
 
     def _detect_lineage_relationship(self, _obj: Any) -> list[str]:

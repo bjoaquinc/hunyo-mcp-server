@@ -185,7 +185,7 @@ class FileWatcher:
 
     async def _process_existing_files(self) -> None:
         """Process any existing JSONL files on startup."""
-        watcher_logger.info("📂 Checking for existing JSONL files...")
+        watcher_logger.info("[SCAN] Checking for existing JSONL files...")
 
         # Process runtime files
         runtime_files = list(self.runtime_dir.glob("*.jsonl"))
@@ -208,7 +208,7 @@ class FileWatcher:
 
     async def _background_processor(self) -> None:
         """Background task for processing file changes."""
-        watcher_logger.status("🔄 Background processor started")
+        watcher_logger.status("[PROC] Background processor started")
 
         try:
             while self.running:
@@ -302,7 +302,7 @@ class FileWatcher:
 
     async def process_file_now(self, file_path: Path) -> int:
         """Manually trigger processing of a specific file."""
-        watcher_logger.info(f"🔄 Manual processing: {file_path.name}")
+        watcher_logger.info(f"[PROC] Manual processing: {file_path.name}")
 
         # Determine file type
         if file_path.parent == self.runtime_dir:

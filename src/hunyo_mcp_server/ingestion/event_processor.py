@@ -61,7 +61,7 @@ class EventProcessor:
                 processor_logger.warning(f"Schema file not found: {schema_path}")
                 return None
 
-            with open(schema_path) as f:
+            with open(schema_path, encoding="utf-8") as f:
                 schema = json.load(f)
 
             processor_logger.success(f"[OK] Loaded schema: {schema_filename}")
@@ -232,7 +232,7 @@ class EventProcessor:
         line_number = 0
 
         try:
-            with open(file_path) as f:
+            with open(file_path, encoding="utf-8") as f:
                 for line in f:
                     line_number += 1
                     stripped_line = line.strip()

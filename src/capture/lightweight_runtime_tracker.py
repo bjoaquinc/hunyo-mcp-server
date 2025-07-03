@@ -270,7 +270,7 @@ class LightweightRuntimeTracker:
         }
 
         # Add optional fields based on event type
-        if event_type in ("cell_execution_end", "cell_execution_error"):
+        if event_type in {"cell_execution_end", "cell_execution_error"}:
             if end_memory_mb is not None:
                 event["end_memory_mb"] = end_memory_mb
             if duration_ms is not None:

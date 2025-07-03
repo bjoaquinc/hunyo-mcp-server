@@ -6,7 +6,11 @@ Handles DuckDB database setup, schema creation, and connection pooling
 for the Hunyo MCP Server ingestion pipeline.
 """
 
+import concurrent.futures
 import json
+import os
+import platform
+import time
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +21,15 @@ from capture.logger import get_logger
 
 # Import project paths
 from hunyo_mcp_server.config import get_repository_root
+from hunyo_mcp_server.utils.paths import (
+    normalize_database_path,
+    validate_path_accessibility,
+)
 
 db_logger = get_logger("hunyo.duckdb")
+
+# Constants
+WINDOWS_MAX_PATH_LENGTH = 260  # Windows long path limit
 
 
 class DuckDBManager:
@@ -27,8 +38,9 @@ class DuckDBManager:
 
     Features:
     - Automatic schema initialization from SQL files
-    - Connection management and reuse
-    - Query execution with error handling
+    - Connection management and reuse with retry logic
+    - Platform-specific configuration optimization
+    - Query execution with error handling and timeouts
     - Transaction support for batch operations
     """
 
@@ -37,11 +49,67 @@ class DuckDBManager:
         self.connection: duckdb.DuckDBPyConnection | None = None
         self._schema_initialized = False
 
+        # Platform-specific configuration
+        self.platform_config = self._get_platform_config()
+
+        # Normalize database path for cross-platform compatibility
+        self.database_path = Path(self._normalize_path(str(self.database_path)))
+
         # Ensure database directory exists
         self.database_path.parent.mkdir(parents=True, exist_ok=True)
 
         db_logger.status("DuckDB Manager initialized")
         db_logger.config(f"Database path: {self.database_path}")
+        db_logger.config(f"Platform config: {self.platform_config}")
+
+    def _normalize_path(self, path: str) -> str:
+        """Handle cross-platform path normalization with validation."""
+        # Use the centralized cross-platform path normalization
+        normalized_path = normalize_database_path(path)
+
+        # Validate path accessibility (except for in-memory databases)
+        if path != ":memory:" and not validate_path_accessibility(normalized_path):
+            db_logger.warning(
+                f"[WARN] Database path may not be accessible: {normalized_path}"
+            )
+
+        return normalized_path
+
+    def _get_platform_config(self) -> dict[str, Any]:
+        """Get platform-optimized DuckDB configuration."""
+        system = platform.system().lower()
+        cpu_count = os.cpu_count() or 1
+
+        base_config = {
+            "threads": cpu_count,
+        }
+
+        if system == "windows":
+            base_config.update(
+                {
+                    "memory_limit": "1GB",  # Conservative for Windows - use absolute value
+                    "temp_directory": None,  # Let DuckDB auto-detect
+                }
+            )
+            db_logger.config("[WINDOWS] Using conservative memory configuration")
+        elif system == "darwin":  # macOS
+            base_config.update(
+                {
+                    "memory_limit": "2GB",  # Respect unified memory - use absolute value
+                    "temp_directory": None,  # Let DuckDB auto-detect
+                }
+            )
+            db_logger.config("[MACOS] Using unified memory configuration")
+        else:  # Linux and other Unix
+            base_config.update(
+                {
+                    "memory_limit": "4GB",  # Aggressive on Linux - use absolute value
+                    "temp_directory": None,  # Let DuckDB auto-detect
+                }
+            )
+            db_logger.config("[LINUX] Using aggressive memory configuration")
+
+        return base_config
 
     def initialize_database(self) -> None:
         """Initialize database and create schema from SQL files."""
@@ -52,8 +120,11 @@ class DuckDBManager:
         db_logger.startup("[INIT] Initializing DuckDB database and schema...")
 
         try:
-            # Connect to database
-            self._connect()
+            # Connect to database with retry logic
+            self._connect_with_retry()
+
+            # Apply platform-specific configuration
+            self._apply_platform_config()
 
             # Execute schema initialization
             self._create_schema()
@@ -83,21 +154,108 @@ class DuckDBManager:
             self._schema_initialized = True
             db_logger.success("[OK] Database schema initialized successfully")
 
+            # Simple marker for test parsing (bypasses rich logger formatting)
+            print("HUNYO_READY_MARKER: DATABASE_SCHEMA_READY")  # noqa: T201
+
         except Exception as e:
             db_logger.error(f"Failed to initialize database: {e}")
             raise
 
-    def _connect(self) -> None:
-        """Establish database connection."""
+    def _connect_with_retry(self, max_retries: int = 3) -> None:
+        """Connect to database with retry logic for concurrency issues."""
         if self.connection:
             return
 
-        try:
-            self.connection = duckdb.connect(str(self.database_path))
-            db_logger.success(f"Connected to database: {self.database_path}")
-        except Exception as e:
-            db_logger.error(f"Failed to connect to database: {e}")
-            raise
+        for attempt in range(max_retries):
+            try:
+                db_logger.config(f"[CONNECT] Attempt {attempt + 1}/{max_retries}")
+                self.connection = duckdb.connect(str(self.database_path))
+                db_logger.success(f"Connected to database: {self.database_path}")
+                return
+            except Exception as e:
+                error_msg = str(e).lower()
+
+                # Check for concurrency-related errors that warrant retry
+                retry_conditions = [
+                    "used by another process",
+                    "database is locked",
+                    "connection failed",
+                    "cannot open",
+                ]
+
+                should_retry = any(
+                    condition in error_msg for condition in retry_conditions
+                )
+
+                if should_retry and attempt < max_retries - 1:
+                    wait_time = 0.1 * (2**attempt)  # Exponential backoff
+                    db_logger.warning(
+                        f"[RETRY] Connection failed (attempt {attempt + 1}), retrying in {wait_time:.1f}s: {e}"
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    db_logger.error(
+                        f"Failed to connect to database after {max_retries} attempts: {e}"
+                    )
+                    raise
+
+    def _apply_platform_config(self) -> None:
+        """Apply platform-specific configuration to the database connection."""
+        if not self.connection:
+            msg = "No database connection available"
+            raise RuntimeError(msg)
+
+        db_logger.config("[CONFIG] Applying platform-specific configuration...")
+
+        for setting, value in self.platform_config.items():
+            try:
+                # Skip settings that are None or not DuckDB configuration options
+                if value is None or setting in [
+                    "memory_allocator",
+                    "enable_external_access",
+                    "temp_directory",
+                ]:
+                    continue
+
+                self.connection.execute(f"SET {setting} = '{value}'")
+                db_logger.config(f"[CONFIG] Set {setting} = {value}")
+            except Exception as e:
+                db_logger.warning(f"[CONFIG] Failed to set {setting}: {e}")
+
+    def _execute_with_timeout(
+        self, func, timeout_seconds: float = 30.0, *args, **kwargs
+    ):
+        """Execute a function with cross-platform timeout handling."""
+        if os.name == "nt":  # Windows
+            # Use ThreadPoolExecutor for Windows (no signal.alarm support)
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    return future.result(timeout=timeout_seconds)
+                except concurrent.futures.TimeoutError as e:
+                    timeout_msg = f"Operation timed out after {timeout_seconds} seconds"
+                    db_logger.error(timeout_msg)
+                    raise TimeoutError(timeout_msg) from e
+        else:  # Unix-like systems
+            # Use signal.alarm for Unix systems
+            import signal
+
+            def timeout_handler(_signum, _frame):
+                timeout_msg = f"Operation timed out after {timeout_seconds} seconds"
+                raise TimeoutError(timeout_msg)
+
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(int(timeout_seconds))
+            try:
+                return func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+
+    def _connect(self) -> None:
+        """Legacy connect method - use _connect_with_retry instead."""
+        self._connect_with_retry()
 
     def _create_schema(self) -> None:
         """Create database schema from SQL files."""
@@ -138,7 +296,7 @@ class DuckDBManager:
     def _execute_sql_file(self, file_path: Path) -> None:
         """Execute SQL commands from a file."""
         try:
-            with open(file_path) as f:
+            with open(file_path, encoding="utf-8") as f:
                 sql_content = f.read()
 
             # Split on semicolons and execute each statement
@@ -167,7 +325,7 @@ class DuckDBManager:
                     if sql_lines:
                         cleaned_statement = " ".join(sql_lines)
                         db_logger.config(
-                            f"Executing statement {i+1}: {cleaned_statement[:50]}..."
+                            f"Executing statement {i + 1}: {cleaned_statement[:50]}..."
                         )
                         self.connection.execute(cleaned_statement)
 
@@ -202,32 +360,82 @@ class DuckDBManager:
                 )
 
     def execute_query(
-        self, query: str, parameters: list | None = None
+        self, query: str, parameters: list | None = None, timeout: float = 30.0
     ) -> list[dict[str, Any]]:
-        """Execute a query and return results as list of dictionaries."""
+        """Execute a query and return results as list of dictionaries with timeout support."""
         self._ensure_connected()
 
+        def _execute():
+            try:
+                if parameters:
+                    result = self.connection.execute(query, parameters)
+                else:
+                    result = self.connection.execute(query)
+
+                # Convert to list of dictionaries
+                columns = (
+                    [desc[0] for desc in result.description]
+                    if result.description
+                    else []
+                )
+                rows = result.fetchall()
+
+                return [dict(zip(columns, row, strict=False)) for row in rows]
+
+            except Exception as e:
+                db_logger.error(f"Query execution failed: {e}")
+                db_logger.error(f"Query: {query}")
+                raise
+
+        # Execute with timeout handling
         try:
-            if parameters:
-                result = self.connection.execute(query, parameters)
-            else:
-                result = self.connection.execute(query)
-
-            # Convert to list of dictionaries
-            columns = (
-                [desc[0] for desc in result.description] if result.description else []
-            )
-            rows = result.fetchall()
-
-            return [dict(zip(columns, row, strict=False)) for row in rows]
-
-        except Exception as e:
-            db_logger.error(f"Query execution failed: {e}")
-            db_logger.error(f"Query: {query}")
+            return self._execute_with_timeout(_execute, timeout)
+        except TimeoutError:
+            db_logger.error(f"Query timed out after {timeout}s: {query[:100]}...")
+            # Connection may be unstable after timeout
+            self.connection = None
             raise
 
-    def insert_runtime_event(self, event_data: dict[str, Any]) -> None:
-        """Insert a runtime event into the database."""
+    def execute_query_with_retry(
+        self,
+        query: str,
+        parameters: list | None = None,
+        max_retries: int = 3,
+        timeout: float = 30.0,
+    ) -> list[dict[str, Any]]:
+        """Execute query with both retry logic and timeout handling."""
+        last_exception = None
+
+        for attempt in range(max_retries):
+            try:
+                return self.execute_query(query, parameters, timeout)
+            except (TimeoutError, duckdb.TransactionException) as e:
+                last_exception = e
+                if attempt < max_retries - 1:
+                    wait_time = 0.1 * (2**attempt)
+                    db_logger.warning(
+                        f"[RETRY] Query failed (attempt {attempt + 1}), retrying in {wait_time:.1f}s: {e}"
+                    )
+                    time.sleep(wait_time)
+                    # Ensure fresh connection after timeout
+                    if isinstance(e, TimeoutError):
+                        self._connect_with_retry()
+                    continue
+                else:
+                    db_logger.error(f"Query failed after {max_retries} attempts: {e}")
+                    raise
+
+        # This should never be reached, but just in case
+        if last_exception:
+            raise last_exception
+        else:
+            error_msg = f"Query failed after {max_retries} attempts with unknown error"
+            raise RuntimeError(error_msg)
+
+    def insert_runtime_event(
+        self, event_data: dict[str, Any], timeout: float = 10.0
+    ) -> None:
+        """Insert a runtime event into the database with timeout."""
         query = """
         INSERT INTO runtime_events (
             event_id, event_type, execution_id, cell_id, cell_source, cell_source_lines,
@@ -257,10 +465,16 @@ class DuckDBManager:
         ]
 
         self._ensure_connected()
-        self.connection.execute(query, parameters)
 
-    def insert_lineage_event(self, event_data: dict[str, Any]) -> None:
-        """Insert a lineage event into the database."""
+        def _insert():
+            return self.connection.execute(query, parameters)
+
+        self._execute_with_timeout(_insert, timeout)
+
+    def insert_lineage_event(
+        self, event_data: dict[str, Any], timeout: float = 10.0
+    ) -> None:
+        """Insert a lineage event into the database with timeout."""
         query = """
         INSERT INTO lineage_events (
             ol_event_id, run_id, execution_id, event_type, job_name, event_time,
@@ -307,7 +521,11 @@ class DuckDBManager:
         ]
 
         self._ensure_connected()
-        self.connection.execute(query, parameters)
+
+        def _insert():
+            return self.connection.execute(query, parameters)
+
+        self._execute_with_timeout(_insert, timeout)
 
     def get_table_info(self, table_name: str) -> list[dict[str, Any]]:
         """Get information about a table's structure."""

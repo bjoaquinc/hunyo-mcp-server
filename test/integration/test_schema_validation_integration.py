@@ -134,14 +134,14 @@ if __name__ == "__main__":
     def runtime_events_schema(self):
         """Load runtime events schema for validation"""
         schema_path = Path("schemas/json/runtime_events_schema.json")
-        with open(schema_path) as f:
+        with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
     @pytest.fixture
     def openlineage_events_schema(self):
         """Load OpenLineage events schema for validation"""
         schema_path = Path("schemas/json/openlineage_events_schema.json")
-        with open(schema_path) as f:
+        with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
     @pytest.fixture
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         """Create a temporary marimo notebook file"""
         notebook_path = temp_hunyo_dir / "schema_validation_test_notebook.py"
 
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_test_notebook_content)
 
         return notebook_path
@@ -247,7 +247,7 @@ if __name__ == "__main__":
 
         # Load and validate events against schema
         events = []
-        with open(runtime_events_file) as f:
+        with open(runtime_events_file, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     events.append(json.loads(line))
@@ -268,13 +268,13 @@ if __name__ == "__main__":
                 valid_count += 1
             else:
                 invalid_count += 1
-                validation_errors.append(f"Event {i+1}: {error}")
+                validation_errors.append(f"Event {i + 1}: {error}")
 
         # Assert schema compliance
         test_logger.tracking("Runtime Events Validation:")
         test_logger.success(f"Valid events: {valid_count}")
         test_logger.error(f"Invalid events: {invalid_count}")
-        test_logger.status(f"Compliance rate: {(valid_count/len(events)*100):.1f}%")
+        test_logger.status(f"Compliance rate: {(valid_count / len(events) * 100):.1f}%")
 
         if validation_errors:
             test_logger.error("Validation errors:")
@@ -333,7 +333,7 @@ if __name__ == "__main__":
 
         # Load and validate OpenLineage events
         events = []
-        with open(lineage_events_file) as f:
+        with open(lineage_events_file, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     try:
@@ -360,7 +360,7 @@ if __name__ == "__main__":
                 valid_count += 1
             else:
                 invalid_count += 1
-                validation_errors.append(f"Event {i+1}: {error}")
+                validation_errors.append(f"Event {i + 1}: {error}")
 
         test_logger.tracking("OpenLineage Events Validation:")
         test_logger.success(f"Valid events: {valid_count}")
@@ -573,7 +573,7 @@ except Exception as e:
 
         # Check runtime events
         if runtime_events_file.exists() and runtime_events_file.stat().st_size > 0:
-            with open(runtime_events_file) as f:
+            with open(runtime_events_file, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         try:
@@ -592,7 +592,7 @@ except Exception as e:
 
         # Check lineage events
         if lineage_events_file.exists() and lineage_events_file.stat().st_size > 0:
-            with open(lineage_events_file) as f:
+            with open(lineage_events_file, encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         try:
@@ -692,7 +692,7 @@ except Exception as e:
         ]
 
         # Write sample events
-        with open(runtime_events_file, "w") as f:
+        with open(runtime_events_file, "w", encoding="utf-8") as f:
             for event in sample_events:
                 f.write(json.dumps(event) + "\n")
 
@@ -700,7 +700,7 @@ except Exception as e:
         valid_count = 0
         invalid_count = 0
 
-        with open(runtime_events_file) as f:
+        with open(runtime_events_file, encoding="utf-8") as f:
             for line in f:
                 if line.strip():
                     event = json.loads(line)

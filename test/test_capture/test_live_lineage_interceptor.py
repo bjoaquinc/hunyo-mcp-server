@@ -663,7 +663,7 @@ class TestMarimoLiveInterceptorReal:
 
             # Verify event was written to file
             assert output_file.exists()
-            with open(output_file) as f:
+            with open(output_file, encoding="utf-8") as f:
                 written_event = json.loads(f.read().strip())
                 assert written_event["event_type"] == "test_event"
                 # The written event is exactly what was passed in - session_id not added automatically

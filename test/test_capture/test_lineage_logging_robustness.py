@@ -161,7 +161,7 @@ class TestLineageLoggingRobustness:
         # Verify event file was created and contains data
         assert temp_files["lineage"].exists()
 
-        with open(temp_files["lineage"]) as f:
+        with open(temp_files["lineage"], encoding="utf-8") as f:
             content = f.read().strip()
             assert content  # Should have event data
 

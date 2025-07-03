@@ -201,7 +201,7 @@ class TestEventProcessor:
         """Test processing JSONL file with runtime events"""
         # Create test JSONL file
         jsonl_file = tmp_path / "runtime_events.jsonl"
-        with open(jsonl_file, "w") as f:
+        with open(jsonl_file, "w", encoding="utf-8") as f:
             f.write(json.dumps(sample_runtime_event) + "\n")
 
         result = event_processor.process_jsonl_file(jsonl_file, "runtime")
@@ -215,7 +215,7 @@ class TestEventProcessor:
         """Test processing JSONL file with lineage events"""
         # Create test JSONL file
         jsonl_file = tmp_path / "lineage_events.jsonl"
-        with open(jsonl_file, "w") as f:
+        with open(jsonl_file, "w", encoding="utf-8") as f:
             f.write(json.dumps(sample_openlineage_event) + "\n")
 
         result = event_processor.process_jsonl_file(jsonl_file, "lineage")
@@ -235,7 +235,7 @@ class TestEventProcessor:
         """Test processing JSONL file with invalid JSON"""
         # Create file with invalid JSON
         jsonl_file = tmp_path / "invalid.jsonl"
-        with open(jsonl_file, "w") as f:
+        with open(jsonl_file, "w", encoding="utf-8") as f:
             f.write("invalid json line\n")
             f.write('{"valid": "json"}\n')
 
@@ -248,7 +248,7 @@ class TestEventProcessor:
     def test_process_jsonl_file_unknown_type(self, event_processor, tmp_path):
         """Test processing JSONL file with unknown event type"""
         jsonl_file = tmp_path / "test.jsonl"
-        with open(jsonl_file, "w") as f:
+        with open(jsonl_file, "w", encoding="utf-8") as f:
             f.write('{"test": "event"}\n')
 
         result = event_processor.process_jsonl_file(jsonl_file, "unknown")
@@ -462,7 +462,7 @@ class TestEventProcessor:
     ):
         """Test processing JSONL file with empty lines"""
         jsonl_file = tmp_path / "test.jsonl"
-        with open(jsonl_file, "w") as f:
+        with open(jsonl_file, "w", encoding="utf-8") as f:
             f.write("\n")  # Empty line
             f.write("  \n")  # Whitespace line
             f.write("\n")  # Another empty line

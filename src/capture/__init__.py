@@ -87,9 +87,9 @@ def get_user_data_dir() -> str:
 
     # Method 1: Check for environment variable override
     env_mode = os.environ.get("HUNYO_DEV_MODE", "").lower()
-    if env_mode in ("1", "true", "yes", "on"):
+    if env_mode in {"1", "true", "yes", "on"}:
         is_dev_mode = True
-    elif env_mode in ("0", "false", "no", "off"):
+    elif env_mode in {"0", "false", "no", "off"}:
         is_dev_mode = False  # Explicitly force production mode
     else:
         # Method 2: Auto-detect based on development indicators

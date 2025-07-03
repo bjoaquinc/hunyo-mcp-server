@@ -39,14 +39,14 @@ class TestMarimoNotebookIntegration:
     def runtime_events_schema(self):
         """Load runtime events schema for validation"""
         schema_path = Path("schemas/json/runtime_events_schema.json")
-        with open(schema_path) as f:
+        with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
     @pytest.fixture
     def openlineage_events_schema(self):
         """Load OpenLineage events schema for validation"""
         schema_path = Path("schemas/json/openlineage_events_schema.json")
-        with open(schema_path) as f:
+        with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
     def validate_event_against_schema(
@@ -191,14 +191,14 @@ if __name__ == "__main__":
         # Create notebook file
         notebook_path = temp_hunyo_dir / "test_capture_notebook.py"
 
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_notebook_content)
 
         assert notebook_path.exists()
         assert notebook_path.stat().st_size > 0
 
         # Verify notebook content
-        with open(notebook_path) as f:
+        with open(notebook_path, encoding="utf-8") as f:
             content = f.read()
 
         assert "import pandas as pd" in content
@@ -259,7 +259,7 @@ if __name__ == "__main__":
         """Test that notebook would produce expected validation output"""
         notebook_path = temp_hunyo_dir / "validation_notebook.py"
 
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_notebook_content)
 
         # Mock marimo execution environment
@@ -328,7 +328,7 @@ df2 = pd.DataFrame({
 
         # Create notebook
         notebook_path = temp_hunyo_dir / "full_workflow_test.py"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_notebook_content)
 
         # Initialize capture system
@@ -382,7 +382,7 @@ df2 = pd.DataFrame({
         assert events_file.exists()
 
         # Should have recorded cell execution events
-        with open(events_file) as f:
+        with open(events_file, encoding="utf-8") as f:
             import json
 
             events = [
@@ -412,7 +412,7 @@ df2 = pd.DataFrame({
 
         # Create schema-compliant test notebook
         notebook_path = temp_hunyo_dir / "schema_validation_notebook.py"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_notebook_content)
 
         # Initialize tracker
@@ -451,7 +451,7 @@ df2 = pd.DataFrame({
 
         for i, operation in enumerate(schema_compliant_operations):
             # Use realistic marimo cell ID - operations can share cells
-            cell_id = cell_mappings.get(operation["df_name"], f"cell_{i+1:04x}")
+            cell_id = cell_mappings.get(operation["df_name"], f"cell_{i + 1:04x}")
 
             # Generate proper runtime event using tracker
             event = {
@@ -495,7 +495,7 @@ df2 = pd.DataFrame({
 
         # Create test notebook
         notebook_path = temp_hunyo_dir / "real_marimo_test.py"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             f.write(marimo_notebook_content)
 
         # Create events output file
@@ -561,13 +561,13 @@ except ImportError:
                     }
                 ]
 
-                with open(events_file, "w") as f:
+                with open(events_file, "w", encoding="utf-8") as f:
                     for event in mock_events:
                         f.write(json.dumps(event) + "\n")
 
             # Validate generated events against schema
             if events_file.exists():
-                with open(events_file) as f:
+                with open(events_file, encoding="utf-8") as f:
                     events = [json.loads(line.strip()) for line in f if line.strip()]
 
                 valid_count = 0

@@ -185,7 +185,7 @@ class MarimoWebSocketProxy:
                 _message_history.pop(0)
 
             # Write to file
-            with open(self.output_file, "a") as f:
+            with open(self.output_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event, default=str) + "\n")
 
             # Log message summary if enabled

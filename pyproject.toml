@@ -197,6 +197,7 @@ skip-string-normalization = true
 [tool.ruff]
 target-version = "py310"
 line-length = 88
+
 lint.select = [
     "A",
     "ARG",
@@ -216,7 +217,7 @@ lint.select = [
     "PLR",
     "PLW",
     "Q",
-    "RUF",    # Includes RUF001, RUF002, RUF003 for Unicode detection (prevents Windows CI failures)
+    "RUF",
     "S",
     "T",
     "TID",
@@ -233,14 +234,24 @@ lint.ignore = [
     "S105", "S106", "S107",
     # TODO: SECURITY - Review before production! SQL injection warnings ignored for dev
     "S608",
-    # Ignore complexity
-    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+    # Ignore complexity warnings (sometimes necessary for business logic)
+    "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR0914", "PLR1702", "PLR0904",
     # Allow imports not at top-level (useful for conditional imports, lazy loading)
     "E402", "PLC0415",
-    # Allow longer lines (usefule for logs and test asserts)
+    # Allow longer lines (useful for logs and test asserts)
     "E501",
     # Allow relative imports
     "TID252",
+    # Ignore pytest method style warnings (test methods don't need to be static)
+    "PLR6301",
+    # Allow subprocess usage in tests
+    "S404",
+    # Allow private imports for testing/development
+    "PLC2701",
+    # Allow explicit string comparisons (more readable than implicit)
+    "PLC1901",
+    # Allow eval() usage in debugging/hooking contexts
+    "S307",
 ]
 
 lint.unfixable = [

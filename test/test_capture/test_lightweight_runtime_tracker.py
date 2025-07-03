@@ -136,7 +136,7 @@ class TestLightweightRuntimeTracker:
         # Verify events were written
         assert output_file.exists()
 
-        with open(output_file) as f:
+        with open(output_file, encoding="utf-8") as f:
             lines = f.readlines()
 
         assert (
@@ -172,11 +172,11 @@ class TestLightweightRuntimeTracker:
             assert "event_type" in event
 
             # Cell execution events should have specific fields
-            if event_type in [
+            if event_type in {
                 "cell_execution_start",
                 "cell_execution_end",
                 "cell_execution_error",
-            ]:
+            }:
                 assert "cell_id" in event
                 assert "cell_source" in event
                 if "execution_id" in event:  # Not all events might have this

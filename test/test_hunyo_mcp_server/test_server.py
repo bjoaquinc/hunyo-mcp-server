@@ -5,7 +5,7 @@ Tests for server.py - Main CLI entry point and MCP server setup.
 Tests cover CLI parameter handling, environment setup, component lifecycle,
 error handling, and graceful shutdown scenarios.
 """
-# ruff: noqa: S108 - Hardcoded tmp paths OK for tests
+
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
+
+# Import cross-platform path utilities
+from hunyo_mcp_server.utils.paths import get_safe_temp_database_path
 
 # Mock problematic modules to avoid relative import issues
 mock_logger = MagicMock()
@@ -124,7 +127,11 @@ print(df)
             patch.object(server_module, "mcp", mock_mcp),
             patch.object(server_module, "ensure_directory_structure"),
             patch.object(
-                server_module, "get_hunyo_data_dir", return_value=Path("/tmp/.hunyo")
+                server_module,
+                "get_hunyo_data_dir",
+                return_value=Path(
+                    get_safe_temp_database_path("test1").replace(".duckdb", "")
+                ),
             ),
             patch.object(server_module, "set_global_orchestrator"),
         ):
@@ -151,7 +158,11 @@ print(df)
             patch.object(server_module, "mcp", mock_mcp),
             patch.object(server_module, "ensure_directory_structure"),
             patch.object(
-                server_module, "get_hunyo_data_dir", return_value=Path("/tmp/.hunyo")
+                server_module,
+                "get_hunyo_data_dir",
+                return_value=Path(
+                    get_safe_temp_database_path("test2").replace(".duckdb", "")
+                ),
             ),
             patch.object(server_module, "set_global_orchestrator"),
             patch.dict(os.environ, {}, clear=True),
@@ -181,7 +192,9 @@ print(df)
             patch("hunyo_mcp_server.server.ensure_directory_structure"),
             patch(
                 "hunyo_mcp_server.server.get_hunyo_data_dir",
-                return_value=Path("/tmp/.hunyo"),
+                return_value=Path(
+                    get_safe_temp_database_path("test3").replace(".duckdb", "")
+                ),
             ),
             patch("hunyo_mcp_server.server.set_global_orchestrator"),
         ):
@@ -217,7 +230,9 @@ print(df)
             patch("hunyo_mcp_server.server.ensure_directory_structure"),
             patch(
                 "hunyo_mcp_server.server.get_hunyo_data_dir",
-                return_value=Path("/tmp/.hunyo"),
+                return_value=Path(
+                    get_safe_temp_database_path("test4").replace(".duckdb", "")
+                ),
             ),
             patch("hunyo_mcp_server.server.set_global_orchestrator") as mock_set_global,
         ):
@@ -252,7 +267,9 @@ print(df)
             patch("hunyo_mcp_server.server.ensure_directory_structure"),
             patch(
                 "hunyo_mcp_server.server.get_hunyo_data_dir",
-                return_value=Path("/tmp/.hunyo"),
+                return_value=Path(
+                    get_safe_temp_database_path("test5").replace(".duckdb", "")
+                ),
             ),
             patch("hunyo_mcp_server.server.set_global_orchestrator"),
         ):
@@ -285,7 +302,9 @@ print(df)
             patch("hunyo_mcp_server.server.ensure_directory_structure"),
             patch(
                 "hunyo_mcp_server.server.get_hunyo_data_dir",
-                return_value=Path("/tmp/.hunyo"),
+                return_value=Path(
+                    get_safe_temp_database_path("test6").replace(".duckdb", "")
+                ),
             ),
             patch("hunyo_mcp_server.server.set_global_orchestrator"),
         ):
@@ -331,7 +350,9 @@ print(df)
             patch("hunyo_mcp_server.server.ensure_directory_structure"),
             patch(
                 "hunyo_mcp_server.server.get_hunyo_data_dir",
-                return_value=Path("/tmp/.hunyo"),
+                return_value=Path(
+                    get_safe_temp_database_path("test7").replace(".duckdb", "")
+                ),
             ),
             patch("hunyo_mcp_server.server.set_global_orchestrator"),
         ):

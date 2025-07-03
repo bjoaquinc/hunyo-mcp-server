@@ -88,6 +88,9 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
 
         click.echo("[START] MCP server starting...")
 
+        # Simple marker for test parsing (bypasses rich logger formatting)
+        print("HUNYO_READY_MARKER: MCP_SERVER_STARTING")  # noqa: T201
+
         # Check if we're running in standalone mode
         if standalone:
             click.echo("[INFO] Running in standalone mode - waiting for connections...")

@@ -84,6 +84,10 @@ class HunyoOrchestrator:
             self._start_ingestion_components()
 
             orchestrator_logger.success("[OK] All components started successfully")
+
+            # Simple marker for test parsing (bypasses rich logger formatting)
+            print("HUNYO_READY_MARKER: ALL_COMPONENTS_STARTED")  # noqa: T201
+
             self.running = True
 
         except Exception as e:

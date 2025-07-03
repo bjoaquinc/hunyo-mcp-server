@@ -122,7 +122,7 @@ class MarimoNativeHooksInterceptor:
                 PRE_EXECUTION_HOOKS,
             )
 
-            hooks_logger.info("🔧 Installing marimo native hooks...")
+            hooks_logger.info("[INSTALL] Installing marimo native hooks...")
 
             # Install pre-execution hook
             pre_hook = self._create_pre_execution_hook()
@@ -419,7 +419,7 @@ class MarimoNativeHooksInterceptor:
             return {"namespace": "marimo", "name": f"unknown_dataframe_{df_id}"}
 
         try:
-            if operation in ["merge", "join"]:
+            if operation in {"merge", "join"}:
                 left_df = self._get_input_df_from_args(args)
                 right_df = kwargs.get("right", args[1] if len(args) > 1 else None)
 
@@ -614,12 +614,12 @@ class MarimoNativeHooksInterceptor:
                             ),
                             "min": (
                                 float(df[col].min())
-                                if df[col].dtype in ["int64", "float64"]
+                                if df[col].dtype in {"int64", "float64"}
                                 else None
                             ),
                             "max": (
                                 float(df[col].max())
-                                if df[col].dtype in ["int64", "float64"]
+                                if df[col].dtype in {"int64", "float64"}
                                 else None
                             ),
                         }
@@ -947,7 +947,7 @@ class MarimoNativeHooksInterceptor:
             # Ensure runtime directory exists
             runtime_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(runtime_file, "a") as f:
+            with open(runtime_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(event_data, default=str) + "\n")
         except Exception as e:
             # Fallback to logger if file write fails
@@ -1086,7 +1086,7 @@ class MarimoNativeHooksInterceptor:
             event["emitted_at"] = datetime.now(timezone.utc).isoformat()
 
             with self._lock:
-                with open(self.lineage_file, "a") as f:
+                with open(self.lineage_file, "a", encoding="utf-8") as f:
                     f.write(json.dumps(event, default=str) + "\n")
         except Exception as e:
             # Use marimo-aware logger that handles context properly
@@ -1105,7 +1105,7 @@ class MarimoNativeHooksInterceptor:
                 PRE_EXECUTION_HOOKS,
             )
 
-            hooks_logger.info("🔧 Uninstalling marimo native hooks...")
+            hooks_logger.info("[UNINSTALL] Uninstalling marimo native hooks...")
 
             # Remove all installed hooks
             for hook_list_name, hook_func in self.installed_hooks:
@@ -1149,7 +1149,7 @@ class MarimoNativeHooksInterceptor:
                     setattr(pd, func_name, original_method)
 
             _pandas_intercepted = False
-            hooks_logger.info("🐼 Pandas methods restored")
+            hooks_logger.info("[PANDAS] Pandas methods restored")
 
         except Exception as e:
             hooks_logger.warning(f"[WARN] Error restoring pandas methods: {e}")
@@ -1183,7 +1183,7 @@ def enable_native_hook_tracking(
         )
         return _global_native_interceptor
 
-    hooks_logger.info("🔧 Creating new interceptor instance...")
+    hooks_logger.info("[INIT] Creating new interceptor instance...")
     _global_native_interceptor = MarimoNativeHooksInterceptor(
         lineage_file, notebook_path
     )
@@ -1198,7 +1198,7 @@ def disable_native_hook_tracking():
     if _global_native_interceptor is not None:
         _global_native_interceptor.uninstall()
         _global_native_interceptor = None
-        hooks_logger.info("🔇 Native hook tracking disabled")
+        hooks_logger.info("[DISABLE] Native hook tracking disabled")
     else:
         hooks_logger.warning("[WARN] Native hook tracking was not active")
 
@@ -1224,9 +1224,9 @@ if __name__ == "__main__":
     hooks_logger.info("Manual test mode - run enable_native_hook_tracking() manually")
 else:
     # Don't auto-enable to prevent startup issues - user must call enable_native_hook_tracking()
-    hooks_logger.info("🔧 Marimo hooks interceptor imported")
+    hooks_logger.info("[IMPORT] Marimo hooks interceptor imported")
     hooks_logger.info(
-        "🚨 IMPORTANT: Call enable_native_hook_tracking() to start tracking"
+        "[IMPORTANT] Call enable_native_hook_tracking() to start tracking"
     )
     hooks_logger.info(
         "   Example: import marimo_native_hooks_interceptor; marimo_native_hooks_interceptor.enable_native_hook_tracking()"

@@ -32,7 +32,7 @@ class TestRealMarimoExecution:
     def runtime_events_schema(self):
         """Load runtime events schema for validation"""
         schema_path = Path("schemas/json/runtime_events_schema.json")
-        with open(schema_path) as f:
+        with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
     def validate_event_against_schema(
@@ -84,7 +84,7 @@ class TestRealMarimoExecution:
             # Validate that real implementation generates compliant events
             assert events_file.exists(), "Real tracker should create events file"
 
-            with open(events_file) as f:
+            with open(events_file, encoding="utf-8") as f:
                 events = [json.loads(line.strip()) for line in f if line.strip()]
 
             # Focus on cell execution events (not session events)
@@ -283,7 +283,7 @@ if __name__ == "__main__":
             # Check for runtime events (cell execution from hooks)
             runtime_events = []
             if runtime_events_file.exists():
-                with open(runtime_events_file) as f:
+                with open(runtime_events_file, encoding="utf-8") as f:
                     runtime_events = [
                         json.loads(line.strip()) for line in f if line.strip()
                     ]
@@ -291,7 +291,7 @@ if __name__ == "__main__":
             # Check for lineage events (DataFrame operations)
             lineage_events = []
             if lineage_events_file.exists():
-                with open(lineage_events_file) as f:
+                with open(lineage_events_file, encoding="utf-8") as f:
                     lineage_events = [
                         json.loads(line.strip()) for line in f if line.strip()
                     ]
@@ -508,7 +508,7 @@ if __name__ == "__main__":
             # Check for runtime events (should be 0 - no hooks fire)
             runtime_events = []
             if runtime_events_file.exists():
-                with open(runtime_events_file) as f:
+                with open(runtime_events_file, encoding="utf-8") as f:
                     runtime_events = [
                         json.loads(line.strip()) for line in f if line.strip()
                     ]
@@ -516,7 +516,7 @@ if __name__ == "__main__":
             # Check for lineage events (DataFrame operations should work)
             lineage_events = []
             if lineage_events_file.exists():
-                with open(lineage_events_file) as f:
+                with open(lineage_events_file, encoding="utf-8") as f:
                     lineage_events = [
                         json.loads(line.strip()) for line in f if line.strip()
                     ]
@@ -600,8 +600,8 @@ if __name__ == "__main__":
 
             # Simulate 3 cells executing
             for i in range(3):
-                cell_id = f"test_cell_{i+1}"
-                cell_source = f"# Cell {i+1}\ndf{i+1} = pd.DataFrame({{'col': [1, 2, 3]}})\nprint('Cell {i+1} executed')"
+                cell_id = f"test_cell_{i + 1}"
+                cell_source = f"# Cell {i + 1}\ndf{i + 1} = pd.DataFrame({{'col': [1, 2, 3]}})\nprint('Cell {i + 1} executed')"
 
                 test_logger.notebook(f"Simulating cell execution: {cell_id}")
 
@@ -659,14 +659,16 @@ if __name__ == "__main__":
                     interceptor.runtime_tracker.stop_tracking(flush_events=True)
 
                 if interceptor.runtime_tracker.output_file.exists():
-                    with open(interceptor.runtime_tracker.output_file) as f:
+                    with open(
+                        interceptor.runtime_tracker.output_file, encoding="utf-8"
+                    ) as f:
                         runtime_events = [
                             json.loads(line.strip()) for line in f if line.strip()
                         ]
 
             lineage_events = []
             if lineage_file.exists():
-                with open(lineage_file) as f:
+                with open(lineage_file, encoding="utf-8") as f:
                     lineage_events = [
                         json.loads(line.strip()) for line in f if line.strip()
                     ]

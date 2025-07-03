@@ -78,7 +78,7 @@ class TestCaptureIntegration:
         assert capture_event_file.exists()
 
         # Verify event content
-        with open(capture_event_file) as f:
+        with open(capture_event_file, encoding="utf-8") as f:
             events = [
                 json.loads(line.strip()) for line in f.readlines() if line.strip()
             ]

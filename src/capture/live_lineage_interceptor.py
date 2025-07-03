@@ -929,7 +929,7 @@ class MarimoLiveInterceptor:
         """Emit a lineage event to the output file"""
         try:
             with self._lock:
-                with open(self.output_file, "a") as f:
+                with open(self.output_file, "a", encoding="utf-8") as f:
                     f.write(json.dumps(event, default=str) + "\n")
         except Exception as e:
             lineage_logger.warning(f"Failed to emit event: {e}")

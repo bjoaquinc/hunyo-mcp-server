@@ -9,6 +9,12 @@ import os
 from pathlib import Path
 from typing import Any
 
+# Import cross-platform path utilities
+from hunyo_mcp_server.utils.paths import (
+    normalize_database_path,
+    setup_cross_platform_directories,
+)
+
 # Import logging utility
 try:
     from capture.logger import get_logger
@@ -82,7 +88,7 @@ def is_development_mode() -> bool:
     # Environment variable override
     env_dev_mode = os.environ.get("HUNYO_DEV_MODE")
     if env_dev_mode is not None:
-        return env_dev_mode.lower() in ("1", "true", "yes", "on")
+        return env_dev_mode.lower() in {"1", "true", "yes", "on"}
 
     # Check if we're in a repository
     try:
@@ -141,13 +147,15 @@ def get_event_directories() -> tuple[Path, Path]:
 
 def get_database_path() -> Path:
     """
-    Get the DuckDB database file path.
+    Get the DuckDB database file path with cross-platform normalization.
 
     Returns:
-        Path: Database file path
+        Path: Normalized database file path
     """
     data_dir = get_hunyo_data_dir()
-    return data_dir / "database" / "lineage.duckdb"
+    db_path = data_dir / "database" / "lineage.duckdb"
+    normalized_path = normalize_database_path(str(db_path))
+    return Path(normalized_path)
 
 
 def get_config_path() -> Path:
@@ -163,35 +171,39 @@ def get_config_path() -> Path:
 
 def ensure_directory_structure() -> None:
     """
-    Ensure all necessary directories exist with proper permissions.
+    Ensure all necessary directories exist with cross-platform permissions.
 
     Creates:
     - Main data directory (.hunyo)
     - Events subdirectories (runtime, lineage)
     - Database directory
     - Config directory
+
+    Uses cross-platform directory setup for proper permissions.
     """
     data_dir = get_hunyo_data_dir()
 
-    # Create main directory structure
-    directories_to_create = [
-        data_dir,
-        data_dir / "events",
+    # Use cross-platform directory setup utility
+    setup_cross_platform_directories(str(data_dir))  # Create base directories
+
+    # Create additional event subdirectories not covered by base setup
+    event_subdirs = [
         data_dir / "events" / "runtime",
         data_dir / "events" / "lineage",
-        data_dir / "database",
-        data_dir / "config",
     ]
 
-    for directory in directories_to_create:
-        directory.mkdir(parents=True, exist_ok=True)
+    for subdir in event_subdirs:
+        subdir.mkdir(parents=True, exist_ok=True)
 
-        # Ensure reasonable permissions (owner read/write/execute)
+        # Apply cross-platform permissions
         try:
-            directory.chmod(0o755)
+            if os.name != "nt":  # Not Windows
+                subdir.chmod(0o755)
         except (OSError, NotImplementedError):
             # Some filesystems don't support chmod, skip silently
             pass
+
+    mcp_logger.config(f"[OK] Directory structure created at: {data_dir}")
 
 
 def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Path:
@@ -208,7 +220,7 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
     Raises:
         ValueError: If event_type is not 'runtime' or 'lineage'
     """
-    if event_type not in ("runtime", "lineage"):
+    if event_type not in {"runtime", "lineage"}:
         msg = f"event_type must be 'runtime' or 'lineage', got: {event_type}"
         raise ValueError(msg)
 
