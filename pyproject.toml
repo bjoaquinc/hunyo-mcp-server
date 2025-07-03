@@ -110,7 +110,6 @@ inspect-verbose = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebo
 # Multi-Python testing now handled by GitHub Actions CI
 # Run tests locally with: hatch run test
 # See .github/workflows/test.yml for comprehensive CI matrix
-test-matrix = "hatch run test:test"
 coverage-report = [
     "pytest --cov=src/hunyo_mcp_server --cov=src/capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
 ]
@@ -130,14 +129,9 @@ dev-mode = true  # Install project in development mode
 test = "pytest {args}"
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args}"
 
-# Multi-version testing environments
-[[tool.hatch.envs.test.matrix]]
-python = ["3.10", "3.11", "3.12", "3.13"]
-
-[tool.hatch.envs.test.overrides]
-matrix.python.dependencies = [
-    { value = "pytest>=8.3.0", if = ["3.10", "3.11", "3.12", "3.13"] },
-]
+# Multi-version testing is handled by GitHub Actions CI/CD matrix
+# No need for Hatch matrix since each CI job targets a specific Python version
+# This eliminates redundant environment creation and speeds up CI
 
 # Pytest configuration following marimo patterns
 [tool.pytest.ini_options]
@@ -222,7 +216,7 @@ lint.select = [
     "PLR",
     "PLW",
     "Q",
-    "RUF",
+    "RUF",    # Includes RUF001, RUF002, RUF003 for Unicode detection (prevents Windows CI failures)
     "S",
     "T",
     "TID",
@@ -248,6 +242,7 @@ lint.ignore = [
     # Allow relative imports
     "TID252",
 ]
+
 lint.unfixable = [
     # Don't touch unused imports
     "F401",
@@ -266,11 +261,16 @@ banned-module-level-imports = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests can use magic values, assertions, relative imports, unused fixtures, subprocess calls, print statements, and marimo function naming
-"test/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607", "T201", "N807"]
-# Marimo notebooks in test fixtures can use print statements and marimo function naming
+# ALSO allow Unicode in tests since they may contain test data with Unicode
+"test/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607", "T201", "N807", "RUF001", "RUF002", "RUF003"]
+# Marimo notebooks in test fixtures can use print statements and marimo function naming  
 "test/fixtures/*.py" = ["T201", "N807"]
 # WebSocket interceptor uses legitimate module-level singleton pattern
 "src/capture/websocket_interceptor.py" = ["PLW0603"]
+# Allow Unicode in documentation files
+"**/{README,CHANGELOG,CONTRIBUTING,ROADMAP}.md" = ["RUF001", "RUF002", "RUF003"]
+# CI files can have Unicode (we manually fixed them to be Windows-safe)
+".github/**/*.yml" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.mypy]
 # Relaxed configuration for development - focus on real type errors

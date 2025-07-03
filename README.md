@@ -114,8 +114,9 @@ GROUP BY operation;
 ## 🔧 Installation & Usage
 
 ### Prerequisites
-- **Python 3.10+** (3.11+ recommended)
+- **Python 3.10+** (3.11+ recommended) 
 - **Marimo notebooks** - Works with `.py` marimo notebook files
+- **Cross-platform** - Fully compatible with Windows, macOS, and Linux
 
 ### Installation Options
 

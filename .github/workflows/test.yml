@@ -77,14 +77,19 @@ jobs:
         hatch env create test
         
     - name: Verify dependencies
+      shell: bash
+      env:
+        # Fix Windows Unicode issues
+        PYTHONIOENCODING: utf-8
+        PYTHONUTF8: 1
       run: |
-        echo "🔍 Verifying critical dependencies..."
-        hatch run test:python -c "import pandas; print('✅ pandas available')"
-        hatch run test:python -c "import duckdb; print('✅ duckdb available')" 
-        hatch run test:python -c "import jsonschema; print('✅ jsonschema available')"
-        hatch run test:python -c "import pytest; print('✅ pytest available')"
-        hatch run test:python -c "import click; print('✅ click available')"
-        echo "✅ All dependencies verified"
+        echo "Verifying critical dependencies..."
+        hatch run test:python -c "import pandas; print('[OK] pandas available')"
+        hatch run test:python -c "import duckdb; print('[OK] duckdb available')" 
+        hatch run test:python -c "import jsonschema; print('[OK] jsonschema available')"
+        hatch run test:python -c "import pytest; print('[OK] pytest available')"
+        hatch run test:python -c "import click; print('[OK] click available')"
+        echo "[OK] All dependencies verified"
         
     - name: Run tests with coverage
       shell: bash
@@ -95,7 +100,7 @@ jobs:
         # Rename coverage file to include job info for later combination
         if [ -f .coverage ]; then
           mv .coverage .coverage.py${{ matrix.python-version }}-${{ runner.os }}
-          echo "✅ Coverage file renamed to: .coverage.py${{ matrix.python-version }}-${{ runner.os }}"
+          echo "[OK] Coverage file renamed to: .coverage.py${{ matrix.python-version }}-${{ runner.os }}"
         fi
         
     - name: Upload coverage data
@@ -152,7 +157,7 @@ jobs:
     - name: Create environment and verify setup
       run: |
         hatch env create test
-        hatch run test:python -c "import marimo; print('✅ marimo available')"
+        hatch run test:python -c "import marimo; print('[OK] marimo available')"
         
     - name: Run integration tests
       run: |
@@ -187,7 +192,7 @@ jobs:
         
     - name: Generate coverage report
       run: |
-        echo "📊 Processing coverage data..."
+        echo "Processing coverage data..."
         ls -la .coverage* 2>/dev/null || echo "No coverage files found"
         
         if ls .coverage.* 1>/dev/null 2>&1; then
@@ -196,7 +201,7 @@ jobs:
           coverage report --show-missing
           coverage html
           coverage xml
-          echo "✅ Coverage reports generated"
+          echo "[OK] Coverage reports generated"
         else
           echo "No coverage data found, running fallback collection..."
           hatch env create test
@@ -230,8 +235,8 @@ jobs:
         python -m pip install hatch
         hatch build
         pip install dist/*.whl
-        python -c "import hunyo_mcp_server; print('✅ Package installed successfully')"
-        python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer importable')"
+        python -c "import hunyo_mcp_server; print('[OK] Package installed successfully')"
+        python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('[OK] Capture layer importable')"
 
   # Test summary
   test-summary:
@@ -243,18 +248,18 @@ jobs:
     steps:
     - name: Check test results
       run: |
-        echo "🧪 Test Summary:"
-        echo "  📊 Test Matrix: ${{ needs.test-matrix.result }}"
-        echo "  🎨 Code Quality: ${{ needs.code-quality.result }}"
-        echo "  🔗 Integration Tests: ${{ needs.integration-tests.result }}"
-        echo "  📈 Coverage Report: ${{ needs.coverage-report.result }}"
-        echo "  📦 Package Test: ${{ needs.test-package.result }}"
+        echo "Test Summary:"
+        echo "  Test Matrix: ${{ needs.test-matrix.result }}"
+        echo "  Code Quality: ${{ needs.code-quality.result }}"
+        echo "  Integration Tests: ${{ needs.integration-tests.result }}"
+        echo "  Coverage Report: ${{ needs.coverage-report.result }}"
+        echo "  Package Test: ${{ needs.test-package.result }}"
         
         # Fail if critical tests failed
         if [[ "${{ needs.test-matrix.result }}" != "success" ]] || 
            [[ "${{ needs.code-quality.result }}" != "success" ]]; then
-          echo "❌ Critical tests failed"
+          echo "[FAIL] Critical tests failed"
           exit 1
         else
-          echo "🎉 All critical tests passed!"
+          echo "[OK] All critical tests passed!"
         fi 

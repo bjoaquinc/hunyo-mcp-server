@@ -518,3 +518,52 @@ banned-module-level-imports = [
 **Resolution**: Use proper package imports based on your `pyproject.toml` package structure
 
 ## 🧪 Development Workflow
+
+### 🚀 **CI/CD & Quality Assurance**
+
+**Full Cross-Platform Testing Matrix**: Our CI/CD pipeline runs comprehensive tests across:
+- **Python versions**: 3.10, 3.11, 3.12, 3.13
+- **Operating systems**: Ubuntu, Windows, macOS  
+- **Total matrix**: 12 test jobs ensuring universal compatibility
+
+```bash
+# Check all quality gates locally before pushing
+hatch run style    # Black + Ruff checks (includes Windows Unicode detection)
+hatch run typing   # MyPy type checking
+hatch run test     # Full test suite
+hatch run test-cov # Tests with coverage report
+```
+
+### 🛡️ **Windows Compatibility**
+
+**Unicode Safety**: Automatic prevention of Windows CI failures:
+- **Ruff rules** - `RUF001`, `RUF002`, `RUF003` detect problematic Unicode characters
+- **CI environment** - UTF-8 encoding enforcement with `PYTHONIOENCODING=utf-8`
+- **ASCII-safe output** - All CI messages use `[OK]`, `[INFO]` instead of emojis
+- **Strategic exceptions** - Unicode allowed in tests, docs, and appropriate files
+
+**Testing Windows Locally**:
+```bash
+# Test Unicode detection (should show warnings)
+echo 'test = "✅ Unicode emoji"' > test_unicode.py
+hatch run style test_unicode.py
+
+# Current codebase should be clean
+hatch run style --select RUF001,RUF002,RUF003
+```
+
+### 🔒 **Pre-commit Hooks**
+
+**Automated Quality Enforcement**:
+```bash
+# Install pre-commit hooks (one-time setup)
+hatch run pre-commit install
+
+# Manual run on all files
+hatch run pre-commit run --all-files
+```
+
+**Hooks Active:**
+- **Auto-fixing**: Black formatting, Ruff auto-fixes, import sorting
+- **Quality checks**: Ruff linting, MyPy type checking, test execution
+- **Standards enforcement**: Prevents `src.` imports, ensures import structure
