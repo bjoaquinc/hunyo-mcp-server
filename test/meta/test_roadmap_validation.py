@@ -12,7 +12,7 @@ class TestRoadmapValidation:
     @pytest.fixture
     def roadmap_path(self) -> Path:
         """Returns path to ROADMAP.md file"""
-        return Path(__file__).parent.parent / "ROADMAP.md"
+        return Path(__file__).parent.parent.parent / "ROADMAP.md"
 
     @pytest.fixture
     def roadmap_content(self, roadmap_path: Path) -> str:
@@ -114,7 +114,7 @@ class TestServerImplementationPreparation:
 
     def test_project_structure_ready_for_server(self):
         """Test that project structure is ready for server.py implementation"""
-        src_dir = Path(__file__).parent.parent / "src" / "hunyo_mcp_server"
+        src_dir = Path(__file__).parent.parent.parent / "src" / "hunyo_mcp_server"
 
         # Core directories should exist
         assert src_dir.exists(), "hunyo_mcp_server package should exist"
@@ -131,7 +131,7 @@ class TestServerImplementationPreparation:
         from pathlib import Path
 
         # Add src to path temporarily
-        src_path = str(Path(__file__).parent.parent / "src")
+        src_path = str(Path(__file__).parent.parent.parent / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
@@ -163,7 +163,7 @@ class TestServerImplementationPreparation:
         from pathlib import Path
 
         # Add src to path temporarily
-        src_path = str(Path(__file__).parent.parent / "src")
+        src_path = str(Path(__file__).parent.parent.parent / "src")
         if src_path not in sys.path:
             sys.path.insert(0, src_path)
 
@@ -187,7 +187,7 @@ class TestServerImplementationPreparation:
 
     def test_pyproject_entry_point_configured(self):
         """Test that pyproject.toml has correct CLI entry point for server"""
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         assert pyproject_path.exists(), "pyproject.toml should exist"
 
         content = pyproject_path.read_text()
@@ -198,7 +198,7 @@ class TestServerImplementationPreparation:
 
     def test_dependencies_available_for_server(self):
         """Test that required dependencies for server implementation are available"""
-        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
         content = pyproject_path.read_text()
 
         # Key dependencies for MCP server should be listed
@@ -217,7 +217,7 @@ class TestServerImplementationPreparation:
 
     def test_schemas_available_for_server(self):
         """Test that database schemas are available for server initialization"""
-        schemas_dir = Path(__file__).parent.parent / "schemas" / "sql"
+        schemas_dir = Path(__file__).parent.parent.parent / "schemas" / "sql"
 
         # Key schema files should exist
         assert (schemas_dir / "init_database.sql").exists()
