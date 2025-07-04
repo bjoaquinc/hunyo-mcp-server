@@ -128,7 +128,7 @@ def get_user_data_dir() -> str:
         # Production mode: use home directory .hunyo
         data_dir = Path.home() / ".hunyo"
 
-    # Create directory structure
+    # Created directory structure
     (data_dir / "events" / "runtime").mkdir(parents=True, exist_ok=True)
     (data_dir / "events" / "lineage").mkdir(parents=True, exist_ok=True)
     (data_dir / "database").mkdir(parents=True, exist_ok=True)
