@@ -119,6 +119,8 @@ class TestNotebookName:
 
     def test_filesystem_safe_characters(self):
         """Test that problematic characters are replaced with underscores"""
+        import platform
+
         test_cases = [
             ("note book.py", "note_book"),  # Space
             ("note-book.py", "note-book"),  # Dash (allowed)
@@ -126,16 +128,20 @@ class TestNotebookName:
             ("note@book.py", "note_book"),  # Special character
             ("note#book$.py", "note_book_"),  # Multiple special characters
             ("note/book.py", "book"),  # Slash - only takes filename
-            (
-                "note\\book.py",
-                "note_book",
-            ),  # Backslash (on non-Windows, treated as char)
             ("note:book.py", "note_book"),  # Colon
             ("note?book.py", "note_book"),  # Question mark
             ("note*book.py", "note_book"),  # Asterisk
             ("note|book.py", "note_book"),  # Pipe
             ("note<book>.py", "note_book_"),  # Angle brackets
         ]
+
+        # Platform-specific test case for backslash
+        if platform.system() == "Windows":
+            # On Windows, backslash is path separator, so note\book.py -> book
+            test_cases.append(("note\\book.py", "book"))
+        else:
+            # On Unix systems, backslash is treated as character
+            test_cases.append(("note\\book.py", "note_book"))
 
         for input_path, expected_name in test_cases:
             actual_name = get_notebook_name(input_path)
@@ -182,15 +188,12 @@ class TestEventFilenames:
         assert isinstance(runtime_file, str)
         assert isinstance(lineage_file, str)
 
-        # Files should be in correct subdirectories
-        assert (
-            "/tmp/data/events/runtime/"  # noqa: S108 # Test path validation
-            in runtime_file
-        )
-        assert (
-            "/tmp/data/events/lineage/"  # noqa: S108 # Test path validation
-            in lineage_file
-        )
+        # Files should be in correct subdirectories (platform-aware)
+        expected_runtime_path = Path(data_dir) / "events" / "runtime"
+        expected_lineage_path = Path(data_dir) / "events" / "lineage"
+
+        assert str(expected_runtime_path) in runtime_file
+        assert str(expected_lineage_path) in lineage_file
 
         # Files should contain hash and notebook name
         hash_val = get_notebook_file_hash(notebook_path)
@@ -239,8 +242,11 @@ class TestEventFilenames:
         filename2 = Path(runtime2).name
         assert filename1 == filename2
 
-        assert "/data1/events/runtime/" in runtime1
-        assert "/data2/events/runtime/" in runtime2
+        # Platform-aware path checking
+        expected_path1 = str(Path("/data1") / "events" / "runtime")
+        expected_path2 = str(Path("/data2") / "events" / "runtime")
+        assert expected_path1 in runtime1
+        assert expected_path2 in runtime2
 
     def test_path_object_handling(self):
         """Test that function works with Path objects"""
@@ -285,7 +291,8 @@ class TestUserDataDir:
                 mock_home.return_value = Path("/fake/home")
                 with patch("pathlib.Path.mkdir"):
                     data_dir = get_user_data_dir()
-                    assert "/fake/home/.hunyo" == data_dir
+                    expected_path = str(Path("/fake/home") / ".hunyo")
+                    assert expected_path == data_dir
 
     def test_development_mode_git_detection(self):
         """Test development mode detection via .git directory"""
@@ -321,7 +328,8 @@ class TestUserDataDir:
                     with patch.dict(os.environ, {}, clear=True):
                         with patch("pathlib.Path.mkdir"):
                             data_dir = get_user_data_dir()
-                            assert "/fake/home/.hunyo" == data_dir
+                            expected_path = str(Path("/fake/home") / ".hunyo")
+                            assert expected_path == data_dir
 
     def test_directory_structure_creation(self):
         """Test that required directory structure is created"""

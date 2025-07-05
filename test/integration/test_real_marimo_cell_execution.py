@@ -127,10 +127,48 @@ class MarimoEditModeWebSocketTester:
                 await browser.close()
 
         finally:
-            # Clean up marimo process
+            # Clean up marimo process with Windows-compatible handling
             if self.marimo_process:
+                self._cleanup_marimo_process()
+
+    def _cleanup_marimo_process(self):
+        """Cleanup marimo process with Windows-compatible handling"""
+        import platform
+        import time
+
+        if not self.marimo_process:
+            return
+
+        try:
+            # Try graceful termination first
+            if self.marimo_process.poll() is None:  # Process is still running
+                test_logger.info("[TEST] Terminating marimo process...")
                 self.marimo_process.terminate()
-                test_logger.info("[TEST] Marimo process terminated")
+
+                # Wait for graceful shutdown
+                try:
+                    self.marimo_process.wait(timeout=5)
+                    test_logger.info("[TEST] Marimo process terminated gracefully")
+                except subprocess.TimeoutExpired:
+                    # Force kill if terminate didn't work
+                    test_logger.warning("[TEST] Forcing marimo process shutdown...")
+                    self.marimo_process.kill()
+
+                    # Wait for force kill to complete
+                    try:
+                        self.marimo_process.wait(timeout=3)
+                        test_logger.info("[TEST] Marimo process killed")
+                    except subprocess.TimeoutExpired:
+                        test_logger.error("[TEST] Failed to kill marimo process")
+
+            # Additional Windows-specific cleanup delay
+            if platform.system() == "Windows":
+                time.sleep(1.0)  # Give Windows time to release file handles
+
+        except Exception as e:
+            test_logger.warning(f"[TEST] Error during marimo process cleanup: {e}")
+        finally:
+            self.marimo_process = None
 
     async def _start_marimo_edit_mode(self):
         """Start marimo in edit mode"""

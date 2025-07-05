@@ -29,16 +29,45 @@ class MockConfig:
 @pytest.fixture
 def temp_hunyo_dir() -> Generator[Path, None, None]:
     """Provides a temporary .hunyo directory for testing"""
-    with tempfile.TemporaryDirectory() as temp_dir:
-        hunyo_dir = Path(temp_dir) / ".hunyo"
-        hunyo_dir.mkdir(parents=True, exist_ok=True)
+    import platform
+    import shutil
+    import time
 
-        # Create subdirectories
-        (hunyo_dir / "events").mkdir(exist_ok=True)
-        (hunyo_dir / "database").mkdir(exist_ok=True)
-        (hunyo_dir / "config").mkdir(exist_ok=True)
+    temp_dir = tempfile.mkdtemp()
+    hunyo_dir = Path(temp_dir) / ".hunyo"
+    hunyo_dir.mkdir(parents=True, exist_ok=True)
 
+    # Create subdirectories
+    (hunyo_dir / "events").mkdir(exist_ok=True)
+    (hunyo_dir / "database").mkdir(exist_ok=True)
+    (hunyo_dir / "config").mkdir(exist_ok=True)
+
+    try:
         yield hunyo_dir
+    finally:
+        # Windows-specific cleanup with retry logic
+        if platform.system() == "Windows":
+            max_attempts = 5
+            for attempt in range(max_attempts):
+                try:
+                    shutil.rmtree(temp_dir)
+                    break
+                except PermissionError:
+                    if attempt < max_attempts - 1:
+                        time.sleep(0.5)  # Wait for file handles to be released
+                        continue
+                    else:
+                        # Last attempt failed, log warning but don't fail test
+                        import warnings
+
+                        warnings.warn(
+                            f"Could not clean up temp directory {temp_dir} due to file locks. "
+                            "This may leave temporary files on disk.",
+                            stacklevel=2,
+                        )
+        else:
+            # Unix systems - normal cleanup
+            shutil.rmtree(temp_dir)
 
 
 @pytest.fixture
