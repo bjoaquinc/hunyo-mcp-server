@@ -296,7 +296,7 @@ class FileWatcher:
 
     def get_stats(self) -> dict[str, int]:
         """Get file watcher statistics."""
-        processor_stats = self.event_processor.get_processing_stats()
+        processor_stats = self.event_processor.get_validation_summary()
 
         return {
             "files_processed": self.files_processed,
@@ -322,8 +322,10 @@ class FileWatcher:
             msg = f"File not in watched directories: {file_path}"
             raise ValueError(msg)
 
+        # Process the file once and return the event count
+        events_before = self.events_processed
         await self._process_file(file_path, event_type)
-        return self.event_processor.process_jsonl_file(file_path, event_type)
+        return self.events_processed - events_before
 
 
 # Utility functions for testing and CLI usage
@@ -348,11 +350,24 @@ async def watch_directories(
     watcher = FileWatcher(runtime_dir, lineage_dir, event_processor)
 
     if duration:
-        # Watch for specified duration
+        # Watch for specified duration using asyncio.wait_for
         async def timed_watch():
-            await watcher.start()
+            # Start the watcher in a task so it doesn't block
+            start_task = asyncio.create_task(watcher.start())
+
+            # Wait for the specified duration
             await asyncio.sleep(duration)
+
+            # Stop the watcher
             await watcher.stop()
+
+            # Cancel the start task if it's still running
+            if not start_task.done():
+                start_task.cancel()
+                try:
+                    await start_task
+                except asyncio.CancelledError:
+                    pass
 
         await timed_watch()
     else:
