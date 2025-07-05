@@ -23,9 +23,63 @@ from capture.logger import get_logger
 
 # Playwright for browser automation (marimo's official test framework)
 try:
+    import os
+    import subprocess
+    import sys
+
     from playwright.async_api import async_playwright
 
-    PLAYWRIGHT_AVAILABLE = True
+    # Check if browsers are actually installed
+    def check_playwright_browsers():
+        try:
+            # Try to check if chromium is available
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "playwright",
+                    "install",
+                    "--dry-run",
+                    "chromium",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            # If dry-run succeeds, browsers should be available
+            return result.returncode == 0
+        except (
+            subprocess.TimeoutExpired,
+            FileNotFoundError,
+            subprocess.SubprocessError,
+        ):
+            return False
+
+    PLAYWRIGHT_AVAILABLE = check_playwright_browsers()
+
+    # If check failed, try to install browsers automatically in CI
+    if not PLAYWRIGHT_AVAILABLE:
+        ci_indicators = ["CI", "GITHUB_ACTIONS", "GITLAB_CI"]
+        if any(os.getenv(indicator) for indicator in ci_indicators):
+            try:
+                # Note: test_logger not available here, use print for CI debugging
+                print("[PLAYWRIGHT] Attempting to install browsers in CI...")
+                result = subprocess.run(
+                    [sys.executable, "-m", "playwright", "install", "chromium"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=False,
+                )
+                PLAYWRIGHT_AVAILABLE = result.returncode == 0
+                if PLAYWRIGHT_AVAILABLE:
+                    print("[PLAYWRIGHT] Browsers installed successfully")
+                else:
+                    print(f"[PLAYWRIGHT] Browser installation failed: {result.stderr}")
+            except Exception as e:
+                print(f"[PLAYWRIGHT] Failed to install browsers: {e}")
+
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
@@ -466,6 +520,7 @@ class TestRealMarimoCellExecution:
             return False, str(e)
 
     @pytest.mark.integration
+    @pytest.mark.playwright
     @pytest.mark.asyncio
     @pytest.mark.timeout(90)  # Extended timeout for CI/CD environments (90 seconds)
     @pytest.mark.skipif(not PLAYWRIGHT_AVAILABLE, reason="Playwright not available")

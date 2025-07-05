@@ -95,7 +95,7 @@ class TestEventProcessor:
     def test_process_runtime_events_success(
         self, event_processor, sample_runtime_event
     ):
-        """Test successful processing of runtime events"""
+        """Test successful processing of runtime events with individual transactions"""
         events = [sample_runtime_event]
 
         result = event_processor.process_runtime_events(events)
@@ -104,7 +104,7 @@ class TestEventProcessor:
         assert event_processor.processed_events == 1
         assert event_processor.failed_events == 0
 
-        # Verify database calls
+        # Verify database calls - now called once per event for individual transactions
         event_processor.db_manager.begin_transaction.assert_called_once()
         event_processor.db_manager.commit_transaction.assert_called_once()
         event_processor.db_manager.insert_runtime_event.assert_called_once()
@@ -121,7 +121,7 @@ class TestEventProcessor:
         event_processor.db_manager.begin_transaction.assert_not_called()
 
     def test_process_runtime_events_validation_error(self, event_processor):
-        """Test handling of validation errors in runtime events"""
+        """Test handling of validation errors in runtime events with individual transactions"""
         # Invalid event missing required fields
         invalid_event = {"event_type": "cell_execution_start"}
 
@@ -131,14 +131,14 @@ class TestEventProcessor:
         assert event_processor.processed_events == 0
         assert event_processor.failed_events == 1
 
-        # Transaction should still be committed (empty)
-        event_processor.db_manager.begin_transaction.assert_called_once()
-        event_processor.db_manager.commit_transaction.assert_called_once()
+        # No database calls should be made for events that fail validation
+        event_processor.db_manager.begin_transaction.assert_not_called()
+        event_processor.db_manager.commit_transaction.assert_not_called()
 
     def test_process_runtime_events_database_error(
         self, event_processor, sample_runtime_event
     ):
-        """Test handling of database errors during runtime event processing"""
+        """Test handling of database errors during runtime event processing with individual transactions"""
         # Mock database error
         event_processor.db_manager.insert_runtime_event.side_effect = Exception(
             "DB Error"
@@ -149,28 +149,34 @@ class TestEventProcessor:
         assert result == 0
         assert event_processor.failed_events == 1
 
-        # Transaction should be committed even with individual event failures
+        # With individual transactions, failed events should trigger rollback, not commit
         event_processor.db_manager.begin_transaction.assert_called_once()
-        event_processor.db_manager.commit_transaction.assert_called_once()
+        event_processor.db_manager.rollback_transaction.assert_called_once()
+        event_processor.db_manager.commit_transaction.assert_not_called()
 
     def test_process_runtime_events_transaction_error(
         self, event_processor, sample_runtime_event
     ):
-        """Test handling of transaction errors during runtime event processing"""
-        # Mock transaction error
+        """Test handling of transaction errors during runtime event processing with graceful recovery"""
+        # Mock transaction error on commit
         event_processor.db_manager.commit_transaction.side_effect = Exception(
             "Transaction Error"
         )
 
-        with pytest.raises(Exception, match="Transaction Error"):
-            event_processor.process_runtime_events([sample_runtime_event])
+        # Should not raise exception - handles errors gracefully for Windows compatibility
+        result = event_processor.process_runtime_events([sample_runtime_event])
 
+        assert result == 0  # No events successfully processed
+        assert event_processor.failed_events == 1  # Event marked as failed
+
+        # Should attempt transaction but rollback on error
+        event_processor.db_manager.begin_transaction.assert_called_once()
         event_processor.db_manager.rollback_transaction.assert_called_once()
 
     def test_process_lineage_events_success(
         self, event_processor, sample_openlineage_event
     ):
-        """Test successful processing of lineage events"""
+        """Test successful processing of lineage events with individual transactions"""
         events = [sample_openlineage_event]
 
         result = event_processor.process_lineage_events(events)
@@ -179,7 +185,7 @@ class TestEventProcessor:
         assert event_processor.processed_events == 1
         assert event_processor.failed_events == 0
 
-        # Verify database calls
+        # Verify database calls - now called once per event for individual transactions
         event_processor.db_manager.begin_transaction.assert_called_once()
         event_processor.db_manager.commit_transaction.assert_called_once()
         event_processor.db_manager.insert_lineage_event.assert_called_once()
@@ -431,7 +437,7 @@ class TestEventProcessor:
         assert stats == expected_stats
 
     def test_multiple_event_processing(self, event_processor, sample_runtime_event):
-        """Test processing multiple events in sequence"""
+        """Test processing multiple events in sequence with individual transactions"""
         events = [sample_runtime_event.copy() for _ in range(3)]
 
         result = event_processor.process_runtime_events(events)
@@ -440,7 +446,9 @@ class TestEventProcessor:
         assert event_processor.processed_events == 3
         assert event_processor.failed_events == 0
 
-        # Should have called insert 3 times
+        # Should have called transaction methods and insert 3 times (once per event)
+        assert event_processor.db_manager.begin_transaction.call_count == 3
+        assert event_processor.db_manager.commit_transaction.call_count == 3
         assert event_processor.db_manager.insert_runtime_event.call_count == 3
 
     def test_mixed_valid_invalid_events(self, event_processor, sample_runtime_event):

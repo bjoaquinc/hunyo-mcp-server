@@ -7,6 +7,7 @@ from both runtime and lineage JSONL files into DuckDB.
 """
 
 import json
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -99,7 +100,7 @@ class EventProcessor:
 
     def process_runtime_events(self, events: list[dict[str, Any]]) -> int:
         """
-        Process a batch of runtime events with schema validation.
+        Process runtime events with individual transaction boundaries for Windows compatibility.
 
         Args:
             events: List of runtime event dictionaries
@@ -112,50 +113,45 @@ class EventProcessor:
 
         successful = 0
 
-        try:
-            self.db_manager.begin_transaction()
+        for event in events:
+            try:
+                # Schema validation first
+                is_valid, validation_error = self._validate_event_against_schema(
+                    event, self.runtime_schema, "runtime"
+                )
 
-            for event in events:
-                try:
-                    # Schema validation first
-                    is_valid, validation_error = self._validate_event_against_schema(
-                        event, self.runtime_schema, "runtime"
+                if not is_valid:
+                    processor_logger.warning(
+                        f"Runtime event schema validation failed: {validation_error}"
                     )
+                    self.failed_events += 1
+                    continue
 
-                    if not is_valid:
-                        processor_logger.warning(
-                            f"Runtime event schema validation failed: {validation_error}"
-                        )
-                        self.failed_events += 1
-                        continue
+                # Transform event
+                transformed_event = self._transform_runtime_event(event)
 
-                    # Transform event
-                    transformed_event = self._transform_runtime_event(event)
-
-                    # Insert into database
-                    self.db_manager.insert_runtime_event(transformed_event)
+                # Insert with individual transaction and constraint handling
+                if self._insert_single_event_with_recovery(
+                    transformed_event, "runtime"
+                ):
                     successful += 1
-
-                except Exception as e:
-                    processor_logger.warning(f"Failed to process runtime event: {e}")
+                else:
                     self.failed_events += 1
 
-            self.db_manager.commit_transaction()
-            self.processed_events += successful
+            except Exception as e:
+                processor_logger.warning(f"Failed to process runtime event: {e}")
+                self.failed_events += 1
 
-            if successful > 0:
-                processor_logger.success(f"[OK] Processed {successful} runtime events")
+        self.processed_events += successful
 
-        except Exception as e:
-            self.db_manager.rollback_transaction()
-            processor_logger.error(f"Failed to process runtime events batch: {e}")
-            raise
+        if successful > 0:
+            processor_logger.success(f"[OK] Processed {successful} runtime events")
 
         return successful
 
     def process_lineage_events(self, events: list[dict[str, Any]]) -> int:
         """
-        Process a batch of lineage events with schema validation.
+        Process lineage events with individual transaction boundaries for Windows compatibility.
 
         Args:
             events: List of lineage event dictionaries
@@ -168,44 +164,39 @@ class EventProcessor:
 
         successful = 0
 
-        try:
-            self.db_manager.begin_transaction()
+        for event in events:
+            try:
+                # Schema validation first
+                is_valid, validation_error = self._validate_event_against_schema(
+                    event, self.openlineage_schema, "openlineage"
+                )
 
-            for event in events:
-                try:
-                    # Schema validation first
-                    is_valid, validation_error = self._validate_event_against_schema(
-                        event, self.openlineage_schema, "openlineage"
+                if not is_valid:
+                    processor_logger.warning(
+                        f"OpenLineage event schema validation failed: {validation_error}"
                     )
+                    self.failed_events += 1
+                    continue
 
-                    if not is_valid:
-                        processor_logger.warning(
-                            f"OpenLineage event schema validation failed: {validation_error}"
-                        )
-                        self.failed_events += 1
-                        continue
+                # Transform event
+                transformed_event = self._transform_lineage_event(event)
 
-                    # Transform event
-                    transformed_event = self._transform_lineage_event(event)
-
-                    # Insert into database
-                    self.db_manager.insert_lineage_event(transformed_event)
+                # Insert with individual transaction and constraint handling
+                if self._insert_single_event_with_recovery(
+                    transformed_event, "lineage"
+                ):
                     successful += 1
-
-                except Exception as e:
-                    processor_logger.warning(f"Failed to process lineage event: {e}")
+                else:
                     self.failed_events += 1
 
-            self.db_manager.commit_transaction()
-            self.processed_events += successful
+            except Exception as e:
+                processor_logger.warning(f"Failed to process lineage event: {e}")
+                self.failed_events += 1
 
-            if successful > 0:
-                processor_logger.success(f"[OK] Processed {successful} lineage events")
+        self.processed_events += successful
 
-        except Exception as e:
-            self.db_manager.rollback_transaction()
-            processor_logger.error(f"Failed to process lineage events batch: {e}")
-            raise
+        if successful > 0:
+            processor_logger.success(f"[OK] Processed {successful} lineage events")
 
         return successful
 
@@ -264,7 +255,9 @@ class EventProcessor:
 
     def _transform_runtime_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Transform runtime event to database schema format."""
+        import platform
         import time
+        import uuid
 
         # With schema validation, we can trust the event structure more
         # But still do basic validation for critical database fields
@@ -274,8 +267,17 @@ class EventProcessor:
                 msg = f"Missing required field: {field}"
                 raise ValueError(msg)
 
-        # Generate primary key
-        event_id = int(time.time() * 1000000)  # Microsecond timestamp
+        # Generate platform-specific primary key to avoid Windows time resolution issues
+        if platform.system() == "Windows":
+            # Windows has ~15.6ms system clock ticks - use UUID to avoid duplicates
+            event_id = abs(hash(str(uuid.uuid4()))) % (
+                10**15
+            )  # Ensure positive 15-digit max
+        else:
+            # Unix systems have microsecond precision - use high-resolution timestamp
+            event_id = (
+                int(time.perf_counter() * 1000000) + hash(str(uuid.uuid4())) % 1000
+            )
 
         # Transform event to match database schema
         transformed = {
@@ -298,10 +300,21 @@ class EventProcessor:
 
     def _transform_lineage_event(self, event: dict[str, Any]) -> dict[str, Any]:
         """Transform lineage event to database schema format."""
+        import platform
         import time
+        import uuid
 
-        # Generate primary key
-        ol_event_id = int(time.time() * 1000000)  # Microsecond timestamp
+        # Generate platform-specific primary key to avoid Windows time resolution issues
+        if platform.system() == "Windows":
+            # Windows has ~15.6ms system clock ticks - use UUID to avoid duplicates
+            ol_event_id = abs(hash(str(uuid.uuid4()))) % (
+                10**15
+            )  # Ensure positive 15-digit max
+        else:
+            # Unix systems have microsecond precision - use high-resolution timestamp
+            ol_event_id = (
+                int(time.perf_counter() * 1000000) + hash(str(uuid.uuid4())) % 1000
+            )
 
         # Handle OpenLineage event structure
         if "run" in event and "job" in event:
@@ -424,6 +437,91 @@ class EventProcessor:
             other_facets[f"job.{key}"] = value
 
         return other_facets if other_facets else None
+
+    def _execute_with_retry(self, operation_func, max_retries: int = 3) -> Any:
+        """Execute database operation with retry logic for transaction conflicts."""
+        for attempt in range(max_retries):
+            try:
+                return operation_func()
+            except Exception as e:
+                # Check for specific DuckDB exceptions following best practices guide
+                if "used by another process" in str(e) and attempt < max_retries - 1:
+                    # File locking issue - retry with exponential backoff
+                    wait_time = 0.1 * (2**attempt)
+                    processor_logger.warning(
+                        f"Database locked, retrying in {wait_time}s..."
+                    )
+                    time.sleep(wait_time)
+                    continue
+                elif "Current transaction is aborted" in str(e):
+                    # Transaction already aborted - cannot continue
+                    processor_logger.error(
+                        "Transaction aborted - operation cannot continue"
+                    )
+                    raise
+                else:
+                    # Other errors or final attempt - re-raise
+                    raise
+
+    def _insert_single_event_with_recovery(
+        self, event_data: dict[str, Any], event_type: str
+    ) -> bool:
+        """Insert single event with individual transaction and constraint handling."""
+        import duckdb
+
+        def insert_operation():
+            """Nested function for retry mechanism."""
+            # Each event gets its own transaction to prevent cascade failures
+            self.db_manager.begin_transaction()
+
+            try:
+                if event_type == "runtime":
+                    self.db_manager.insert_runtime_event(event_data)
+                elif event_type == "lineage":
+                    self.db_manager.insert_lineage_event(event_data)
+                else:
+                    error_msg = f"Unknown event type: {event_type}"
+                    raise ValueError(error_msg)
+
+                self.db_manager.commit_transaction()
+                return True
+
+            except Exception as e:
+                self.db_manager.rollback_transaction()
+
+                # Handle specific DuckDB exceptions per best practices guide
+                if isinstance(e, duckdb.ConstraintException):
+                    # Primary key violation - skip this event but continue processing
+                    processor_logger.warning(
+                        f"Skipping duplicate event (constraint violation): {e}"
+                    )
+                    return False
+                elif isinstance(e, duckdb.BinderException):
+                    # Column or function not found
+                    processor_logger.error(f"Database binding error: {e}")
+                    return False
+                elif isinstance(e, duckdb.CatalogException):
+                    # Table/schema not found
+                    processor_logger.error(f"Database catalog error: {e}")
+                    return False
+                elif isinstance(e, duckdb.InternalException):
+                    # Internal errors trigger restricted mode - connection must be restarted
+                    processor_logger.error(
+                        f"DuckDB internal error (restricted mode): {e}"
+                    )
+                    self.db_manager.close()
+                    raise
+                else:
+                    # Unknown error - return False (already rolled back)
+                    return False
+
+        try:
+            return self._execute_with_retry(insert_operation)
+        except Exception as e:
+            processor_logger.error(
+                f"Failed to insert {event_type} event after retries: {e}"
+            )
+            return False
 
     def get_validation_summary(self) -> dict[str, Any]:
         """Get validation and processing summary."""

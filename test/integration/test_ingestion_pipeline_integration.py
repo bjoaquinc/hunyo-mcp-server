@@ -102,13 +102,28 @@ class TestIngestionPipelineIntegration:
             return False, str(e)
 
     def create_sample_runtime_events(self, count: int = 5) -> list[dict[str, Any]]:
-        """Create sample runtime events for testing"""
+        """Create sample runtime events for testing with Windows-compatible unique timestamps"""
+        import platform
+        import time
+
         events = []
         base_time = datetime.now(timezone.utc)
         session_id = uuid.uuid4().hex[:8]  # 8 hex chars for session
 
         for i in range(count):
             execution_id = uuid.uuid4().hex[:8]  # 8 hex chars required by schema
+
+            # Platform-specific timestamp generation to avoid ID collisions
+            if platform.system() == "Windows":
+                # Windows: Use UUID-based unique microseconds to avoid time resolution issues
+                start_microsecond = abs(hash(f"start_{i}_{execution_id}")) % 1000000
+                end_microsecond = abs(hash(f"end_{i}_{execution_id}")) % 1000000
+                # Add small delay to ensure unique timestamps
+                time.sleep(0.001)
+            else:
+                # Unix: Use incremental microseconds (fine resolution)
+                start_microsecond = (i * 2000) % 1000000
+                end_microsecond = (i * 2000 + 1000) % 1000000
 
             # Start event
             start_event = {
@@ -118,9 +133,13 @@ class TestIngestionPipelineIntegration:
                 "cell_source": f"df{i} = pd.DataFrame({{'col': [1, 2, 3]}})",
                 "cell_source_lines": 1,
                 "start_memory_mb": 100.0 + i,
-                "timestamp": (base_time.replace(microsecond=i * 1000)).isoformat(),
+                "timestamp": base_time.replace(
+                    microsecond=start_microsecond
+                ).isoformat(),
                 "session_id": session_id,
-                "emitted_at": (base_time.replace(microsecond=i * 1000)).isoformat(),
+                "emitted_at": base_time.replace(
+                    microsecond=start_microsecond
+                ).isoformat(),
             }
             events.append(start_event)
 
@@ -134,12 +153,10 @@ class TestIngestionPipelineIntegration:
                 "start_memory_mb": 100.0 + i,
                 "end_memory_mb": 105.0 + i,
                 "duration_ms": 50.0 + i,
-                "timestamp": (
-                    base_time.replace(microsecond=i * 1000 + 500)
-                ).isoformat(),
+                "timestamp": base_time.replace(microsecond=end_microsecond).isoformat(),
                 "session_id": session_id,
-                "emitted_at": (
-                    base_time.replace(microsecond=i * 1000 + 500)
+                "emitted_at": base_time.replace(
+                    microsecond=end_microsecond
                 ).isoformat(),
             }
             events.append(end_event)

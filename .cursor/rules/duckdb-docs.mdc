@@ -1,5 +1,5 @@
 ---
-description: Expert cross-platform guidance for DuckDB development. Provides platform-specific best practices, configuration optimization, error troubleshooting, and performance tuning for Windows, Linux, and macOS. Addresses connection testing, file system behaviors, memory management, and CI/CD deployment strategies based on comprehensive cross-platform analysis.
+description: 
 globs: 
 alwaysApply: false
 ---

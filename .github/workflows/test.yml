@@ -285,7 +285,7 @@ jobs:
         else
           echo "No coverage data found, running fallback collection..."
           hatch env create test
-          hatch run test:test-cov -k "not slow"
+          hatch run test:test-cov -k "not slow and not playwright"
         fi
         
     - name: Upload coverage reports to Codecov

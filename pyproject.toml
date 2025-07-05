@@ -156,6 +156,7 @@ filterwarnings = [
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
+    "playwright: marks tests that require Playwright browsers",
     "unit: marks tests as unit tests",
     "asyncio: marks tests as async tests requiring event loop",
 ]
