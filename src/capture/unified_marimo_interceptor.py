@@ -147,6 +147,9 @@ class UnifiedMarimoInterceptor:
 
             # Store original methods
             self.original_pandas_methods["DataFrame.__init__"] = pd.DataFrame.__init__
+            self.original_pandas_methods["DataFrame.__setitem__"] = (
+                pd.DataFrame.__setitem__
+            )
 
             # Create execution-context-aware DataFrame.__init__
             def tracked_dataframe_init(df_self, *args, **kwargs):
@@ -162,9 +165,22 @@ class UnifiedMarimoInterceptor:
                         unified_logger.debug(
                             "[HOOK] In execution context, capturing DataFrame creation..."
                         )
-                        self._capture_dataframe_creation(
-                            df_self, execution_context, *args, **kwargs
-                        )
+                        try:
+                            self._capture_dataframe_creation(
+                                df_self, execution_context, *args, **kwargs
+                            )
+                        except KeyboardInterrupt:
+                            # Emit ABORT event for interrupted DataFrame creation
+                            self._capture_dataframe_abortion(
+                                df=df_self,
+                                execution_context=execution_context,
+                                job_name="pandas_dataframe_creation",
+                                termination_reason="User interrupted operation",
+                                partial_outputs=(
+                                    [df_self] if df_self is not None else None
+                                ),
+                            )
+                            raise
                     else:
                         unified_logger.debug("[HOOK] No execution context found")
                 else:
@@ -174,8 +190,52 @@ class UnifiedMarimoInterceptor:
 
                 return result
 
-            # Apply the monkey patch
+            # Create execution-context-aware DataFrame.__setitem__
+            def tracked_dataframe_setitem(df_self, key, value):
+                # Call original method first
+                result = self.original_pandas_methods["DataFrame.__setitem__"](
+                    df_self, key, value
+                )
+
+                # Only capture if we're in active marimo execution
+                if self._is_in_marimo_execution():
+                    execution_context = self._get_current_execution_context()
+                    if execution_context:
+                        unified_logger.debug(
+                            f"[HOOK] Capturing DataFrame column assignment: {key}"
+                        )
+                        try:
+                            self._capture_dataframe_modification(
+                                df_self,
+                                execution_context,
+                                "column_assignment",
+                                key,
+                                value,
+                            )
+                        except KeyboardInterrupt:
+                            # Emit ABORT event for interrupted DataFrame modification
+                            self._capture_dataframe_abortion(
+                                df=df_self,
+                                execution_context=execution_context,
+                                job_name="pandas_dataframe_modification",
+                                termination_reason="User interrupted operation",
+                                partial_outputs=(
+                                    [df_self] if df_self is not None else None
+                                ),
+                            )
+                            raise
+                    else:
+                        unified_logger.debug("[HOOK] No execution context found")
+                else:
+                    unified_logger.debug(
+                        "[HOOK] Not in marimo execution, skipping DataFrame modification capture"
+                    )
+
+                return result
+
+            # Apply the monkey patches
             pd.DataFrame.__init__ = tracked_dataframe_init
+            pd.DataFrame.__setitem__ = tracked_dataframe_setitem
 
             unified_logger.info("[INSTALL] DataFrame monkey patches installed")
 
@@ -294,6 +354,44 @@ class UnifiedMarimoInterceptor:
                             "error_message": str(error),
                         }
 
+                        # Emit FAIL lineage event for cell execution error
+                        try:
+                            import traceback
+
+                            error_info = {
+                                "error_message": str(error),
+                                "stack_trace": traceback.format_exc(),
+                                "error_type": type(error).__name__,
+                            }
+
+                            # Check if it's a KeyboardInterrupt for ABORT event
+                            if isinstance(error, KeyboardInterrupt):
+                                abort_event = self._create_openlineage_event(
+                                    event_type="ABORT",
+                                    job_name="cell_execution",
+                                    error_info=error_info,
+                                    execution_context=execution_context,
+                                    termination_reason="User interrupted cell execution",
+                                    cell_id=cell_id,
+                                    cell_source=cell_code,
+                                )
+                                self._emit_lineage_event(abort_event)
+                            else:
+                                fail_event = self._create_openlineage_event(
+                                    event_type="FAIL",
+                                    job_name="cell_execution",
+                                    error_info=error_info,
+                                    execution_context=execution_context,
+                                    failure_context=f"Cell execution failed: {type(error).__name__}",
+                                    cell_id=cell_id,
+                                    cell_source=cell_code,
+                                )
+                                self._emit_lineage_event(fail_event)
+                        except Exception as lineage_error:
+                            unified_logger.error(
+                                f"Failed to emit lineage error event: {lineage_error}"
+                            )
+
                     self._emit_runtime_event(event_data)
 
                     # Clean up execution context
@@ -337,6 +435,109 @@ class UnifiedMarimoInterceptor:
         # In practice, there should only be one active execution at a time
         return next(iter(self._execution_contexts.values()))
 
+    def _create_openlineage_event(
+        self,
+        event_type,
+        job_name,
+        inputs=None,
+        outputs=None,
+        error_info=None,
+        execution_context=None,
+        **extra_fields,
+    ):
+        """Create a standardized OpenLineage event"""
+        event_time = datetime.now(timezone.utc).isoformat()
+        run_id = str(uuid.uuid4())
+
+        # Build run facets
+        run_facets = {
+            "marimoSession": {
+                "_producer": "marimo-lineage-tracker",
+                "sessionId": self.session_id,
+            }
+        }
+
+        # Add execution context as a run facet if provided
+        if execution_context:
+            run_facets["marimoExecution"] = {
+                "_producer": "marimo-lineage-tracker",
+                "executionId": execution_context.get("execution_id", ""),
+                "sessionId": self.session_id,
+            }
+
+        # Add error facet for FAIL/ABORT events
+        if error_info and event_type in ("FAIL", "ABORT"):
+            run_facets["errorMessage"] = {
+                "_producer": "marimo-lineage-tracker",
+                "_schemaURL": "https://openlineage.io/spec/facets/1-0-0/ErrorMessageRunFacet.json",
+                "message": error_info.get("error_message", ""),
+                "programmingLanguage": "python",
+                "stackTrace": error_info.get("stack_trace", ""),
+            }
+
+        # Create base OpenLineage event
+        lineage_event = {
+            "eventType": event_type,
+            "eventTime": event_time,
+            "run": {"runId": run_id, "facets": run_facets},
+            "job": {"namespace": "marimo", "name": job_name},
+            "inputs": inputs or [],
+            "outputs": outputs or [],
+            "producer": "marimo-lineage-tracker",
+            "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+            "session_id": self.session_id,
+            "emitted_at": event_time,
+        }
+
+        # Only add valid schema fields from extra_fields
+        # Don't add execution_context or other non-schema fields
+        schema_allowed_fields = {
+            "cell_id",
+            "cell_source",
+            "termination_reason",
+            "failure_context",
+            "modification_type",
+            "key",
+            "value_type",
+            "test_field",
+            "custom_field",
+            "abortion_context",
+        }
+
+        for field_name, field_value in extra_fields.items():
+            if field_name in schema_allowed_fields:
+                # Add these as job facets instead of top-level properties
+                if "facets" not in lineage_event["job"]:
+                    lineage_event["job"]["facets"] = {}
+                lineage_event["job"]["facets"][field_name] = field_value
+
+        return lineage_event
+
+    def _create_dataframe_dataset(self, df, dataset_name=None):
+        """Create a dataset representation for a DataFrame"""
+        if dataset_name is None:
+            dataset_name = f"dataframe_{id(df)}"
+
+        # Build schema fields from DataFrame
+        schema_fields = []
+        try:
+            for col, dtype in df.dtypes.items():
+                schema_fields.append({"name": str(col), "type": str(dtype)})
+        except Exception as e:
+            unified_logger.debug(f"Failed to build schema fields: {e}")
+
+        return {
+            "namespace": "marimo",
+            "name": dataset_name,
+            "facets": {
+                "schema": {
+                    "_producer": "marimo-lineage-tracker",
+                    "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                    "fields": schema_fields,
+                }
+            },
+        }
+
     def _capture_dataframe_creation(self, df, execution_context, *_args, **_kwargs):
         """Capture DataFrame creation as OpenLineage event"""
         try:
@@ -344,58 +545,22 @@ class UnifiedMarimoInterceptor:
                 f"[CAPTURE] Starting to capture DataFrame creation for df_{id(df)}"
             )
 
-            # Generate DataFrame metadata
+            # Create output dataset
+            output_dataset = self._create_dataframe_dataset(df)
+
+            # Create OpenLineage event
+            lineage_event = self._create_openlineage_event(
+                event_type="START",
+                job_name="pandas_dataframe_creation",
+                outputs=[output_dataset],
+                execution_context=execution_context,
+            )
+
+            # Add to tracked DataFrames
             df_id = f"df_{id(df)}"
-            event_time = datetime.now(timezone.utc).isoformat()
-            run_id = str(uuid.uuid4())
-
-            # Build schema fields from DataFrame
-            schema_fields = []
-            try:
-                for col, dtype in df.dtypes.items():
-                    schema_fields.append({"name": str(col), "type": str(dtype)})
-            except Exception as e:
-                unified_logger.debug(f"Failed to build schema fields: {e}")
-
-            # Build output dataset
-            output_dataset = {
-                "namespace": "marimo",
-                "name": f"dataframe_{id(df)}",
-                "facets": {
-                    "schema": {
-                        "_producer": "marimo-lineage-tracker",
-                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
-                        "fields": schema_fields,
-                    }
-                },
-            }
-
-            # Build run facets
-            run_facets = {
-                "marimoSession": {
-                    "_producer": "marimo-lineage-tracker",
-                    "sessionId": self.session_id,
-                }
-            }
-
-            # Create proper OpenLineage event
-            lineage_event = {
-                "eventType": "START",
-                "eventTime": event_time,
-                "run": {"runId": run_id, "facets": run_facets},
-                "job": {"namespace": "marimo", "name": "pandas_dataframe_creation"},
-                "inputs": [],  # No inputs for creation operations
-                "outputs": [output_dataset],
-                "producer": "marimo-lineage-tracker",
-                "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
-                "session_id": self.session_id,
-                "emitted_at": event_time,
-            }
-
-            # Add to tracked DataFrames (use df_id as key, not the DataFrame itself)
             _tracked_dataframes[df_id] = {
                 "df_id": df_id,
-                "created_at": event_time,
+                "created_at": lineage_event["eventTime"],
                 "execution_id": execution_context["execution_id"],
             }
 
@@ -403,6 +568,145 @@ class UnifiedMarimoInterceptor:
 
         except Exception as e:
             unified_logger.error(f"Failed to capture DataFrame creation: {e}")
+            # Emit FAIL event for DataFrame creation failure
+            try:
+                self._capture_dataframe_failure(
+                    df=df,
+                    execution_context=execution_context,
+                    job_name="pandas_dataframe_creation",
+                    error=e,
+                    partial_outputs=[df] if df is not None else None,
+                )
+            except Exception as fail_error:
+                unified_logger.error(
+                    f"Failed to capture DataFrame creation failure: {fail_error}"
+                )
+
+    def _capture_dataframe_modification(
+        self, df, execution_context, modification_type, key, value
+    ):
+        """Capture DataFrame modification as OpenLineage event"""
+        try:
+            unified_logger.debug(
+                f"[CAPTURE] Starting to capture DataFrame modification for df_{id(df)}"
+            )
+
+            # Create output dataset
+            output_dataset = self._create_dataframe_dataset(df)
+
+            # Create OpenLineage event
+            lineage_event = self._create_openlineage_event(
+                event_type="COMPLETE",
+                job_name="pandas_dataframe_modification",
+                outputs=[output_dataset],
+                execution_context=execution_context,
+                modification_type=modification_type,
+                key=str(key),
+                value_type=str(type(value).__name__),
+            )
+
+            # Add to tracked DataFrames
+            df_id = f"df_{id(df)}"
+            _tracked_dataframes[df_id] = {
+                "df_id": df_id,
+                "created_at": lineage_event["eventTime"],
+                "execution_id": execution_context["execution_id"],
+            }
+
+            self._emit_lineage_event(lineage_event)
+
+        except Exception as e:
+            unified_logger.error(f"Failed to capture DataFrame modification: {e}")
+            # Emit FAIL event for DataFrame modification failure
+            try:
+                self._capture_dataframe_failure(
+                    df=df,
+                    execution_context=execution_context,
+                    job_name="pandas_dataframe_modification",
+                    error=e,
+                    partial_outputs=[df] if df is not None else None,
+                )
+            except Exception as fail_error:
+                unified_logger.error(
+                    f"Failed to capture DataFrame modification failure: {fail_error}"
+                )
+
+    def _capture_dataframe_failure(
+        self, df, execution_context, job_name, error, partial_outputs=None
+    ):
+        """Capture DataFrame operation failure as OpenLineage FAIL event"""
+        try:
+            unified_logger.debug(
+                f"[CAPTURE] Starting to capture DataFrame failure for df_{id(df)}"
+            )
+
+            # Create partial output datasets if any data was produced
+            outputs = []
+            if partial_outputs:
+                for partial_df in partial_outputs:
+                    outputs.append(self._create_dataframe_dataset(partial_df))
+
+            # Build error information
+            import traceback
+
+            error_info = {
+                "error_message": str(error),
+                "stack_trace": traceback.format_exc(),
+                "error_type": type(error).__name__,
+            }
+
+            # Create OpenLineage FAIL event
+            lineage_event = self._create_openlineage_event(
+                event_type="FAIL",
+                job_name=job_name,
+                outputs=outputs,
+                error_info=error_info,
+                execution_context=execution_context,
+                failure_context=f"DataFrame operation failed: {type(error).__name__}",
+            )
+
+            self._emit_lineage_event(lineage_event)
+
+        except Exception as e:
+            unified_logger.error(f"Failed to capture DataFrame failure: {e}")
+
+    def _capture_dataframe_abortion(
+        self, df, execution_context, job_name, termination_reason, partial_outputs=None
+    ):
+        """Capture DataFrame operation abortion as OpenLineage ABORT event"""
+        try:
+            unified_logger.debug(
+                f"[CAPTURE] Starting to capture DataFrame abortion for df_{id(df)}"
+            )
+
+            # Create partial output datasets if any data was produced
+            outputs = []
+            if partial_outputs:
+                for partial_df in partial_outputs:
+                    outputs.append(self._create_dataframe_dataset(partial_df))
+
+            # Build termination information
+            error_info = {
+                "error_message": f"Operation terminated: {termination_reason}",
+                "stack_trace": f"Termination reason: {termination_reason}",
+                "error_type": "OperationAborted",
+            }
+
+            # Create OpenLineage ABORT event
+            lineage_event = self._create_openlineage_event(
+                event_type="ABORT",
+                job_name=job_name,
+                outputs=outputs,
+                error_info=error_info,
+                execution_context=execution_context,
+                termination_reason=termination_reason,
+                abortion_context=f"DataFrame operation aborted: {termination_reason}",
+            )
+
+            self._emit_lineage_event(lineage_event)
+
+        except Exception as e:
+            unified_logger.error(f"Failed to capture DataFrame abortion: {e}")
 
     def _emit_runtime_event(self, event_data):
         """Emit runtime event to runtime file"""
@@ -467,6 +771,8 @@ class UnifiedMarimoInterceptor:
                 ) in self.original_pandas_methods.items():
                     if method_name == "DataFrame.__init__":
                         pd.DataFrame.__init__ = original_method
+                    elif method_name == "DataFrame.__setitem__":
+                        pd.DataFrame.__setitem__ = original_method
 
             self.installed_hooks.clear()
             self.original_pandas_methods.clear()

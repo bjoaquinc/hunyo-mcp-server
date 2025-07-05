@@ -228,6 +228,533 @@ class TestUnifiedMarimoInterceptor:
             except ImportError:
                 pytest.skip("pandas not available")
 
+    def test_create_openlineage_event(self):
+        """Test that OpenLineage events are created with correct structure."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            interceptor = UnifiedMarimoInterceptor(
+                notebook_path=str(Path(tmp_dir) / "test.py"),
+                runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+            )
+
+            # Test basic OpenLineage event creation
+            event = interceptor._create_openlineage_event(
+                event_type="START",
+                job_name="test_job",
+                inputs=[],
+                outputs=[],
+                cell_id="test_cell_123",
+            )
+
+            # Verify required OpenLineage fields
+            assert event["eventType"] == "START"
+            assert event["job"]["name"] == "test_job"
+            assert event["job"]["namespace"] == "marimo"
+            assert "eventTime" in event
+            assert "run" in event
+            assert event["run"]["runId"] is not None
+            assert event["producer"] == "marimo-lineage-tracker"
+            assert (
+                event["schemaURL"]
+                == "https://openlineage.io/spec/1-0-5/OpenLineage.json"
+            )
+            assert event["session_id"] == interceptor.session_id
+            assert "emitted_at" in event
+
+            # Verify custom fields are included as job facets
+            assert event["job"]["facets"]["cell_id"] == "test_cell_123"
+
+            # Verify run facets structure
+            assert "facets" in event["run"]
+            assert "marimoSession" in event["run"]["facets"]
+            assert (
+                event["run"]["facets"]["marimoSession"]["sessionId"]
+                == interceptor.session_id
+            )
+
+    def test_create_dataframe_dataset(self):
+        """Test that DataFrame datasets are created with correct schema."""
+        try:
+            import pandas as pd
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                interceptor = UnifiedMarimoInterceptor(
+                    notebook_path=str(Path(tmp_dir) / "test.py"),
+                    runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                    lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                )
+
+                # Create test DataFrame
+                df = pd.DataFrame(
+                    {
+                        "col1": [1, 2, 3],
+                        "col2": ["a", "b", "c"],
+                        "col3": [1.1, 2.2, 3.3],
+                    }
+                )
+
+                # Test dataset creation
+                dataset = interceptor._create_dataframe_dataset(df)
+
+                # Verify dataset structure
+                assert dataset["namespace"] == "marimo"
+                assert dataset["name"] == f"dataframe_{id(df)}"
+                assert "facets" in dataset
+                assert "schema" in dataset["facets"]
+
+                # Verify schema fields
+                schema_fields = dataset["facets"]["schema"]["fields"]
+                assert len(schema_fields) == 3
+
+                # Check specific field types
+                field_names = [field["name"] for field in schema_fields]
+                assert "col1" in field_names
+                assert "col2" in field_names
+                assert "col3" in field_names
+
+                # Test custom dataset name
+                custom_dataset = interceptor._create_dataframe_dataset(
+                    df, "custom_name"
+                )
+                assert custom_dataset["name"] == "custom_name"
+
+        except ImportError:
+            pytest.skip("pandas not available")
+
+    def test_dataframe_modification_capture(self):
+        """Test that DataFrame modifications are captured correctly."""
+        try:
+            import pandas as pd
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                lineage_file = Path(tmp_dir) / "lineage.jsonl"
+                interceptor = UnifiedMarimoInterceptor(
+                    notebook_path=str(Path(tmp_dir) / "test.py"),
+                    runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                    lineage_file=str(lineage_file),
+                )
+
+                # Create test DataFrame
+                df = pd.DataFrame({"col1": [1, 2, 3]})
+
+                # Create mock execution context
+                execution_context = {
+                    "execution_id": "test_exec_123",
+                    "cell_id": "test_cell",
+                    "start_time": 1234567890,
+                    "cell_code": "df['new_col'] = [4, 5, 6]",
+                }
+
+                # Test DataFrame modification capture
+                interceptor._capture_dataframe_modification(
+                    df, execution_context, "column_assignment", "new_col", [4, 5, 6]
+                )
+
+                # Verify lineage event was written
+                assert lineage_file.exists()
+                with open(lineage_file) as f:
+                    saved_event = json.loads(f.read().strip())
+
+                    # Verify OpenLineage event structure
+                    assert saved_event["eventType"] == "COMPLETE"
+                    assert saved_event["job"]["name"] == "pandas_dataframe_modification"
+                    assert (
+                        saved_event["job"]["facets"]["modification_type"]
+                        == "column_assignment"
+                    )
+                    assert saved_event["job"]["facets"]["key"] == "new_col"
+                    assert saved_event["job"]["facets"]["value_type"] == "list"
+                    assert saved_event["session_id"] == interceptor.session_id
+
+                    # Verify outputs structure
+                    assert len(saved_event["outputs"]) == 1
+                    output = saved_event["outputs"][0]
+                    assert output["namespace"] == "marimo"
+                    assert "schema" in output["facets"]
+
+        except ImportError:
+            pytest.skip("pandas not available")
+
+    def test_dataframe_setitem_monkey_patching(self):
+        """Test that DataFrame.__setitem__ monkey patching works correctly."""
+        try:
+            import pandas as pd
+
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                lineage_file = Path(tmp_dir) / "lineage.jsonl"
+                interceptor = UnifiedMarimoInterceptor(
+                    notebook_path=str(Path(tmp_dir) / "test.py"),
+                    runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                    lineage_file=str(lineage_file),
+                )
+
+                # Store original method
+                original_setitem = pd.DataFrame.__setitem__
+
+                # Install monkey patches
+                interceptor._install_dataframe_patches()
+
+                # Verify that __setitem__ was patched
+                assert pd.DataFrame.__setitem__ != original_setitem
+                assert "DataFrame.__setitem__" in interceptor.original_pandas_methods
+
+                # Test that the patched method still works
+                df = pd.DataFrame({"a": [1, 2, 3]})
+
+                # This should work without errors (even though no execution context)
+                df["b"] = [4, 5, 6]
+                assert "b" in df.columns
+                assert list(df["b"]) == [4, 5, 6]
+
+                # Restore original method
+                pd.DataFrame.__setitem__ = original_setitem
+
+        except ImportError:
+            pytest.skip("pandas not available")
+
+    def test_dataframe_failure_capture(self):
+        """Test FAIL event capture for DataFrame operations"""
+        try:
+            import pandas as pd
+        except ImportError:
+            pytest.skip("pandas not available")
+
+        import json
+        import os
+        import tempfile
+
+        # Setup interceptor with test files
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as lineage_file:
+            lineage_file_path = lineage_file.name
+
+        interceptor = UnifiedMarimoInterceptor(
+            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+        )
+
+        # Setup execution context
+        execution_context = {
+            "execution_id": "test_exec_1",
+            "cell_id": "test_cell_1",
+            "cell_code": "df = pd.DataFrame({'col': [1, 2, 3]})",
+            "start_time": 1234567890.0,
+        }
+
+        # Test DataFrame creation failure
+        test_df = pd.DataFrame({"col": [1, 2, 3]})
+        test_error = ValueError("Test error for DataFrame creation")
+
+        # Call the failure capture method
+        interceptor._capture_dataframe_failure(
+            df=test_df,
+            execution_context=execution_context,
+            job_name="pandas_dataframe_creation",
+            error=test_error,
+            partial_outputs=[test_df],
+        )
+
+        # Verify FAIL event was emitted
+        with open(lineage_file_path) as f:
+            events = [json.loads(line) for line in f.readlines()]
+
+        assert len(events) == 1
+        fail_event = events[0]
+
+        # Verify event structure
+        assert fail_event["eventType"] == "FAIL"
+        assert fail_event["job"]["name"] == "pandas_dataframe_creation"
+        assert "errorMessage" in fail_event["run"]["facets"]
+
+        # Verify error facet
+        error_facet = fail_event["run"]["facets"]["errorMessage"]
+        assert error_facet["message"] == "Test error for DataFrame creation"
+        assert error_facet["programmingLanguage"] == "python"
+        assert "stackTrace" in error_facet  # Stack trace should be present
+
+        # Verify partial outputs
+        assert len(fail_event["outputs"]) == 1
+        output_dataset = fail_event["outputs"][0]
+        assert output_dataset["namespace"] == "marimo"
+        assert "dataframe_" in output_dataset["name"]
+
+        # Cleanup
+        os.unlink(lineage_file_path)
+
+    def test_dataframe_abortion_capture(self):
+        """Test ABORT event capture for DataFrame operations"""
+        try:
+            import pandas as pd
+        except ImportError:
+            pytest.skip("pandas not available")
+
+        import json
+        import os
+        import tempfile
+
+        # Setup interceptor with test files
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as lineage_file:
+            lineage_file_path = lineage_file.name
+
+        interceptor = UnifiedMarimoInterceptor(
+            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+        )
+
+        # Setup execution context
+        execution_context = {
+            "execution_id": "test_exec_2",
+            "cell_id": "test_cell_2",
+            "cell_code": "df = pd.DataFrame({'col': [1, 2, 3]})",
+            "start_time": 1234567890.0,
+        }
+
+        # Test DataFrame modification abortion
+        test_df = pd.DataFrame({"col": [1, 2, 3]})
+        termination_reason = "User interrupted operation"
+
+        # Call the abortion capture method
+        interceptor._capture_dataframe_abortion(
+            df=test_df,
+            execution_context=execution_context,
+            job_name="pandas_dataframe_modification",
+            termination_reason=termination_reason,
+            partial_outputs=[test_df],
+        )
+
+        # Verify ABORT event was emitted
+        with open(lineage_file_path) as f:
+            events = [json.loads(line) for line in f.readlines()]
+
+        assert len(events) == 1
+        abort_event = events[0]
+
+        # Verify event structure
+        assert abort_event["eventType"] == "ABORT"
+        assert abort_event["job"]["name"] == "pandas_dataframe_modification"
+        assert "errorMessage" in abort_event["run"]["facets"]
+
+        # Verify error facet
+        error_facet = abort_event["run"]["facets"]["errorMessage"]
+        assert (
+            error_facet["message"] == "Operation terminated: User interrupted operation"
+        )
+        assert error_facet["programmingLanguage"] == "python"
+        assert "stackTrace" in error_facet  # Stack trace should be present
+
+        # Verify termination context
+        assert (
+            abort_event["job"]["facets"]["termination_reason"]
+            == "User interrupted operation"
+        )
+
+        # Verify partial outputs
+        assert len(abort_event["outputs"]) == 1
+        output_dataset = abort_event["outputs"][0]
+        assert output_dataset["namespace"] == "marimo"
+        assert "dataframe_" in output_dataset["name"]
+
+        # Cleanup
+        os.unlink(lineage_file_path)
+
+    def test_create_openlineage_event_with_error_info(self):
+        """Test OpenLineage event creation with error information"""
+        interceptor = UnifiedMarimoInterceptor(notebook_path="test_notebook.py")
+
+        # Test FAIL event with error info
+        error_info = {
+            "error_message": "Test error message",
+            "stack_trace": "Test stack trace",
+            "error_type": "ValueError",
+        }
+
+        fail_event = interceptor._create_openlineage_event(
+            event_type="FAIL",
+            job_name="test_job",
+            error_info=error_info,
+            test_field="test_value",
+        )
+
+        # Verify base event structure
+        assert fail_event["eventType"] == "FAIL"
+        assert fail_event["job"]["name"] == "test_job"
+        assert fail_event["job"]["facets"]["test_field"] == "test_value"
+
+        # Verify error facet
+        assert "errorMessage" in fail_event["run"]["facets"]
+        error_facet = fail_event["run"]["facets"]["errorMessage"]
+        assert error_facet["message"] == "Test error message"
+        assert error_facet["stackTrace"] == "Test stack trace"
+        assert error_facet["programmingLanguage"] == "python"
+
+        # Test ABORT event with error info
+        abort_event = interceptor._create_openlineage_event(
+            event_type="ABORT", job_name="test_job", error_info=error_info
+        )
+
+        # Verify ABORT event has error facet
+        assert abort_event["eventType"] == "ABORT"
+        assert "errorMessage" in abort_event["run"]["facets"]
+
+        # Test event without error info (should not have error facet)
+        normal_event = interceptor._create_openlineage_event(
+            event_type="START", job_name="test_job"
+        )
+
+        assert normal_event["eventType"] == "START"
+        assert "errorMessage" not in normal_event["run"]["facets"]
+
+    def test_keyboard_interrupt_handling_dataframe_creation(self):
+        """Test KeyboardInterrupt handling in DataFrame creation"""
+        try:
+            import pandas as pd
+        except ImportError:
+            pytest.skip("pandas not available")
+
+        import json
+        import os
+        import tempfile
+
+        # Setup interceptor with test files
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as lineage_file:
+            lineage_file_path = lineage_file.name
+
+        interceptor = UnifiedMarimoInterceptor(
+            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+        )
+
+        # Setup execution context
+        execution_context = {
+            "execution_id": "test_exec_3",
+            "cell_id": "test_cell_3",
+            "cell_code": "df = pd.DataFrame({'col': [1, 2, 3]})",
+            "start_time": 1234567890.0,
+        }
+
+        # Test that ABORT event is captured when DataFrame operation is interrupted
+        test_df = pd.DataFrame({"col": [1, 2, 3]})
+
+        # Directly test the ABORT capture functionality
+        interceptor._capture_dataframe_abortion(
+            df=test_df,
+            execution_context=execution_context,
+            job_name="pandas_dataframe_creation",
+            termination_reason="User interrupted operation",
+        )
+
+        # Verify ABORT event was emitted
+        with open(lineage_file_path) as f:
+            events = [json.loads(line) for line in f.readlines()]
+
+        assert len(events) == 1
+        abort_event = events[0]
+        assert abort_event["eventType"] == "ABORT"
+        assert abort_event["job"]["name"] == "pandas_dataframe_creation"
+        assert (
+            abort_event["job"]["facets"]["termination_reason"]
+            == "User interrupted operation"
+        )
+
+        # Cleanup
+        os.unlink(lineage_file_path)
+
+    def test_cell_execution_error_lineage_events(self):
+        """Test FAIL/ABORT lineage events for cell execution errors"""
+        import json
+        import os
+        import tempfile
+        from unittest.mock import Mock
+
+        # Setup interceptor with test files
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as lineage_file:
+            lineage_file_path = lineage_file.name
+
+        interceptor = UnifiedMarimoInterceptor(
+            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+        )
+
+        # Setup execution context
+        execution_context = {
+            "execution_id": "test_exec_4",
+            "cell_id": "test_cell_4",
+            "cell_code": "raise ValueError('Test error')",
+            "start_time": 1234567890.0,
+        }
+        interceptor._execution_contexts["test_cell_4"] = execution_context
+
+        # Create post-execution hook
+        post_hook = interceptor._create_post_execution_hook()
+
+        # Mock cell and run_result for ValueError
+        mock_cell = Mock()
+        mock_cell.cell_id = "test_cell_4"
+        mock_cell.code = "raise ValueError('Test error')"
+
+        mock_run_result = Mock()
+        mock_run_result.exception = ValueError("Test error")
+
+        # Call post-execution hook
+        post_hook(mock_cell, None, mock_run_result)
+
+        # Verify FAIL event was emitted
+        with open(lineage_file_path) as f:
+            events = [json.loads(line) for line in f.readlines()]
+
+        # Should have FAIL event for cell execution
+        fail_events = [e for e in events if e.get("eventType") == "FAIL"]
+        assert len(fail_events) > 0
+
+        fail_event = fail_events[0]
+        assert fail_event["job"]["name"] == "cell_execution"
+        assert "errorMessage" in fail_event["run"]["facets"]
+        assert fail_event["job"]["facets"]["cell_id"] == "test_cell_4"
+
+        # Test KeyboardInterrupt -> ABORT event by creating a new temporary file
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as abort_lineage_file:
+            abort_lineage_file_path = abort_lineage_file.name
+
+        # Create new interceptor for ABORT test
+        abort_interceptor = UnifiedMarimoInterceptor(
+            notebook_path="test_notebook.py", lineage_file=abort_lineage_file_path
+        )
+        abort_interceptor._execution_contexts["test_cell_4"] = execution_context
+
+        # Create new post-execution hook for ABORT test
+        abort_post_hook = abort_interceptor._create_post_execution_hook()
+
+        # Mock KeyboardInterrupt exception
+        mock_run_result.exception = KeyboardInterrupt("User interrupted")
+        abort_post_hook(mock_cell, None, mock_run_result)
+
+        # Verify ABORT event was emitted
+        with open(abort_lineage_file_path) as f:
+            abort_events_data = [json.loads(line) for line in f.readlines()]
+
+        abort_events = [e for e in abort_events_data if e.get("eventType") == "ABORT"]
+        assert len(abort_events) > 0
+
+        abort_event = abort_events[0]
+        assert abort_event["job"]["name"] == "cell_execution"
+        assert "errorMessage" in abort_event["run"]["facets"]
+        assert abort_event["job"]["facets"]["cell_id"] == "test_cell_4"
+        assert (
+            abort_event["job"]["facets"]["termination_reason"]
+            == "User interrupted cell execution"
+        )
+
+        # Cleanup ABORT test file
+        os.unlink(abort_lineage_file_path)
+
+        # Cleanup
+        os.unlink(lineage_file_path)
+
 
 class TestUnifiedInterceptorGlobalFunctions:
     """Test cases for the global unified interceptor functions."""

@@ -10,6 +10,7 @@ import concurrent.futures
 import json
 import os
 import platform
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -155,7 +156,9 @@ class DuckDBManager:
             db_logger.success("[OK] Database schema initialized successfully")
 
             # Simple marker for test parsing (bypasses rich logger formatting)
-            print("HUNYO_READY_MARKER: DATABASE_SCHEMA_READY", flush=True)  # noqa: T201
+            print(  # noqa: T201
+                "HUNYO_READY_MARKER: DATABASE_SCHEMA_READY", file=sys.stderr, flush=True
+            )
 
         except Exception as e:
             db_logger.error(f"Failed to initialize database: {e}")

@@ -59,15 +59,17 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
     # Ensure data directory structure exists
     ensure_directory_structure()
 
-    click.echo("[START] Starting Hunyo MCP Server")
-    click.echo(f"[INFO] Notebook: {notebook}")
-    click.echo(f"[INFO] Data directory: {get_hunyo_data_dir()}")
+    click.echo("[START] Starting Hunyo MCP Server", err=True)
+    click.echo(f"[INFO] Notebook: {notebook}", err=True)
+    click.echo(f"[INFO] Data directory: {get_hunyo_data_dir()}", err=True)
 
     orchestrator = None
 
     def signal_handler(signum, _frame):
         """Handle termination signals gracefully."""
-        click.echo(f"\n[STOP] Received signal {signum}, shutting down gracefully...")
+        click.echo(
+            f"\n[STOP] Received signal {signum}, shutting down gracefully...", err=True
+        )
         if orchestrator:
             orchestrator.stop()
         sys.exit(0)
@@ -86,14 +88,19 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
         # Start all components
         orchestrator.start()
 
-        click.echo("[START] MCP server starting...")
+        click.echo("[START] MCP server starting...", err=True)
 
         # Simple marker for test parsing (bypasses rich logger formatting)
-        print("HUNYO_READY_MARKER: MCP_SERVER_STARTING", flush=True)  # noqa: T201
+        print(  # noqa: T201
+            "HUNYO_READY_MARKER: MCP_SERVER_STARTING", file=sys.stderr, flush=True
+        )
 
         # Check if we're running in standalone mode
         if standalone:
-            click.echo("[INFO] Running in standalone mode - waiting for connections...")
+            click.echo(
+                "[INFO] Running in standalone mode - waiting for connections...",
+                err=True,
+            )
             # Keep-alive loop for standalone operation (testing/development)
             try:
                 while True:
@@ -104,17 +111,17 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
                 raise
         else:
             # Normal MCP protocol mode (with client via stdin/stdout)
-            click.echo("[INFO] Running in MCP protocol mode...")
+            click.echo("[INFO] Running in MCP protocol mode...", err=True)
             mcp.run()
 
     except KeyboardInterrupt:
         try:
-            click.echo("\n[STOP] Keyboard interrupt received...")
+            click.echo("\n[STOP] Keyboard interrupt received...", err=True)
         except (OSError, ValueError):
             pass
     except Exception as e:
         try:
-            click.echo(f"[ERROR] Error: {e}")
+            click.echo(f"[ERROR] Error: {e}", err=True)
         except (OSError, ValueError):
             pass
         raise
@@ -125,7 +132,7 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
 
         # Safe echo during shutdown (may fail if stdout is closed)
         try:
-            click.echo("[OK] Shutdown complete")
+            click.echo("[OK] Shutdown complete", err=True)
         except (OSError, ValueError):
             # stdout/stderr may be closed during process termination
             pass

@@ -60,8 +60,8 @@ class HunyoLogger:
 
         # Only configure if not already configured
         if not self.logger.handlers:
-            # Console handler with emoji formatting
-            console_handler = logging.StreamHandler(sys.stdout)
+            # Console handler with emoji formatting (use stderr for MCP compatibility)
+            console_handler = logging.StreamHandler(sys.stderr)
             console_handler.setFormatter(
                 EmojiFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
             )

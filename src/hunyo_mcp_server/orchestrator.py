@@ -10,6 +10,7 @@ Manages the startup, coordination, and shutdown of all system components:
 """
 
 import asyncio
+import sys
 import threading
 import time
 from pathlib import Path
@@ -87,7 +88,9 @@ class HunyoOrchestrator:
 
             # Simple marker for test parsing (bypasses rich logger formatting)
             print(  # noqa: T201
-                "HUNYO_READY_MARKER: ALL_COMPONENTS_STARTED", flush=True
+                "HUNYO_READY_MARKER: ALL_COMPONENTS_STARTED",
+                file=sys.stderr,
+                flush=True,
             )
 
             self.running = True
