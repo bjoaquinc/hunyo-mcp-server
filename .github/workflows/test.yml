@@ -76,6 +76,12 @@ jobs:
         echo "Creating hatch environment with test dependencies..."
         hatch env create test
         
+    - name: Install Playwright browsers
+      run: |
+        echo "Installing Playwright browser binaries..."
+        hatch run test:python -m playwright install chromium
+        echo "[OK] Playwright browsers installed"
+        
     - name: Verify dependencies
       shell: bash
       env:
@@ -89,6 +95,8 @@ jobs:
         hatch run test:python -c "import jsonschema; print('[OK] jsonschema available')"
         hatch run test:python -c "import pytest; print('[OK] pytest available')"
         hatch run test:python -c "import click; print('[OK] click available')"
+        hatch run test:python -c "import aiohttp; print('[OK] aiohttp available')"
+        hatch run test:python -c "import playwright; print('[OK] playwright available')"
         echo "[OK] All dependencies verified"
         
     - name: Cache DuckDB extensions
@@ -192,6 +200,12 @@ jobs:
         hatch env create test
         hatch run test:python -c "import marimo; print('[OK] marimo available')"
         
+    - name: Install Playwright browsers
+      run: |
+        echo "Installing Playwright browser binaries..."
+        hatch run test:python -m playwright install chromium
+        echo "[OK] Playwright browsers installed"
+        
     - name: Cache DuckDB extensions
       uses: actions/cache@v4
       with:
@@ -225,9 +239,9 @@ jobs:
         
         echo "[OK] DuckDB extensions pre-installed - eliminating download race conditions"
         
-    - name: Run integration tests
+    - name: Run integration and e2e tests
       run: |
-        hatch run test:test test/integration/ -v --timeout=60
+        hatch run test:test test/integration/ test/e2e/ -v --timeout=60
 
   # Generate final coverage report
   coverage-report:
@@ -302,7 +316,7 @@ jobs:
         hatch build
         pip install dist/*.whl
         python -c "import hunyo_mcp_server; print('[OK] Package installed successfully')"
-        python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('[OK] Capture layer importable')"
+        python -c "from capture.unified_marimo_interceptor import enable_unified_tracking; print('[OK] Unified capture layer importable')"
 
   # Test summary
   test-summary:

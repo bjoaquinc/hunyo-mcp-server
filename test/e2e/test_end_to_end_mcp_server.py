@@ -128,7 +128,7 @@ class TestEndToEndMCPServer:
     ):
         """Test the complete pipeline from CLI execution to database ingestion"""
 
-        e2e_logger.success("[START] Starting end-to-end MCP server pipeline test")
+        e2e_logger.info("[START] Starting end-to-end MCP server pipeline test")
         e2e_logger.info(f"[FILE] Test data directory: {temp_hunyo_dir}")
         e2e_logger.info(f"[FILE] Test notebook: {test_notebook_path}")
         e2e_logger.info("[EXEC] Starting hunyo-mcp-server subprocess...")

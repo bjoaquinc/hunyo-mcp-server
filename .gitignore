@@ -76,3 +76,6 @@ coverage.xml
 
 # Notebooks for testing
 sandbox/
+
+# temporary plan file
+DEPRECATION_PLAN.md

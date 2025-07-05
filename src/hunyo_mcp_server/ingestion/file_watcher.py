@@ -98,8 +98,9 @@ class FileWatcher:
         *,
         verbose: bool = False,
     ):
-        self.runtime_dir = Path(runtime_dir)
-        self.lineage_dir = Path(lineage_dir)
+        # Normalize directory paths for consistent comparison across platforms
+        self.runtime_dir = Path(runtime_dir).resolve()
+        self.lineage_dir = Path(lineage_dir).resolve()
         self.event_processor = event_processor
         self.verbose = verbose
 
@@ -231,13 +232,17 @@ class FileWatcher:
 
         for file_path in pending_files:
             try:
-                # Determine file type based on directory
-                if file_path.parent == self.runtime_dir:
+                # Determine file type based on directory (resolve paths for proper comparison)
+                file_parent = file_path.parent.resolve()
+                runtime_dir_resolved = self.runtime_dir.resolve()
+                lineage_dir_resolved = self.lineage_dir.resolve()
+
+                if file_parent == runtime_dir_resolved:
                     event_type = "runtime"
-                elif file_path.parent == self.lineage_dir:
+                elif file_parent == lineage_dir_resolved:
                     event_type = "lineage"
                 else:
-                    watcher_logger.warning(f"Unknown file location: {file_path}")
+                    watcher_logger.warning(f"[WARN] Unknown file location: {file_path}")
                     continue
 
                 await self._process_file(file_path, event_type)
@@ -304,10 +309,14 @@ class FileWatcher:
         """Manually trigger processing of a specific file."""
         watcher_logger.info(f"[PROC] Manual processing: {file_path.name}")
 
-        # Determine file type
-        if file_path.parent == self.runtime_dir:
+        # Determine file type (resolve paths for proper comparison)
+        file_parent = file_path.parent.resolve()
+        runtime_dir_resolved = self.runtime_dir.resolve()
+        lineage_dir_resolved = self.lineage_dir.resolve()
+
+        if file_parent == runtime_dir_resolved:
             event_type = "runtime"
-        elif file_path.parent == self.lineage_dir:
+        elif file_parent == lineage_dir_resolved:
             event_type = "lineage"
         else:
             msg = f"File not in watched directories: {file_path}"

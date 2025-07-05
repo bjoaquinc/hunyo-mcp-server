@@ -230,54 +230,46 @@ class HunyoOrchestrator:
         orchestrator_logger.success("File watcher started in background")
 
     def _start_capture_layer(self) -> None:
-        """Initialize the capture layer for the notebook."""
-        orchestrator_logger.startup("[SETUP] Initializing capture layer...")
+        """Initialize the unified capture layer for both runtime and lineage events."""
+        orchestrator_logger.startup("[SETUP] Initializing unified capture layer...")
 
         try:
-            # Import and start runtime tracking directly
-            # Generate proper file paths for this notebook
-            from capture import get_event_filenames
-            from capture.lightweight_runtime_tracker import enable_runtime_tracking
-            from capture.native_hooks_interceptor import enable_native_hook_tracking
+            # Import and start unified tracking
+            from capture.unified_marimo_interceptor import enable_unified_tracking
 
-            runtime_file, lineage_file = get_event_filenames(
-                str(self.notebook_path), str(self.data_dir)
-            )
+            # Enable unified tracking with notebook path for proper convention naming
+            interceptor = enable_unified_tracking(notebook_path=str(self.notebook_path))
 
-            orchestrator_logger.status(f"Runtime events: {Path(runtime_file).name}")
-            orchestrator_logger.status(f"Lineage events: {Path(lineage_file).name}")
-
-            # Enable tracking with notebook path for proper convention naming
-            enable_runtime_tracking(notebook_path=str(self.notebook_path))
-
-            # Use native Marimo hooks instead of Python exec() hooks (pass notebook_path for proper naming)
-            enable_native_hook_tracking(
-                lineage_file=lineage_file, notebook_path=str(self.notebook_path)
-            )
-
-            orchestrator_logger.success(
-                "[OK] Capture layer active - native Marimo hooks enabled"
-            )
+            if interceptor:
+                orchestrator_logger.status(
+                    f"Runtime events: {interceptor.runtime_file.name}"
+                )
+                orchestrator_logger.status(
+                    f"Lineage events: {interceptor.lineage_file.name}"
+                )
+                orchestrator_logger.success(
+                    "[OK] Unified capture layer active - marimo hooks enabled for both runtime and lineage events"
+                )
+            else:
+                orchestrator_logger.warning(
+                    "[WARN] Failed to create unified interceptor"
+                )
 
         except ImportError as e:
-            orchestrator_logger.warning(f"Capture layer import failed: {e}")
+            orchestrator_logger.warning(f"Unified capture layer import failed: {e}")
             orchestrator_logger.warning(
-                "[WARN] Runtime tracking not available. Please add these imports to your notebook manually:"
+                "[WARN] Unified tracking not available. Please add this import to your notebook manually:"
             )
             orchestrator_logger.status(
-                "  from capture.lightweight_runtime_tracker import enable_runtime_tracking"
+                "  from capture.unified_marimo_interceptor import enable_unified_tracking"
             )
-            orchestrator_logger.status(
-                "  from capture.native_hooks_interceptor import enable_native_hook_tracking"
-            )
-            orchestrator_logger.status("  enable_runtime_tracking()")
-            orchestrator_logger.status("  enable_native_hook_tracking()")
+            orchestrator_logger.status("  enable_unified_tracking()")
 
         except Exception as e:
-            orchestrator_logger.error(f"Failed to start capture layer: {e}")
+            orchestrator_logger.error(f"Failed to start unified capture layer: {e}")
             orchestrator_logger.warning("Falling back to manual import instructions...")
             orchestrator_logger.status(
-                "Please add tracking imports to your notebook manually (see logs above)"
+                "Please add unified tracking import to your notebook manually (see logs above)"
             )
 
     def _start_ingestion_components(self) -> None:

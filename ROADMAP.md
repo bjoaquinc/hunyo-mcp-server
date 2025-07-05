@@ -58,12 +58,13 @@ hunyo-mcp-server/.hunyo/
 ### ✅ **Fully Implemented (Excellent Quality)**
 
 **1. Data Capture Layer**
-- `src/capture/live_lineage_interceptor.py` (30KB, 710 lines) - Sophisticated pandas monkey-patching
-- `src/capture/lightweight_runtime_tracker.py` (21KB, 518 lines) - Runtime execution tracking
-- `src/capture/native_hooks_interceptor.py` (39KB, 934 lines) - Advanced hooking mechanisms
+- ✅ **ACTIVE** `src/capture/unified_marimo_interceptor.py` (20KB, 500+ lines) - **RECOMMENDED** unified system using marimo's native hooks
+- 🔄 **DEPRECATED** `src/capture/live_lineage_interceptor.py` (30KB, 710 lines) - Legacy pandas monkey-patching (deprecated)
+- 🔄 **DEPRECATED** `src/capture/lightweight_runtime_tracker.py` (21KB, 518 lines) - Legacy runtime tracking (deprecated)
+- 🔄 **DEPRECATED** `src/capture/native_hooks_interceptor.py` (39KB, 934 lines) - Legacy hooking mechanisms (deprecated)
 - `src/capture/websocket_interceptor.py` (15KB, 388 lines) - WebSocket integration
 - `src/capture/logger.py` (5KB, 149 lines) - Production-ready logging infrastructure with emoji-rich formatting
-- **Status**: Production-ready, sophisticated event linking, DataFrame ID tracking, professional logging system
+- **Status**: ✅ **UNIFIED SYSTEM ACTIVE** - Orchestrator uses unified system, old systems deprecated but functional for backward compatibility
 
 **2. Database Schema Design**
 - `schemas/sql/init_database.sql` - Complete DuckDB schema with runtime_events + lineage_events tables
@@ -84,7 +85,8 @@ hunyo-mcp-server/.hunyo/
 - `test/fixtures/openlineage_demo_notebook.py` - Lineage event validation notebook
 - `test/test_marimo_notebook_fixtures.py` - Tests for marimo notebook fixtures
 - `test/test_capture/` - Comprehensive unit test suite (4 modules, 35+ tests)
-- `test/integration/` - Integration test coverage for marimo workflows
+- `test/integration/` - Integration test coverage for component interactions
+- `test/e2e/` - End-to-end test coverage for complete user workflows
 - `test/test_ingestion/` - ✅ **NEW** SQL robustness testing with comprehensive database validation
 - `test/mocks.py` - Sophisticated mock infrastructure aligned with marimo testing principles
 - `test/conftest.py` - Pytest fixtures and configuration

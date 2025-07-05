@@ -136,16 +136,13 @@ class TestServerImplementationPreparation:
             sys.path.insert(0, src_path)
 
         try:
-            # These imports should work for server integration
-            from capture.lightweight_runtime_tracker import LightweightRuntimeTracker
-            from capture.live_lineage_interceptor import MarimoLiveInterceptor
-            from capture.native_hooks_interceptor import MarimoNativeHooksInterceptor
+            # Test that the NEW unified system works for server integration
+            from capture.unified_marimo_interceptor import enable_unified_tracking
             from capture.websocket_interceptor import MarimoWebSocketProxy
 
-            # Test that classes are properly defined
-            assert MarimoLiveInterceptor is not None
-            assert LightweightRuntimeTracker is not None
-            assert MarimoNativeHooksInterceptor is not None
+            # Test that the main functions are properly defined
+            assert enable_unified_tracking is not None
+            assert callable(enable_unified_tracking)
             assert MarimoWebSocketProxy is not None
 
         except ImportError as e:

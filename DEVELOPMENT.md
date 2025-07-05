@@ -72,8 +72,8 @@ hatch shell
 # 1. Test basic package import
 hatch run python -c "import hunyo_mcp_server; print('✅ Package imported successfully')"
 
-# 2. Test capture layer (main functionality)
-hatch run python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer working')"
+# 2. Test capture layer (main functionality) - UPDATED to use unified system
+hatch run python -c "from capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Unified capture layer working')"
 
 # 3. Run test suite (most important verification)
 hatch run test
@@ -181,21 +181,23 @@ hatch run test -x
 **Test Categories:**
 
 ```bash
-# Unit tests (53 tests) - Test individual capture modules
+# Unit tests - Test individual modules
 hatch run test test/test_capture/
+hatch run test test/test_hunyo_mcp_server/
 
-# Integration tests (17 tests) - Test component interactions  
+# Integration tests - Test component interactions  
 hatch run test test/integration/
 
-# Specific module tests
-hatch run test test/test_capture/test_lightweight_runtime_tracker.py    # 10 tests
-hatch run test test/test_capture/test_live_lineage_interceptor.py        # 13 tests  
-hatch run test test/test_capture/test_native_hooks_interceptor.py        # 17 tests
-hatch run test test/test_capture/test_websocket_interceptor.py           # 13 tests
+# End-to-end tests - Test complete user workflows
+hatch run test test/e2e/
 
-# Marimo notebook integration tests
-hatch run test test/integration/test_marimo_notebook_integration.py      # 6 tests
-hatch run test test/integration/test_capture_integration.py              # 11 tests
+# Current integration tests
+hatch run test test/integration/test_schema_validation_integration.py
+hatch run test test/integration/test_unified_system_integration.py
+hatch run test test/integration/test_real_marimo_cell_execution.py
+
+# Meta tests (schema validation, roadmap compliance)
+hatch run test test/meta/
 ```
 
 ### Code Quality
@@ -284,17 +286,19 @@ hatch run test test/test_marimo_notebook_fixtures.py -k runtime
 **⚠️ IMPORTANT**: Before any capture system changes, run marimo integration tests to ensure compatibility:
 
 ```bash
-# Run all marimo integration tests (17 tests)
+# Run all integration tests
 hatch run test test/integration/
 
-# Run marimo-specific tests (6 tests)
-hatch run test test/integration/test_marimo_notebook_integration.py -v
+# Run end-to-end tests (complete user workflows)
+hatch run test test/e2e/
 
-# Run capture integration tests (11 tests) 
-hatch run test test/integration/test_capture_integration.py -v
+# Run specific integration tests
+hatch run test test/integration/test_schema_validation_integration.py -v
+hatch run test test/integration/test_unified_system_integration.py -v
+hatch run test test/integration/test_real_marimo_cell_execution.py -v
 
-# Run with coverage for integration tests only
-hatch run test-cov test/integration/
+# Run with coverage for integration and e2e tests
+hatch run test-cov test/integration/ test/e2e/
 ```
 
 **What these tests verify**:
@@ -346,8 +350,8 @@ hunyo-mcp-server --notebook test/sample_notebook.py
 # Test basic package structure
 hatch run python -c "import hunyo_mcp_server; print('✅ Basic package working')"
 
-# Test capture layer functionality
-hatch run python -c "from capture.live_lineage_interceptor import MarimoLiveInterceptor; print('✅ Capture layer working')"
+# Test capture layer functionality - UPDATED to use unified system
+hatch run python -c "from capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Unified capture layer working')"
 
 # Test configuration system
 hatch run python -c "from hunyo_mcp_server.config import get_hunyo_data_dir; print('✅ Config system working')"

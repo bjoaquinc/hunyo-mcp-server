@@ -42,21 +42,30 @@ def test_core_dependencies_importable():
 def test_capture_modules_importable():
     """Test that our capture modules can be imported."""
     try:
-        from capture import (
-            lightweight_runtime_tracker,
-            live_lineage_interceptor,
-            logger,
-            native_hooks_interceptor,
-            websocket_interceptor,
-        )
+        from capture import logger
+        from capture.unified_marimo_interceptor import UnifiedMarimoInterceptor
 
         # Basic smoke test - check for actual classes and functions
         assert hasattr(logger, "get_logger")
         assert hasattr(logger, "HunyoLogger")
-        assert hasattr(live_lineage_interceptor, "MarimoLiveInterceptor")
-        assert hasattr(lightweight_runtime_tracker, "LightweightRuntimeTracker")
-        assert hasattr(native_hooks_interceptor, "MarimoNativeHooksInterceptor")
-        assert hasattr(websocket_interceptor, "MarimoWebSocketProxy")
+
+        # Test the unified system
+        assert hasattr(UnifiedMarimoInterceptor, "install")
+        assert hasattr(UnifiedMarimoInterceptor, "uninstall")
+        assert hasattr(UnifiedMarimoInterceptor, "get_session_summary")
+
+        # Test that utility functions are available
+        from capture import (
+            get_event_filenames,
+            get_notebook_file_hash,
+            get_notebook_name,
+            get_user_data_dir,
+        )
+
+        assert callable(get_event_filenames)
+        assert callable(get_notebook_file_hash)
+        assert callable(get_notebook_name)
+        assert callable(get_user_data_dir)
 
     except ImportError as e:
         pytest.skip(f"Capture modules not available: {e}")

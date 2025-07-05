@@ -54,6 +54,8 @@ test = [
     "pytest-cov>=4.0.0",
     "jsonschema>=4.0.0",
     "marimo>=0.8.0",
+    "playwright>=1.40.0",
+    "aiohttp>=3.8.0",
 ]
 dev = [
     "black>=23.0.0",
@@ -348,7 +350,5 @@ module = [
 [[tool.mypy.overrides]]
 module = [
     "capture.websocket_interceptor",
-    "capture.native_hooks_interceptor",  
-    "capture.live_lineage_interceptor",
 ]
 ignore_errors = true 
