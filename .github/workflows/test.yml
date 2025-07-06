@@ -78,6 +78,8 @@ jobs:
         run: |
           # Run from repo root for integration tests
           hatch env create test
+          # Install playwright browsers for integration tests
+          hatch run test:python -m playwright install chromium
           hatch run test:pytest tests/integration/ -v
 
   # Code quality checks
@@ -124,14 +126,23 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install hatch
         
-        # Build both packages from root (workspace handles both)
+        # Build each package individually in its own directory
+        echo "Building hunyo-mcp-server..."
+        cd packages/hunyo-mcp-server
         hatch build
+        cd ../..
         
-        # Validate build artifacts exist in root dist/ directory
-        ls -la dist/
-        echo "✅ Checking for expected package files..."
-        ls -la dist/*hunyo_mcp_server*
-        ls -la dist/*hunyo_capture*
+        echo "Building hunyo-capture..."  
+        cd packages/hunyo-capture
+        hatch build
+        cd ../..
+        
+        # Validate build artifacts exist
+        echo "✅ MCP Server package files:"
+        ls -la packages/hunyo-mcp-server/dist/
+        
+        echo "✅ Capture package files:"
+        ls -la packages/hunyo-capture/dist/
 
   # Test environment isolation (validates package separation architecture)
   test-environment-isolation:
