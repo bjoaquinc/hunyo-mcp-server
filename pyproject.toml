@@ -1,29 +1,29 @@
 # pyproject.toml (at repo root - for development and integration testing)
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# [build-system]
+# requires = ["hatchling"]
+# build-backend = "hatchling.build"
 
-[project]
-name = "hunyo-workspace"
-dynamic = ["version"]
-description = "Development workspace for hunyo packages"
-readme = "README.md"
-authors = [{name = "Your Name", email = "your.email@example.com"}]
-license = {text = "MIT"}
-requires-python = ">=3.10"
+# [project]
+# name = "hunyo-workspace"
+# dynamic = ["version"]
+# description = "Development workspace for hunyo packages"
+# readme = "README.md"
+# authors = [{name = "Your Name", email = "your.email@example.com"}]
+# license = {text = "MIT"}
+# requires-python = ">=3.10"
 
 # Development dependencies for workspace
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",  # For async test functions
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
-]
+# [project.optional-dependencies]
+# dev = [
+#     "pytest>=7.0.0",
+#     "pytest-asyncio>=0.21.0",  # For async test functions
+#     "black>=23.0.0",
+#     "ruff>=0.1.0",
+#     "mypy>=1.0.0",
+# ]
 
-[tool.hatch.version]
-path = "packages/hunyo-mcp-server/src/hunyo_mcp_server/__init__.py"  # Use MCP server version as workspace version
+# [tool.hatch.version]
+# path = "packages/hunyo-mcp-server/src/hunyo_mcp_server/__init__.py"  # Use MCP server version as workspace version
 
 # Workspace configuration - install packages locally  
 [tool.hatch.envs.default]
@@ -45,14 +45,14 @@ dependencies = [
 
 # Integration testing from repo root - configuration in main pytest section below
 
-[project.urls]
-Repository = "https://github.com/your-username/hunyo-notebook-memories-mcp"
+# [project.urls]
+# Repository = "https://github.com/your-username/hunyo-notebook-memories-mcp"
 
-[project.scripts]
+# [project.scripts]
 
-[tool.hatch.build.targets.wheel]
-# Don't build wheel for workspace - only for development
-exclude = ["*"]
+# [tool.hatch.build.targets.wheel]
+# # Don't build wheel for workspace - only for development
+# exclude = ["*"]
 
 [tool.hatch.envs.default.scripts]
 install-packages = [
