@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 🗂️ Current Project Info
 README is outdated, use these for current state:

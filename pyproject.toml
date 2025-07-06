@@ -1,99 +1,69 @@
+# pyproject.toml (at repo root - for development and integration testing)
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "hunyo-mcp-server"
+name = "hunyo-workspace"
 dynamic = ["version"]
-description = "Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP"
+description = "Development workspace for hunyo packages"
 readme = "README.md"
-license = "MIT"
+authors = [{name = "Your Name", email = "your.email@example.com"}]
+license = {text = "MIT"}
 requires-python = ">=3.10"
-authors = [
-    { name = "Hunyo Team", email = "team@hunyo.dev" },
-]
-keywords = [
-    "marimo",
-    "dataframe",
-    "tracking",
-    "mcp",
-    "openlineage",
-    "debugging",
-    "notebook",
-]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Environment :: Console",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Software Development :: Debuggers",
-    "Topic :: Scientific/Engineering :: Information Analysis",
-]
-dependencies = [
-    "mcp>=1.0.0",
-    "click>=8.0.0",
-    "duckdb>=0.9.0",
-    "pandas>=2.0.0",
-    "pydantic>=2.0.0",
-    "watchdog>=3.0.0",
-    "websockets>=11.0.0",
-    "openlineage-python>=0.28.0",
-]
 
+# Development dependencies for workspace
 [project.optional-dependencies]
-test = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0", 
-    "pytest-timeout>=2.1.0",
-    "pytest-cov>=4.0.0",
-    "jsonschema>=4.0.0",
-    "marimo>=0.8.0",
-    "playwright>=1.40.0",
-    "aiohttp>=3.8.0",
-]
 dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
     "black>=23.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
-    "types-click",
-    "types-psutil", 
-    "pandas-stubs",
 ]
-# Legacy compatibility - remove tox from dependencies
-# tox conflicts with hatch and creates environment isolation issues
-
-[project.urls]
-Documentation = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp#readme"
-Issues = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp/issues"
-Source = "https://github.com/hunyo-dev/hunyo-notebook-memories-mcp"
-
-[project.scripts]
-hunyo-mcp-server = "hunyo_mcp_server.server:main"
 
 [tool.hatch.version]
-path = "src/hunyo_mcp_server/__init__.py"
+path = "packages/hunyo-mcp-server/src/hunyo_mcp_server/__init__.py"  # Use MCP server version as workspace version
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/hunyo_mcp_server", "src/capture"]
-
+# Workspace configuration - install packages locally  
 [tool.hatch.envs.default]
-features = ["test", "dev"]
-dev-mode = true  # Install project in development mode
 dependencies = [
-    # All dependencies are now properly managed through features
-    # This ensures consistency and eliminates duplication
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.1.0",
 ]
 
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
+    "pytest-cov>=4.0.0", 
+    "pytest-timeout>=2.1.0",
+    "marimo>=0.8.0",
+]
+
+# Integration testing from repo root - configuration in main pytest section below
+
+[project.urls]
+Repository = "https://github.com/your-username/hunyo-notebook-memories-mcp"
+
+[project.scripts]
+
+[tool.hatch.build.targets.wheel]
+# Don't build wheel for workspace - only for development
+exclude = ["*"]
+
 [tool.hatch.envs.default.scripts]
-test = "pytest {args:test}"
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args:test}"
-typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture}"
+install-packages = [
+    "pip install -e ./packages/hunyo-mcp-server",
+    "pip install -e ./packages/hunyo-capture",
+]
+test = ["install-packages", "pytest {args:test}"]
+test-capture = ["install-packages", "python -m pytest packages/hunyo-capture/tests/ {args}"]
+test-mcp = ["install-packages", "python -m pytest packages/hunyo-mcp-server/tests/ {args}"]
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=packages/hunyo-mcp-server/src/hunyo_mcp_server --cov=packages/hunyo-capture/src/hunyo_capture {args:test}"
+typing = "mypy --install-types --non-interactive {args:packages/hunyo-mcp-server/src packages/hunyo-capture/src}"
 style = [
     "ruff check {args:.}",
     "black --check --diff {args:.}",
@@ -113,7 +83,7 @@ inspect-verbose = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebo
 # Run tests locally with: hatch run test
 # See .github/workflows/test.yml for comprehensive CI matrix
 coverage-report = [
-    "pytest --cov=src/hunyo_mcp_server --cov=src/capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
+    "pytest --cov=packages/hunyo-mcp-server/src/hunyo_mcp_server --cov=packages/hunyo-capture/src/hunyo_capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
 ]
 coverage-local = [
     "test-cov",
@@ -121,15 +91,15 @@ coverage-local = [
     "python -c 'print(\"📄 Open htmlcov/index.html in your browser to view detailed coverage\")'",
 ]
 
-[tool.hatch.envs.test]
-features = ["test"]
-dev-mode = true  # Install project in development mode
-# Core dependencies are automatically included via project dependencies
-# Test-specific dependencies come from features = ["test"]
-
 [tool.hatch.envs.test.scripts]
-test = "pytest {args}"
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args}"
+install-packages = [
+    "pip install -e ./packages/hunyo-mcp-server",
+    "pip install -e ./packages/hunyo-capture",
+]
+test = ["install-packages", "pytest {args}"]
+test-capture = ["install-packages", "python -m pytest packages/hunyo-capture/tests/ {args}"]
+test-mcp = ["install-packages", "python -m pytest packages/hunyo-mcp-server/tests/ {args}"]
+test-cov = ["install-packages", "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=hunyo_mcp_server --cov=hunyo_capture {args}"]
 
 # Multi-version testing is handled by GitHub Actions CI/CD matrix
 # No need for Hatch matrix since each CI job targets a specific Python version
@@ -144,8 +114,8 @@ addopts = [
     "--ignore-glob=**/fixtures/test_*.py",  # Exclude fixture files from collection
     "--import-mode=importlib"  # Modern import mode for better compatibility
 ]
-testpaths = ["test"]
-# asyncio_mode = "auto"  # Disabled - requires pytest-asyncio>=0.21.0, CI might have older version
+testpaths = ["tests"]
+asyncio_mode = "auto"  # Enabled - pytest-asyncio>=0.21.0 now available
 timeout = 30  # seconds, per test
 filterwarnings = [
     "error",
@@ -162,7 +132,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source_pkgs = ["hunyo_mcp_server", "capture"]
+source_pkgs = ["hunyo_mcp_server", "hunyo_capture"]
 branch = true
 parallel = true
 omit = [
@@ -171,18 +141,18 @@ omit = [
 
 [tool.coverage.paths]
 hunyo_mcp_server = [
-    "src/hunyo_mcp_server", 
+    "packages/hunyo-mcp-server/src/hunyo_mcp_server", 
     "*/hunyo-mcp-server/src/hunyo_mcp_server",
-    "*/hunyo-notebook-memories-mcp/src/hunyo_mcp_server",
-    "/home/runner/work/hunyo-mcp-server/hunyo-mcp-server/src/hunyo_mcp_server",
-    "/Users/*/hunyo-notebook-memories-mcp/src/hunyo_mcp_server"
+    "*/hunyo-notebook-memories-mcp/packages/hunyo-mcp-server/src/hunyo_mcp_server",
+    "/home/runner/work/hunyo-notebook-memories-mcp/hunyo-notebook-memories-mcp/packages/hunyo-mcp-server/src/hunyo_mcp_server",
+    "/Users/*/hunyo-notebook-memories-mcp/packages/hunyo-mcp-server/src/hunyo_mcp_server"
 ]
-capture = [
-    "src/capture", 
-    "*/hunyo-mcp-server/src/capture",
-    "*/hunyo-notebook-memories-mcp/src/capture", 
-    "/home/runner/work/hunyo-mcp-server/hunyo-mcp-server/src/capture",
-    "/Users/*/hunyo-notebook-memories-mcp/src/capture"
+hunyo_capture = [
+    "packages/hunyo-capture/src/hunyo_capture", 
+    "*/hunyo-capture/src/hunyo_capture",
+    "*/hunyo-notebook-memories-mcp/packages/hunyo-capture/src/hunyo_capture", 
+    "/home/runner/work/hunyo-notebook-memories-mcp/hunyo-notebook-memories-mcp/packages/hunyo-capture/src/hunyo_capture",
+    "/Users/*/hunyo-notebook-memories-mcp/packages/hunyo-capture/src/hunyo_capture"
 ]
 
 [tool.coverage.report]
@@ -276,11 +246,11 @@ banned-module-level-imports = [
 [tool.ruff.lint.per-file-ignores]
 # Tests can use magic values, assertions, relative imports, unused fixtures, subprocess calls, print statements, and marimo function naming
 # ALSO allow Unicode in tests since they may contain test data with Unicode
-"test/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607", "T201", "N807", "RUF001", "RUF002", "RUF003"]
+"tests/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607", "T201", "N807", "RUF001", "RUF002", "RUF003"]
+# Package-specific test directories
+"packages/*/tests/**/*" = ["PLR2004", "S101", "TID252", "ARG002", "S603", "S607", "T201", "N807", "RUF001", "RUF002", "RUF003"]
 # Marimo notebooks in test fixtures can use print statements and marimo function naming  
-"test/fixtures/*.py" = ["T201", "N807"]
-# WebSocket interceptor uses legitimate module-level singleton pattern
-"src/capture/websocket_interceptor.py" = ["PLW0603"]
+"tests/fixtures/*.py" = ["T201", "N807"]
 # Allow Unicode in documentation files
 "**/{README,CHANGELOG,CONTRIBUTING,ROADMAP}.md" = ["RUF001", "RUF002", "RUF003"]
 # CI files can have Unicode (we manually fixed them to be Windows-safe)
@@ -308,7 +278,7 @@ warn_redundant_casts = false
 
 # Exclude test files 
 exclude = [
-    "test/.*",
+    "tests/.*",
     ".*_test\\.py$",
 ]
 
@@ -348,8 +318,4 @@ module = [
 ]
 
 # Completely ignore problematic modules for now
-[[tool.mypy.overrides]]
-module = [
-    "capture.websocket_interceptor",
-]
-ignore_errors = true 
+# (No modules currently ignored)

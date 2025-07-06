@@ -79,3 +79,6 @@ sandbox/
 
 # temporary plan file
 DEPRECATION_PLAN.md
+
+# plan files
+PACKAGE_SEPARATION_PLAN.md

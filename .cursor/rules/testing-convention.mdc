@@ -1,14 +1,15 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 After any file update, always run:
 
 hatch run style    # Black + Ruff checks  
 hatch run typing   # MyPy type checking
 hatch run test test/test_capture/ -v  # Unit tests for capture changes
-hatch run test test/integration/ -v   # Integration tests for MCP changes
+hatch run test test/integration/ -v   # Integration tests for component interactions
+hatch run test test/e2e/ -v           # End-to-end tests for complete workflows
 
 Commands for all tests/test fixes:
 hatch run test - Run all tests

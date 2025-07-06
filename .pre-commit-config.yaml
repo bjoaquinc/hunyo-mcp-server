@@ -40,7 +40,7 @@ repos:
       # Fast test subset for commit speed
       - id: unit-tests
         name: "🧪 Unit Tests (Fast Subset)"
-        entry: hatch run test test/test_capture/ -x --tb=short
+        entry: hatch run test-capture -x --tb=short
         language: system
         pass_filenames: false
 

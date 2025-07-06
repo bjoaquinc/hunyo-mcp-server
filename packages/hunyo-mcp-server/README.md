@@ -39,60 +39,12 @@ hunyo-mcp-server --notebook my_analysis.py
 # "Which operations took the most memory?"
 ```
 
-## ��️ Architecture
-
-### Dual-Package System
-
-**Hunyo MCP Server** uses a **dual-package architecture** for optimal deployment flexibility:
-
-#### **Package 1: `hunyo-mcp-server` (pipx installable)**
-- **Purpose**: Global CLI tool for orchestration and data analysis
-- **Installation**: `pipx install hunyo-mcp-server`
-- **Dependencies**: Full MCP stack (DuckDB, OpenLineage, WebSockets)
-- **Features**: Database management, MCP tools, file watching, graceful fallback
-
-#### **Package 2: `hunyo-capture` (pip installable)**
-- **Purpose**: Lightweight DataFrame instrumentation layer
-- **Installation**: `pip install hunyo-capture` (in notebook environment)
-- **Dependencies**: Minimal (pandas only)
-- **Features**: DataFrame tracking, event generation, marimo integration
+## 🏗️ Architecture
 
 ### Data Flow
 ```
-Marimo Notebook → hunyo-capture → JSONL Events → File Watcher → 
+Marimo Notebook → Capture Layer → JSONL Events → File Watcher → 
 DuckDB Database → MCP Query Tools → LLM Analysis
-         ↑                                          ↑
-   (pip install)                            (pipx install)
-```
-
-### Environment Isolation Benefits
-
-**Production Setup (Recommended)**:
-```bash
-# Global MCP server installation
-pipx install hunyo-mcp-server
-
-# Capture layer in notebook environment  
-pip install hunyo-capture
-```
-
-**Benefits**:
-- ✅ **Clean separation**: MCP server isolated from notebook dependencies
-- ✅ **Minimal notebook overhead**: Only lightweight capture layer installed
-- ✅ **Graceful fallback**: MCP server works without capture layer
-- ✅ **Easy management**: Global server, environment-specific capture
-
-### Graceful Fallback System
-
-When capture layer is not available, the MCP server provides helpful guidance:
-
-```bash
-hunyo-mcp-server --notebook analysis.py
-# Output: 
-# [INFO] To enable notebook tracking, add this to your notebook:
-# [INFO]   # Install capture layer: pip install hunyo-capture
-# [INFO]   from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
-# [INFO]   enable_unified_tracking()
 ```
 
 ### Storage Structure
@@ -169,58 +121,18 @@ GROUP BY operation;
 ### Installation Options
 
 ```bash
-# Option 1: MCP Server Only (Recommended)
-# Install MCP server globally via pipx
-pipx install hunyo-mcp-server
-
-# Install capture layer in your notebook environment
-pip install hunyo-capture
-
-# Then in your notebook, add one line:
-# from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
-# enable_unified_tracking()
-
-# Option 2: Quick Start (Run without installing)
+# Option 1: Run directly without installation (recommended)
 pipx run hunyo-mcp-server --notebook analysis.py
-# Note: Capture layer must be installed separately in notebook environment
 
-# Option 3: All-in-One Installation (Same environment)
-pip install hunyo-mcp-server hunyo-capture
+# Option 2: Install globally
+pipx install hunyo-mcp-server
+hunyo-mcp-server --notebook analysis.py
 
-# Option 4: Development installation
+# Option 3: Development installation
 git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
 cd hunyo-notebook-memories-mcp
-hatch run install-packages
+hatch shell
 hunyo-mcp-server --notebook examples/demo.py
-```
-
-### Installation Scenarios
-
-#### **🏭 Production Setup (Recommended)**
-```bash
-# Install MCP server in isolated environment
-pipx install hunyo-mcp-server
-
-# In your notebook environment (conda, venv, etc.)
-pip install hunyo-capture
-
-# Start MCP server
-hunyo-mcp-server --notebook your_analysis.py
-```
-
-#### **🔬 Development/Testing Setup**  
-```bash
-# Install both packages in same environment
-pip install hunyo-mcp-server hunyo-capture
-hunyo-mcp-server --notebook your_analysis.py
-```
-
-#### **⚡ Graceful Fallback (MCP server only)**
-```bash
-# If capture layer not available, MCP server provides helpful instructions
-pipx install hunyo-mcp-server
-hunyo-mcp-server --notebook your_analysis.py
-# Shows: "To enable tracking, install: pip install hunyo-capture"
 ```
 
 ### Command-Line Options
@@ -314,8 +226,8 @@ The lineage tool provides complete DataFrame ancestry and transformation history
 git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
 cd hunyo-notebook-memories-mcp
 
-# Set up development environment (installs both packages)
-hatch run install-packages
+# Set up development environment
+hatch shell
 
 # Run tests
 hatch run test
@@ -328,54 +240,28 @@ hatch run typing
 hunyo-mcp-server --notebook test/fixtures/openlineage_demo_notebook.py --dev-mode
 ```
 
-### Monorepo Package Structure
+### Project Structure
 
 ```
-hunyo-notebook-memories-mcp/
-├── packages/
-│   ├── hunyo-mcp-server/              # MCP server package (pipx installable)
-│   │   ├── pyproject.toml
-│   │   ├── src/hunyo_mcp_server/
-│   │   │   ├── server.py              # CLI entry point
-│   │   │   ├── orchestrator.py        # Component coordination
-│   │   │   ├── config.py              # Environment detection and paths
-│   │   │   ├── ingestion/             # Data pipeline components
-│   │   │   │   ├── duckdb_manager.py  # Database operations
-│   │   │   │   ├── event_processor.py # Event validation and transformation
-│   │   │   │   └── file_watcher.py    # Real-time file monitoring
-│   │   │   └── tools/                 # MCP tools for LLM access
-│   │   │       ├── query_tool.py      # Direct SQL querying
-│   │   │       ├── schema_tool.py     # Database inspection
-│   │   │       └── lineage_tool.py    # DataFrame lineage analysis
-│   │   └── tests/                     # MCP server-specific tests
-│   └── hunyo-capture/                 # Capture layer package (pip installable)
-│       ├── pyproject.toml
-│       ├── src/hunyo_capture/         # Instrumentation layer
-│       │   ├── __init__.py
-│       │   ├── logger.py              # Logging utilities
-│       │   └── unified_marimo_interceptor.py  # DataFrame capture
-│       └── tests/                     # Capture layer-specific tests
-├── tests/integration/                 # Cross-package integration tests
-├── schemas/                           # Shared database schemas
-├── .github/workflows/
-│   ├── test.yml                       # Per-package testing
-│   └── test-integration.yml           # Package separation testing
-└── pyproject.toml                     # Workspace configuration
+src/
+├── hunyo_mcp_server/           # Main MCP server package
+│   ├── server.py              # CLI entry point and FastMCP setup
+│   ├── orchestrator.py        # Component coordination
+│   ├── config.py              # Environment detection and paths
+│   ├── ingestion/             # Data pipeline components
+│   │   ├── duckdb_manager.py  # Database operations
+│   │   ├── event_processor.py # Event validation and transformation
+│   │   └── file_watcher.py    # Real-time file monitoring
+│   └── tools/                 # MCP tools for LLM access
+│       ├── query_tool.py      # Direct SQL querying
+│       ├── schema_tool.py     # Database inspection
+│       └── lineage_tool.py    # DataFrame lineage analysis
+└── capture/                   # Instrumentation layer
+    ├── live_lineage_interceptor.py    # DataFrame operation capture
+    ├── lightweight_runtime_tracker.py # Execution metrics tracking
+    ├── native_hooks_interceptor.py    # Advanced hooking system
+    └── websocket_interceptor.py       # Marimo integration
 ```
-
-### Package Independence
-
-**MCP Server (`hunyo-mcp-server`)**:
-- Zero dependencies on capture package
-- Graceful fallback when capture not available
-- Standalone CLI tool for data analysis
-- Installable via pipx for global access
-
-**Capture Layer (`hunyo-capture`)**:
-- Lightweight DataFrame instrumentation
-- No dependencies on MCP server
-- Installable in any notebook environment
-- Works with existing marimo workflows
 
 ## 🤝 Contributing
 
@@ -391,55 +277,14 @@ hatch run test  # Run test suite
 
 ## 📝 Requirements
 
-### Core Dependencies
-
-**MCP Server (`hunyo-mcp-server`)**:
-```toml
-# Runtime requirements
-mcp >= 1.0.0              # MCP protocol implementation
-click >= 8.0.0             # CLI framework
-duckdb >= 0.9.0            # Database engine
-pandas >= 2.0.0            # Data processing
-pydantic >= 2.0.0          # Data validation
-watchdog >= 3.0.0          # File monitoring
-websockets >= 11.0.0       # WebSocket support
-openlineage-python >= 0.28.0  # Data lineage specification
 ```
-
-**Capture Layer (`hunyo-capture`)**:
-```toml
-# Lightweight requirements
-pandas >= 2.0.0            # DataFrame operations (only dependency)
+Python >= 3.10
+mcp >= 1.0.0
+click >= 8.0.0
+duckdb >= 0.9.0
+pandas >= 2.0.0
+marimo >= 0.8.0
 ```
-
-### Optional Dependencies
-
-**Development & Testing**:
-```toml
-pytest >= 7.0.0           # Testing framework
-pytest-cov >= 4.0.0       # Coverage reporting
-pytest-timeout >= 2.1.0   # Test timeout management
-marimo >= 0.8.0            # Marimo notebook support
-```
-
-**Development Tools**:
-```toml
-black >= 23.0.0            # Code formatting
-ruff >= 0.1.0              # Fast linting
-mypy >= 1.0.0              # Type checking
-```
-
-### Installation Dependencies
-
-**Production Setup**:
-- `pipx` for global MCP server installation
-- `pip` for capture layer in notebook environments
-- Python 3.10+ with virtual environment support
-
-**Development Setup**:
-- `hatch` for workspace management
-- `git` for version control
-- IDE with Python support (VS Code, PyCharm, etc.)
 
 ## 🔗 Links
 

@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hunyo-mcp-server"
+dynamic = ["version"]
+description = "MCP server for notebook memory capture and lineage tracking"
+authors = [{name = "Your Name", email = "your.email@example.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.0.0",
+    "click>=8.0.0", 
+    "duckdb>=0.9.0",
+    "pandas>=2.0.0",  # Keep for MCP tools
+    "pydantic>=2.0.0",
+    "watchdog>=3.0.0",
+    "websockets>=11.0.0",
+    "openlineage-python>=0.28.0",
+]
+
+[project.scripts]
+hunyo-mcp-server = "hunyo_mcp_server.server:main"
+
+[project.optional-dependencies]
+capture = ["hunyo-capture>=0.1.0"]  # Optional dependency
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0", 
+    "pytest-timeout>=2.1.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
+    "marimo>=0.8.0",  # For integration tests
+]
+
+[tool.hatch.version]
+path = "src/hunyo_mcp_server/__init__.py"
+
+[tool.hatch.envs.test]
+dependencies = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-timeout>=2.1.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
+    "marimo>=0.8.0",  # For integration tests
+]
+
+[tool.hatch.envs.test.scripts]
+test = "pytest {args}"
+test-cov = "pytest --cov=src/hunyo_mcp_server --cov-report=term-missing {args}"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hunyo_mcp_server"]  # Remove capture 

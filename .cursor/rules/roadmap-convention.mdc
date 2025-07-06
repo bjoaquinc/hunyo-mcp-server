@@ -1,7 +1,7 @@
 ---
 description: 
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 Test-driven roadmap updates with exact formatting compliance → ROADMAP.md
 

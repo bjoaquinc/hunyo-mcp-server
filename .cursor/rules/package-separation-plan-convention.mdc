@@ -1,0 +1,99 @@
+---
+description: 
+globs: *PLAN.md
+alwaysApply: false
+---
+# Package Separation Plan Implementation Convention
+
+## Implementation Progress Tracking
+
+### 1. DO NOT UPDATE THE PLAN CONTENT
+- **NEVER** modify the original plan text, phases, or implementation details
+- **ONLY** add completion tags to show progress
+- Keep the original plan intact for reference
+
+### 2. Completion Tagging Format
+When a plan item is completed, add a [DONE] tag:
+
+```markdown
+#### 1.1 Create Package Directories [DONE]
+#### 2.3 Update Import Paths [DONE]
+#### 3.2 Configure Separate CI/CD [DONE]
+```
+
+### 3. Implementation Deviations and Nuances
+If implementation differs from the plan or requires additional steps not documented:
+
+**ADD TO NOTES SECTION** at the bottom of the plan:
+
+```markdown
+NOTES:
+
+1.1 Notes: 
+- Had to create additional subdirectory `packages/hunyo-capture/tests/unit/` not mentioned in plan
+- Required updating `.gitignore` to exclude `packages/*/dist/` directories
+- Discovered dependency conflict with `pandas>=2.0` requiring version constraint update
+
+2.3 Notes:
+- Import path updates required 47 files instead of planned 15+ files
+- Added fallback imports for backward compatibility during transition
+- Updated CI/CD to use `hatch build` instead of `python -m build` for consistency
+```
+
+### 4. Notes Management Rules
+- **ONLY ADD NEW NOTES** - never modify existing notes
+- **APPEND CHRONOLOGICALLY** - newer notes go after older ones
+- **USE DESCRIPTIVE TITLES** - make deviations easy to understand
+- **INCLUDE RATIONALE** - explain why deviation was necessary
+
+### 5. Example Implementation Pattern
+
+```markdown
+## Phase 1: Package Separation (2-3 days)
+
+#### 1.1 Create Package Directories [DONE]
+- Create `packages/hunyo-mcp-server/` directory
+- Create `packages/hunyo-capture/` directory
+- Set up basic package structure
+
+#### 1.2 Move Core Files [DONE]
+- Move `src/hunyo_mcp_server/` to `packages/hunyo-mcp-server/src/hunyo_mcp_server/`
+- Move `src/capture/` to `packages/hunyo-capture/src/hunyo_capture/`
+- Update package initialization files
+
+#### 1.3 Create Package Configuration
+- Create separate `pyproject.toml` for each package
+- Configure build system and dependencies
+- Set up package metadata
+
+## Phase 2: Import Path Updates (1 day)
+
+#### 2.1 Update MCP Server Imports [DONE]
+- Change all `from capture.*` imports to `from hunyo_capture.*`
+- Update orchestrator.py import paths
+- Test graceful fallback logic
+
+...
+
+## 🎯 Timeline Summary
+...
+
+## 🚨 Critical Dependencies
+...
+
+NOTES:
+
+...previous notes
+
+2.1 Notes:
+- Import path updates required 47 files instead of planned 15+ files
+- Added fallback imports for backward compatibility during transition
+- Updated CI/CD to use `hatch build` instead of `python -m build` for consistency
+```
+
+### 6. Validation Steps
+After any plan implementation step:
+1. Add [DONE] tag to completed item
+2. Add any deviation notes to NOTES section
+
+This convention ensures clean progress tracking while preserving implementation history and rationale.
