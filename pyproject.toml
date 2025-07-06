@@ -37,6 +37,7 @@ dependencies = [
     "pytest-timeout>=2.1.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+    "mypy>=1.0.0",
 ]
 post-install-commands = [
     "pip install -e ./packages/hunyo-mcp-server",
