@@ -35,6 +35,8 @@ dependencies = [
     "pytest-asyncio>=0.21.0",  # For async test functions
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.1.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
 ]
 post-install-commands = [
     "pip install -e ./packages/hunyo-mcp-server",
