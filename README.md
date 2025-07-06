@@ -317,8 +317,9 @@ cd hunyo-notebook-memories-mcp
 # Set up development environment (installs both packages)
 hatch run install-packages
 
-# Run tests
-hatch run test
+# Run tests (both commands work - they use the test environment)
+hatch run test          # Shorter command (delegates to test environment)
+hatch run test:pytest   # Explicit command (direct test environment)
 
 # Check code quality
 hatch run style
@@ -386,7 +387,7 @@ We welcome contributions! See [DEVELOPMENT.md](DEVELOPMENT.md) for detailed deve
 git clone https://github.com/hunyo-dev/hunyo-notebook-memories-mcp
 cd hunyo-notebook-memories-mcp
 hatch shell
-hatch run test  # Run test suite
+hatch run test  # Run test suite (or: hatch run test:pytest)
 ```
 
 ## 📝 Requirements

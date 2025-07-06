@@ -1,29 +1,32 @@
 # pyproject.toml (at repo root - for development and integration testing)
-# [build-system]
-# requires = ["hatchling"]
-# build-backend = "hatchling.build"
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-# [project]
-# name = "hunyo-workspace"
-# dynamic = ["version"]
-# description = "Development workspace for hunyo packages"
-# readme = "README.md"
-# authors = [{name = "Your Name", email = "your.email@example.com"}]
-# license = {text = "MIT"}
-# requires-python = ">=3.10"
+[project]
+name = "hunyo-workspace"
+dynamic = ["version"]
+description = "Development workspace for hunyo packages"
+readme = "README.md"
+authors = [{name = "Hunyo Team", email = "fatima@hunyo.com"}]
+license = {text = "MIT"}
+requires-python = ">=3.10"
 
 # Development dependencies for workspace
-# [project.optional-dependencies]
-# dev = [
-#     "pytest>=7.0.0",
-#     "pytest-asyncio>=0.21.0",  # For async test functions
-#     "black>=23.0.0",
-#     "ruff>=0.1.0",
-#     "mypy>=1.0.0",
-# ]
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",  # For async test functions
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+]
 
-# [tool.hatch.version]
-# path = "packages/hunyo-mcp-server/src/hunyo_mcp_server/__init__.py"  # Use MCP server version as workspace version
+[tool.hatch.version]
+path = "packages/hunyo-mcp-server/src/hunyo_mcp_server/__init__.py"  # Use MCP server version as workspace version
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
 
 # Workspace configuration - install packages locally  
 [tool.hatch.envs.default]
@@ -33,6 +36,10 @@ dependencies = [
     "pytest-cov>=4.0.0",
     "pytest-timeout>=2.1.0",
 ]
+post-install-commands = [
+    "pip install -e ./packages/hunyo-mcp-server",
+    "pip install -e ./packages/hunyo-capture",
+]
 
 [tool.hatch.envs.test]
 dependencies = [
@@ -41,6 +48,14 @@ dependencies = [
     "pytest-cov>=4.0.0", 
     "pytest-timeout>=2.1.0",
     "marimo>=0.8.0",
+    "pandas>=1.5.0",  # Required for DataFrame integration tests
+    "playwright>=1.40.0",  # Required for browser automation tests
+    "jsonschema>=4.0.0",  # Required for schema validation in integration tests
+    "aiohttp>=3.8.0",  # Required for HTTP requests to marimo server in tests
+]
+post-install-commands = [
+    "pip install -e ./packages/hunyo-mcp-server",
+    "pip install -e ./packages/hunyo-capture",
 ]
 
 # Integration testing from repo root - configuration in main pytest section below
@@ -50,19 +65,12 @@ dependencies = [
 
 # [project.scripts]
 
-# [tool.hatch.build.targets.wheel]
-# # Don't build wheel for workspace - only for development
-# exclude = ["*"]
-
 [tool.hatch.envs.default.scripts]
-install-packages = [
-    "pip install -e ./packages/hunyo-mcp-server",
-    "pip install -e ./packages/hunyo-capture",
-]
-test = ["install-packages", "pytest {args:test}"]
-test-capture = ["install-packages", "python -m pytest packages/hunyo-capture/tests/ {args}"]
-test-mcp = ["install-packages", "python -m pytest packages/hunyo-mcp-server/tests/ {args}"]
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=packages/hunyo-mcp-server/src/hunyo_mcp_server --cov=packages/hunyo-capture/src/hunyo_capture {args:test}"
+# Main test commands delegate to test environment (which has marimo and all dependencies)
+test = "hatch run test:test {args}"
+test-capture = "hatch run test:test-capture {args}"
+test-mcp = "hatch run test:test-mcp {args}"
+test-cov = "hatch run test:test-cov {args}"
 typing = "mypy --install-types --non-interactive {args:packages/hunyo-mcp-server/src packages/hunyo-capture/src}"
 style = [
     "ruff check {args:.}",
@@ -80,26 +88,23 @@ inspect-ui = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebook te
 inspect-verbose = "npx @modelcontextprotocol/inspector hunyo-mcp-server --notebook test/fixtures/test_notebook.py --verbose {args:}"
 # Multi-version testing scripts
 # Multi-Python testing now handled by GitHub Actions CI
-# Run tests locally with: hatch run test
+# Run tests locally with: hatch run test (delegates to test env) or hatch run test:pytest (direct)
 # See .github/workflows/test.yml for comprehensive CI matrix
+
+[tool.hatch.envs.test.scripts]
+# Use explicit pytest invocation to ensure correct environment
+test = "python -m pytest {args}"
+test-capture = "python -m pytest packages/hunyo-capture/tests/ {args}"
+test-mcp = "python -m pytest packages/hunyo-mcp-server/tests/ {args}"
+test-cov = "python -m pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=hunyo_mcp_server --cov=hunyo_capture {args}"
 coverage-report = [
-    "pytest --cov=packages/hunyo-mcp-server/src/hunyo_mcp_server --cov=packages/hunyo-capture/src/hunyo_capture --cov-report=term-missing --cov-report=html --cov-report=xml {args:test}",
+    "python -m pytest --cov=packages/hunyo-mcp-server/src/hunyo_mcp_server --cov=packages/hunyo-capture/src/hunyo_capture --cov-report=term-missing --cov-report=html --cov-report=xml {args}",
 ]
 coverage-local = [
     "test-cov",
     "python -c 'print(\"\\n📊 Coverage reports generated in htmlcov/ directory\")'",
     "python -c 'print(\"📄 Open htmlcov/index.html in your browser to view detailed coverage\")'",
 ]
-
-[tool.hatch.envs.test.scripts]
-install-packages = [
-    "pip install -e ./packages/hunyo-mcp-server",
-    "pip install -e ./packages/hunyo-capture",
-]
-test = ["install-packages", "pytest {args}"]
-test-capture = ["install-packages", "python -m pytest packages/hunyo-capture/tests/ {args}"]
-test-mcp = ["install-packages", "python -m pytest packages/hunyo-mcp-server/tests/ {args}"]
-test-cov = ["install-packages", "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=hunyo_mcp_server --cov=hunyo_capture {args}"]
 
 # Multi-version testing is handled by GitHub Actions CI/CD matrix
 # No need for Hatch matrix since each CI job targets a specific Python version
@@ -112,9 +117,14 @@ addopts = [
     "-ra", "-q", "-v", 
     "--strict-markers", "--strict-config",
     "--ignore-glob=**/fixtures/test_*.py",  # Exclude fixture files from collection
-    "--import-mode=importlib"  # Modern import mode for better compatibility
+    "--import-mode=prepend"  # Use prepend mode for better package compatibility
 ]
 testpaths = ["tests"]
+pythonpath = [
+    ".",
+    "packages/hunyo-mcp-server/src",
+    "packages/hunyo-capture/src",
+]
 asyncio_mode = "auto"  # Enabled - pytest-asyncio>=0.21.0 now available
 timeout = 30  # seconds, per test
 filterwarnings = [

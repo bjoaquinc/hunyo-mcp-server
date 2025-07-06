@@ -55,15 +55,25 @@ class TestUnifiedMarimoInterceptor:
 
     def test_interceptor_initialization_without_notebook_path(self):
         """Test that interceptor uses defaults when no notebook path provided."""
-        interceptor = UnifiedMarimoInterceptor()
+        try:
+            interceptor = UnifiedMarimoInterceptor()
 
-        assert interceptor.notebook_path is None
-        assert interceptor.runtime_file == Path("marimo_runtime_events.jsonl")
-        assert interceptor.lineage_file == Path("marimo_lineage_events.jsonl")
+            assert interceptor.notebook_path is None
+            assert interceptor.runtime_file == Path("marimo_runtime_events.jsonl")
+            assert interceptor.lineage_file == Path("marimo_lineage_events.jsonl")
+        finally:
+            # Clean up any files that may have been created during test
+            for file_path in [
+                "marimo_runtime_events.jsonl",
+                "marimo_lineage_events.jsonl",
+            ]:
+                try:
+                    Path(file_path).unlink(missing_ok=True)
+                except (OSError, FileNotFoundError):
+                    pass  # Ignore cleanup errors for missing or locked files
 
     def test_install_marimo_hooks(self):
         """Test that marimo hooks are installed correctly."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with (
             patch("marimo._runtime.runner.hooks.PRE_EXECUTION_HOOKS", []),
@@ -199,7 +209,6 @@ class TestUnifiedMarimoInterceptor:
 
     def test_uninstall_functionality(self):
         """Test that interceptor can be uninstalled properly."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with (
             patch("marimo._runtime.runner.hooks.PRE_EXECUTION_HOOKS", []),
@@ -441,8 +450,15 @@ class TestUnifiedMarimoInterceptor:
         ) as lineage_file:
             lineage_file_path = lineage_file.name
 
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as runtime_file:
+            runtime_file_path = runtime_file.name
+
         interceptor = UnifiedMarimoInterceptor(
-            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+            notebook_path="test_notebook.py",
+            lineage_file=lineage_file_path,
+            runtime_file=runtime_file_path,
         )
 
         # Setup execution context
@@ -492,6 +508,7 @@ class TestUnifiedMarimoInterceptor:
 
         # Cleanup
         os.unlink(lineage_file_path)
+        os.unlink(runtime_file_path)
 
     def test_dataframe_abortion_capture(self):
         """Test ABORT event capture for DataFrame operations"""
@@ -510,8 +527,15 @@ class TestUnifiedMarimoInterceptor:
         ) as lineage_file:
             lineage_file_path = lineage_file.name
 
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as runtime_file:
+            runtime_file_path = runtime_file.name
+
         interceptor = UnifiedMarimoInterceptor(
-            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+            notebook_path="test_notebook.py",
+            lineage_file=lineage_file_path,
+            runtime_file=runtime_file_path,
         )
 
         # Setup execution context
@@ -569,53 +593,59 @@ class TestUnifiedMarimoInterceptor:
 
         # Cleanup
         os.unlink(lineage_file_path)
+        os.unlink(runtime_file_path)
 
     def test_create_openlineage_event_with_error_info(self):
         """Test OpenLineage event creation with error information"""
-        interceptor = UnifiedMarimoInterceptor(notebook_path="test_notebook.py")
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            interceptor = UnifiedMarimoInterceptor(
+                notebook_path=str(Path(tmp_dir) / "test_notebook.py"),
+                runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+            )
 
-        # Test FAIL event with error info
-        error_info = {
-            "error_message": "Test error message",
-            "stack_trace": "Test stack trace",
-            "error_type": "ValueError",
-        }
+            # Test FAIL event with error info
+            error_info = {
+                "error_message": "Test error message",
+                "stack_trace": "Test stack trace",
+                "error_type": "ValueError",
+            }
 
-        fail_event = interceptor._create_openlineage_event(
-            event_type="FAIL",
-            job_name="test_job",
-            error_info=error_info,
-            test_field="test_value",
-        )
+            fail_event = interceptor._create_openlineage_event(
+                event_type="FAIL",
+                job_name="test_job",
+                error_info=error_info,
+                test_field="test_value",
+            )
 
-        # Verify base event structure
-        assert fail_event["eventType"] == "FAIL"
-        assert fail_event["job"]["name"] == "test_job"
-        assert fail_event["job"]["facets"]["test_field"] == "test_value"
+            # Verify base event structure
+            assert fail_event["eventType"] == "FAIL"
+            assert fail_event["job"]["name"] == "test_job"
+            assert fail_event["job"]["facets"]["test_field"] == "test_value"
 
-        # Verify error facet
-        assert "errorMessage" in fail_event["run"]["facets"]
-        error_facet = fail_event["run"]["facets"]["errorMessage"]
-        assert error_facet["message"] == "Test error message"
-        assert error_facet["stackTrace"] == "Test stack trace"
-        assert error_facet["programmingLanguage"] == "python"
+            # Verify error facet
+            assert "errorMessage" in fail_event["run"]["facets"]
+            error_facet = fail_event["run"]["facets"]["errorMessage"]
+            assert error_facet["message"] == "Test error message"
+            assert error_facet["stackTrace"] == "Test stack trace"
+            assert error_facet["programmingLanguage"] == "python"
 
-        # Test ABORT event with error info
-        abort_event = interceptor._create_openlineage_event(
-            event_type="ABORT", job_name="test_job", error_info=error_info
-        )
+            # Test ABORT event with error info
+            abort_event = interceptor._create_openlineage_event(
+                event_type="ABORT", job_name="test_job", error_info=error_info
+            )
 
-        # Verify ABORT event has error facet
-        assert abort_event["eventType"] == "ABORT"
-        assert "errorMessage" in abort_event["run"]["facets"]
+            # Verify ABORT event has error facet
+            assert abort_event["eventType"] == "ABORT"
+            assert "errorMessage" in abort_event["run"]["facets"]
 
-        # Test event without error info (should not have error facet)
-        normal_event = interceptor._create_openlineage_event(
-            event_type="START", job_name="test_job"
-        )
+            # Test event without error info (should not have error facet)
+            normal_event = interceptor._create_openlineage_event(
+                event_type="START", job_name="test_job"
+            )
 
-        assert normal_event["eventType"] == "START"
-        assert "errorMessage" not in normal_event["run"]["facets"]
+            assert normal_event["eventType"] == "START"
+            assert "errorMessage" not in normal_event["run"]["facets"]
 
     def test_keyboard_interrupt_handling_dataframe_creation(self):
         """Test KeyboardInterrupt handling in DataFrame creation"""
@@ -634,8 +664,15 @@ class TestUnifiedMarimoInterceptor:
         ) as lineage_file:
             lineage_file_path = lineage_file.name
 
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as runtime_file:
+            runtime_file_path = runtime_file.name
+
         interceptor = UnifiedMarimoInterceptor(
-            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+            notebook_path="test_notebook.py",
+            lineage_file=lineage_file_path,
+            runtime_file=runtime_file_path,
         )
 
         # Setup execution context
@@ -672,6 +709,7 @@ class TestUnifiedMarimoInterceptor:
 
         # Cleanup
         os.unlink(lineage_file_path)
+        os.unlink(runtime_file_path)
 
     def test_cell_execution_error_lineage_events(self):
         """Test FAIL/ABORT lineage events for cell execution errors"""
@@ -686,8 +724,15 @@ class TestUnifiedMarimoInterceptor:
         ) as lineage_file:
             lineage_file_path = lineage_file.name
 
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as runtime_file:
+            runtime_file_path = runtime_file.name
+
         interceptor = UnifiedMarimoInterceptor(
-            notebook_path="test_notebook.py", lineage_file=lineage_file_path
+            notebook_path="test_notebook.py",
+            lineage_file=lineage_file_path,
+            runtime_file=runtime_file_path,
         )
 
         # Setup execution context
@@ -733,8 +778,15 @@ class TestUnifiedMarimoInterceptor:
             abort_lineage_file_path = abort_lineage_file.name
 
         # Create new interceptor for ABORT test
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".jsonl", delete=False
+        ) as abort_runtime_file:
+            abort_runtime_file_path = abort_runtime_file.name
+
         abort_interceptor = UnifiedMarimoInterceptor(
-            notebook_path="test_notebook.py", lineage_file=abort_lineage_file_path
+            notebook_path="test_notebook.py",
+            lineage_file=abort_lineage_file_path,
+            runtime_file=abort_runtime_file_path,
         )
         abort_interceptor._execution_contexts["test_cell_4"] = execution_context
 
@@ -763,9 +815,11 @@ class TestUnifiedMarimoInterceptor:
 
         # Cleanup ABORT test file
         os.unlink(abort_lineage_file_path)
+        os.unlink(abort_runtime_file_path)
 
         # Cleanup
         os.unlink(lineage_file_path)
+        os.unlink(runtime_file_path)
 
 
 class TestUnifiedInterceptorGlobalFunctions:
@@ -773,17 +827,22 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_enable_unified_tracking(self):
         """Test enable_unified_tracking function."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             notebook_path = str(Path(tmp_dir) / "test.py")
+            runtime_file = str(Path(tmp_dir) / "runtime.jsonl")
+            lineage_file = str(Path(tmp_dir) / "lineage.jsonl")
 
             # Ensure no interceptor is active
             disable_unified_tracking()
             assert not is_unified_tracking_active()
 
-            # Enable tracking
-            interceptor = enable_unified_tracking(notebook_path=notebook_path)
+            # Enable tracking with explicit file paths
+            interceptor = enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
 
             assert interceptor is not None
             assert is_unified_tracking_active()
@@ -794,13 +853,18 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_disable_unified_tracking(self):
         """Test disable_unified_tracking function."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             notebook_path = str(Path(tmp_dir) / "test.py")
+            runtime_file = str(Path(tmp_dir) / "runtime.jsonl")
+            lineage_file = str(Path(tmp_dir) / "lineage.jsonl")
 
             # Enable tracking first
-            _interceptor = enable_unified_tracking(notebook_path=notebook_path)
+            _interceptor = enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
             assert is_unified_tracking_active()
 
             # Disable tracking
@@ -810,16 +874,21 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_get_unified_interceptor(self):
         """Test get_unified_interceptor function."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             notebook_path = str(Path(tmp_dir) / "test.py")
+            runtime_file = str(Path(tmp_dir) / "runtime.jsonl")
+            lineage_file = str(Path(tmp_dir) / "lineage.jsonl")
 
             # No interceptor initially
             assert get_unified_interceptor() is None
 
             # Enable tracking
-            interceptor = enable_unified_tracking(notebook_path=notebook_path)
+            interceptor = enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
             assert get_unified_interceptor() == interceptor
 
             # Clean up
@@ -827,7 +896,6 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_is_unified_tracking_active(self):
         """Test is_unified_tracking_active function."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         # Start with no tracking
         disable_unified_tracking()
@@ -836,7 +904,14 @@ class TestUnifiedInterceptorGlobalFunctions:
         # Enable tracking
         with tempfile.TemporaryDirectory() as tmp_dir:
             notebook_path = str(Path(tmp_dir) / "test.py")
-            enable_unified_tracking(notebook_path=notebook_path)
+            runtime_file = str(Path(tmp_dir) / "runtime.jsonl")
+            lineage_file = str(Path(tmp_dir) / "lineage.jsonl")
+
+            enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
             assert is_unified_tracking_active()
 
             # Clean up
@@ -845,16 +920,25 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_enable_unified_tracking_already_active(self):
         """Test that enabling tracking when already active returns existing interceptor."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             notebook_path = str(Path(tmp_dir) / "test.py")
+            runtime_file = str(Path(tmp_dir) / "runtime.jsonl")
+            lineage_file = str(Path(tmp_dir) / "lineage.jsonl")
 
             # Enable tracking
-            interceptor1 = enable_unified_tracking(notebook_path=notebook_path)
+            interceptor1 = enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
 
             # Try to enable again
-            interceptor2 = enable_unified_tracking(notebook_path=notebook_path)
+            interceptor2 = enable_unified_tracking(
+                notebook_path=notebook_path,
+                runtime_file=runtime_file,
+                lineage_file=lineage_file,
+            )
 
             # Should return the same interceptor
             assert interceptor1 == interceptor2
@@ -864,7 +948,6 @@ class TestUnifiedInterceptorGlobalFunctions:
 
     def test_multiple_disable_calls(self):
         """Test that multiple disable calls don't cause errors."""
-        pytest.importorskip("marimo", reason="marimo not available in test environment")
 
         disable_unified_tracking()
         disable_unified_tracking()  # Should not raise error

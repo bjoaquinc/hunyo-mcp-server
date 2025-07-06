@@ -1,573 +1,447 @@
-# Development Guide
+# Contributing Guide
 
-This guide explains how to set up the **Hunyo MCP Server** project for development using modern Python tooling with **hatch-only architecture**.
+We welcome all kinds of contributions to the **Hunyo MCP Server** project. _You don't need to be an expert in MCP protocol or marimo development to help out._
 
-## 🚀 Quick Start
+## Checklist
 
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd hunyo-notebook-memories-mcp
+Contributions are made through pull requests. Before sending a pull request, make sure to do the following:
 
-# 2. Enter development environment 
-hatch shell
+- [Lint, typecheck, and format](#lint-typecheck-format) your code
+- [Write tests](#tests) for your changes
+- [Run tests](#tests) and check that they pass (all 107 tests should pass)
+- Test [marimo integration](#marimo-integration) if you modified capture functionality
+- Verify [package separation](#package-structure) works correctly
 
-# 3. You're ready to develop!
-```
+_Please reach out to the maintainers before starting work on a large contribution._ Get in touch through GitHub issues.
 
-That's it! Our modern **hatch-only** setup automatically reads `pyproject.toml` and sets up everything you need with perfect CI/local consistency.
+## Setup
 
-## 📋 Prerequisites
+Install [hatch](https://hatch.pypa.io) to manage your development environment. This project uses a **hatch-only architecture** with separated packages for optimal development experience.
 
-- **Python 3.8+** (3.11+ recommended)
+### Prerequisites
+
+- **Python 3.10+** (3.11+ recommended)
 - **Hatch** - Modern Python project manager
 - **Git** - Version control
 
-### Installing Hatch
+### Installation
 
 ```bash
-# macOS (Homebrew)
-brew install hatch
-
-# pip (any platform)
+# Install hatch
 pip install hatch
+# or: pipx install hatch
+# or: brew install hatch
 
-# pipx (recommended)
-pipx install hatch
-```
-
-## 🏗️ Project Structure
-
-```
-hunyo-notebook-memories-mcp/
-├── src/hunyo_mcp_server/          # Main package source
-├── test/                          # Test files
-├── schemas/                       # Database schemas and JSON schemas
-├── pyproject.toml                 # Project configuration (deps, tools, metadata)
-├── ROADMAP.md                     # Project roadmap and status
-└── DEVELOPMENT.md                 # This file
-```
-
-## 🔧 Development Environment Setup
-
-### 1. Enter Development Shell
-
-```bash
-# Automatically creates venv and installs all dependencies
+# Clone and enter development environment
+git clone <repository-url>
+cd hunyo-notebook-memories-mcp
 hatch shell
 ```
 
-**What this does:**
-- ✅ Creates isolated virtual environment
-- ✅ Installs runtime dependencies from `pyproject.toml`
-- ✅ Installs development dependencies (`[dev]` extras)
-- ✅ Installs the package in editable mode
-- ✅ Activates the environment
-
-### 2. Verify Installation
-
-**✅ Quick Verification Checklist:**
+### Quick Verification
 
 ```bash
-# 1. Test basic package import
-hatch run python -c "import hunyo_mcp_server; print('✅ Package imported successfully')"
-
-# 2. Test capture layer (main functionality) - UPDATED to use unified system
-hatch run python -c "from capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Unified capture layer working')"
-
-# 3. Run test suite (most important verification)
-hatch run test
-
-# 4. Test code quality tools
-hatch run style
-
-# 5. (Optional) Fix code style issues 
-hatch run fmt
+# Test basic functionality (should all pass)
+hatch run test:python -c "import hunyo_capture; import hunyo_mcp_server; print('✅ Packages imported')"
+hatch run test:python -c "from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Capture system working')"
+hatch run test  # Should pass all 107 tests
 ```
 
-**Expected Results:**
-- ✅ **Package import**: Should work
-- ✅ **Capture layer**: Should work (with verbose output)  
-- ✅ **Test suite**: All 70 tests should pass
-- ✅ **Code style**: 405 style issues remaining (88.4% improvement from ~3500!)
+## Package Structure
 
-**💡 Style Status**: 
-- ✅ **3,095 issues automatically fixed** with `hatch run fmt` and manual cleanup
-- ⚠️ **405 remaining issues** need manual attention (mostly test files and print statements)
-- 🎯 **Safe to develop** - all critical style issues resolved
+This project uses separated packages for modularity:
 
-**⚠️ Expected to fail (not implemented yet):**
-- ❌ `hunyo-mcp-server --help` (CLI not implemented)
-- ❌ `import hunyo_mcp_server.tools` (MCP tools not implemented)
-
-### 3. Getting Started Summary
-
-**🎉 You're ready to develop when:**
-- ✅ All 70 tests pass
-- ✅ Capture layer imports without errors  
-- ✅ Code quality checks pass
-- ✅ You can create/modify test files and run them
-
-**🔨 What you can work on:**
-- ✅ **Capture system improvements** (`src/capture/`)
-- ✅ **Database schemas** (`schemas/`)
-- ✅ **Configuration system** (`src/hunyo_mcp_server/config.py`)
-- ✅ **Test additions** (`test/`)
-- 🚧 **MCP server implementation** (`src/hunyo_mcp_server/server.py` - missing)
-- 🚧 **Database ingestion** (`src/hunyo_mcp_server/ingestion/` - missing)
-
-**🎯 Quick Development Workflow:**
-```bash
-# 1. Make changes to code
-# 2. Run tests to verify nothing broke
-hatch run test
-
-# 3. Check code quality
-hatch run style
-
-# 4. Run specific tests for your changes
-hatch run test test/test_capture/test_your_module.py
+```
+hunyo-notebook-memories-mcp/
+├── packages/
+│   ├── hunyo-capture/              # Data capture system
+│   │   ├── src/hunyo_capture/      # Capture source code
+│   │   ├── tests/                  # Capture tests (24 tests)
+│   │   └── pyproject.toml          # Capture package config
+│   └── hunyo-mcp-server/           # MCP server implementation
+│       ├── src/hunyo_mcp_server/   # Server source code
+│       ├── tests/                  # Server tests (60 tests)
+│       └── pyproject.toml          # Server package config
+├── tests/                          # Integration tests (23 tests)
+├── schemas/                        # Database and JSON schemas
+└── pyproject.toml                  # Workspace configuration
 ```
 
-## 🏗️ Modern CI/CD Architecture
+## `hatch` commands
 
-This project uses a **streamlined hatch-only approach** that eliminates common CI/CD problems:
+> [!NOTE]  
+> All commands use the test environment which includes marimo and all dependencies
 
-### ✅ **What We Fixed**
-- **Eliminated tox conflicts** - No more dual environment management 
-- **Fixed test isolation** - Tests use temporary directories, not polluting development
-- **Resolved dependency timing** - All dependencies available during pytest collection
-- **Cross-platform compatibility** - Works on Linux, macOS, Windows
-- **Simplified CI workflow** - Single tool (hatch) for consistency
+| Command                    | Category    | Description                                              |
+| -------------------------- | ----------- | -------------------------------------------------------- |
+| `hatch run test`          | Test        | 🧪 Run all tests (107 total: 24+60+23)                  |
+| `hatch run test:test-capture` | Test    | 🧪 Run capture package tests (24 tests)                 |
+| `hatch run test:test-mcp` | Test        | 🧪 Run MCP server tests (60 tests)                      |
+| `hatch run test tests/integration/` | Test | 🧪 Run integration tests (23 tests)             |
+| `hatch run test:test-cov` | Test        | 🧪 Run tests with coverage reporting                    |
+| `hatch run style`         | Lint        | 🔍 Check code style (Black + Ruff)                      |
+| `hatch run fmt`           | Format      | 🔧 Format code and fix auto-fixable issues              |
+| `hatch run typing`        | Lint        | 🔍 Type checking with MyPy                              |
+| `hatch env prune`         | Setup       | 🗑️ Remove unused environments                            |
+| `hatch env show`          | Setup       | 📋 Show environment information                          |
+| `hatch shell`             | Setup       | 🐚 Enter development shell                               |
 
-### 🚀 **CI Pipeline Features**
-- **Multi-Python matrix** (3.10, 3.11, 3.12, 3.13) on Ubuntu, macOS, Windows
-- **Comprehensive testing** - Unit, integration, style, typing checks
-- **Automated dependency management** - Hatch handles everything
-- **Performance optimized** - Cached dependencies, parallel execution
-- **Zero configuration drift** - Local environment matches CI exactly
+## Lint, Typecheck, Format
 
-### 📋 **Development = CI**
-Your local commands work identically in CI:
-```bash
-hatch run test      # Same command used in CI
-hatch run style     # Same style checks as CI  
-hatch run typing    # Same type checking as CI
-```
-
-## 🧪 Development Workflow
-
-### Running Tests
-
-The project has a comprehensive test suite with **200+ tests** covering both unit and integration testing:
+**All quality checks.**
 
 ```bash
-# Run all tests (70 tests total)
-hatch run test
-
-# Run with coverage reporting
-hatch run test-cov
-
-# Run with verbose output  
-hatch run test -v
-
-# Run specific test file
-hatch run test test/test_capture_integration.py
-
-# Stop on first failure
-hatch run test -x
-```
-
-**Test Categories:**
-
-```bash
-# Unit tests - Test individual modules
-hatch run test test/test_capture/
-hatch run test test/test_hunyo_mcp_server/
-
-# Integration tests - Test component interactions  
-hatch run test test/integration/
-
-# End-to-end tests - Test complete user workflows
-hatch run test test/e2e/
-
-# Current integration tests
-hatch run test test/integration/test_schema_validation_integration.py
-hatch run test test/integration/test_unified_system_integration.py
-hatch run test test/integration/test_real_marimo_cell_execution.py
-
-# Meta tests (schema validation, roadmap compliance)
-hatch run test test/meta/
-```
-
-### Code Quality
-
-```bash
-# Format code with Black and Ruff
-hatch run fmt
-
-# Check code style and linting (includes import ban enforcement)
-hatch run style
-
-# Type checking with MyPy
-hatch run typing
-
-# All quality checks at once
 hatch run style && hatch run typing
-
-# Example: Test import ban enforcement
-echo "from src.capture.logger import get_logger" > bad_import.py
-hatch run ruff check bad_import.py  # Shows: TID253 `src` is banned at the module level
-rm bad_import.py
 ```
 
-### Development Commands
+**Code formatting and auto-fixes.**
 
 ```bash
-# Install development dependencies only
-hatch run pip install -e .[dev]
-
-# Run a command in the environment
-hatch run python scripts/generate_schemas.py
-
-# Open Python REPL in environment
-hatch run python
+hatch run fmt
 ```
 
-## 🛠️ Hatch Scripts (Defined in pyproject.toml)
+**Individual checks.**
 
-Current scripts available in the project:
+<table>
+  <tr>
+    <th>Check Type</th>
+    <th>Command</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>Style</td>
+    <td><code>hatch run style</code></td>
+    <td>Black formatting + Ruff linting</td>
+  </tr>
+  <tr>
+    <td>Types</td>
+    <td><code>hatch run typing</code></td>
+    <td>MyPy type checking</td>
+  </tr>
+  <tr>
+    <td>Format</td>
+    <td><code>hatch run fmt</code></td>
+    <td>Auto-fix formatting issues</td>
+  </tr>
+</table>
 
-```toml
-[tool.hatch.envs.default.scripts]
-test = "pytest {args:test}"
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/hunyo_mcp_server --cov=src/capture {args:test}"
-typing = "mypy --install-types --non-interactive {args:src/hunyo_mcp_server src/capture test}"
-style = [
-    "ruff check {args:.}",
-    "black --check --diff {args:.}",
-]
-fmt = [
-    "black {args:.}",
-    "ruff check --fix {args:.}",
-    "style",
-]
-```
+## Tests
 
-**Available Commands:**
-- `hatch run test` - Run all tests
-- `hatch run test-cov` - Run tests with coverage reporting
-- `hatch run typing` - Type checking with MyPy  
-- `hatch run style` - Check code style (Black + Ruff)
-- `hatch run fmt` - Format code and fix style issues
+We have package unit tests, integration tests, and marimo compatibility tests. All changes should be accompanied by appropriate tests.
 
-## 🎯 Testing Your Changes
+**Current Status: ✅ All 107 tests passing**
+- **Capture package**: 24/24 tests
+- **MCP server package**: 60/60 tests  
+- **Integration tests**: 23/23 tests
 
-### 1. Test Core Functionality
-
-**Current Status: ✅ All 70 tests passing (100% success rate)**
+### Run All Tests
 
 ```bash
-# Test all capture layer functionality (53 unit tests)
-hatch run test test/test_capture/
-
-# Test core integration (3 tests)  
-hatch run test test/test_capture_integration.py
-
-# Test OpenLineage generation (4 tests)
-hatch run test test/test_marimo_notebook_fixtures.py -k openlineage
-
-# Test runtime tracking (4 tests)
-hatch run test test/test_marimo_notebook_fixtures.py -k runtime
+hatch run test
 ```
 
-### 2. Test Marimo Integration (Critical)
+This runs the complete test suite. For faster development cycles, run specific test categories:
 
-**⚠️ IMPORTANT**: Before any capture system changes, run marimo integration tests to ensure compatibility:
+### Package Tests
+
+<table>
+  <tr>
+    <th>Package</th>
+    <th>Command</th>
+    <th>Tests</th>
+  </tr>
+  <tr>
+    <td>Capture</td>
+    <td><code>hatch run test:test-capture</code></td>
+    <td>24 tests</td>
+  </tr>
+  <tr>
+    <td>MCP Server</td>
+    <td><code>hatch run test:test-mcp</code></td>
+    <td>60 tests</td>
+  </tr>
+  <tr>
+    <td>Integration</td>
+    <td><code>hatch run test tests/integration/</code></td>
+    <td>23 tests</td>
+  </tr>
+</table>
+
+### Specific Test Patterns
 
 ```bash
-# Run all integration tests
-hatch run test test/integration/
+# Run specific test file
+hatch run test:pytest packages/hunyo-capture/tests/test_unified_marimo_interceptor.py
 
-# Run end-to-end tests (complete user workflows)
-hatch run test test/e2e/
+# Run tests matching pattern
+hatch run test:pytest -k "test_marimo"        # All marimo-related tests
+hatch run test:pytest -k "test_dataframe"     # All DataFrame tests
+hatch run test:pytest -k "integration"        # All integration tests
 
-# Run specific integration tests
-hatch run test test/integration/test_schema_validation_integration.py -v
-hatch run test test/integration/test_unified_system_integration.py -v
-hatch run test test/integration/test_real_marimo_cell_execution.py -v
-
-# Run with coverage for integration and e2e tests
-hatch run test-cov test/integration/ test/e2e/
+# Run with coverage
+hatch run test:test-cov packages/hunyo-capture/tests/
 ```
 
-**What these tests verify**:
-- ✅ Marimo notebook creation and content parsing
-- ✅ DataFrame operation detection in notebook content
-- ✅ Capture system integration points with marimo cells
-- ✅ Notebook validation and marimo compatibility
+### Debugging Tests
+
+<table>
+  <tr>
+    <th>Debugging Need</th>
+    <th>Command</th>
+  </tr>
+  <tr>
+    <td>Stop on first failure</td>
+    <td><code>hatch run test -x</code></td>
+  </tr>
+  <tr>
+    <td>Verbose output</td>
+    <td><code>hatch run test -v</code></td>
+  </tr>
+  <tr>
+    <td>Show print statements</td>
+    <td><code>hatch run test:pytest -s</code></td>
+  </tr>
+  <tr>
+    <td>Drop into debugger</td>
+    <td><code>hatch run test:pytest --pdb</code></td>
+  </tr>
+  <tr>
+    <td>Short traceback</td>
+    <td><code>hatch run test --tb=short</code></td>
+  </tr>
+</table>
+
+### Marimo Integration
+
+**✅ Marimo Always Available**: All marimo integration tests run without conditional skips.
+
+Critical integration tests to run when modifying capture functionality:
+
+```bash
+# Core system integration (7 tests)
+hatch run test tests/integration/test_unified_system_integration.py
+
+# Real marimo execution with Playwright (1 test)
+hatch run test tests/integration/test_real_marimo_cell_execution.py
+
+# Schema validation (2 tests)
+hatch run test tests/integration/test_schema_validation_integration.py
+```
+
+**What these verify:**
+- ✅ Marimo hook installation and execution
+- ✅ DataFrame operation detection in real marimo cells  
+- ✅ WebSocket communication with marimo server
 - ✅ Complete capture pipeline functionality
-- ✅ Multi-component integration workflows
-- ✅ WebSocket integration with marimo communication
-- ✅ Native hooks integration with marimo execution
-- ✅ Performance optimization with large DataFrames
-- ✅ Error recovery and graceful degradation
 
-**When to run these tests**:
-- Before committing changes to `src/capture/`
-- After updating marimo integration points
-- Before releasing new versions
-- When debugging marimo compatibility issues
-- When modifying DataFrame tracking logic
+## Environment Management
 
-### 3. Test CLI Entry Point
-
-**⚠️ CLI Not Yet Implemented** - The main CLI is not available until `server.py` is implemented.
+### When Dependencies Change
 
 ```bash
-# This will fail (expected) - CLI not implemented yet
-hunyo-mcp-server --help  # ❌ command not found
-
-# Alternative: Test capture modules directly in development
-hatch run python -c "
-from capture.live_lineage_interceptor import MarimoLiveInterceptor
-print('✅ Core functionality available for development')
-"
+# Recommended: Clean all environments
+hatch env prune
+hatch run test    # Recreates environment with new dependencies
 ```
 
-**When CLI is implemented, these commands will work:**
-```bash
-# Future: Test help command
-hunyo-mcp-server --help
-
-# Future: Test with notebook
-hunyo-mcp-server --notebook test/sample_notebook.py
-```
-
-### 4. Test Package Import
+### Alternative: Target Specific Environment
 
 ```bash
-# Test basic package structure
-hatch run python -c "import hunyo_mcp_server; print('✅ Basic package working')"
-
-# Test capture layer functionality - UPDATED to use unified system
-hatch run python -c "from capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Unified capture layer working')"
-
-# Test configuration system
-hatch run python -c "from hunyo_mcp_server.config import get_hunyo_data_dir; print('✅ Config system working')"
+# Remove just test environment
+hatch env remove test
+hatch run test    # Recreates automatically
 ```
 
-## 🔄 Managing Dependencies
+### Environment Information
+
+```bash
+# Show all environments
+hatch env show
+
+# Find environment location
+hatch env find
+
+# List environments in ASCII table
+hatch env show --ascii
+```
+
+## Package Development
 
 ### Adding Dependencies
 
-```bash
-# Edit pyproject.toml directly, then:
-hatch env prune    # Remove old environment
-hatch shell        # Recreate with new deps
-```
-
-Example `pyproject.toml` addition:
-```toml
-dependencies = [
-    "existing-dep>=1.0.0",
-    "new-dependency>=2.0.0",  # Add this line
-]
-```
-
-### Development Dependencies
+**For Package-Specific Dependencies:**
 
 ```bash
-# Development-only dependencies go in [project.optional-dependencies]
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "new-dev-tool>=1.0.0",  # Add development tools here
-]
+# Edit the specific package's pyproject.toml
+cd packages/hunyo-capture          # or packages/hunyo-mcp-server
+# Edit pyproject.toml dependencies, then:
+hatch run test:pip install -e .
 ```
 
-## 🐛 Troubleshooting
+**For Test Environment Dependencies:**
+
+```bash
+# Edit main pyproject.toml [tool.hatch.envs.test] section
+# Then recreate environment:
+hatch env prune
+hatch run test    # Recreates with new dependencies
+```
+
+### Package Import Standards
+
+**✅ Correct Package Imports:**
+
+```python
+# Between packages
+from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+from hunyo_mcp_server.config import get_hunyo_data_dir
+
+# Within packages  
+from hunyo_capture.logger import get_logger
+from hunyo_mcp_server.ingestion.event_processor import EventProcessor
+```
+
+**❌ Banned Imports:**
+
+```python
+# These will trigger TID253 error
+from src.capture.interceptor import MarimoInterceptor
+from src.hunyo_mcp_server.config import get_config
+```
+
+## Development Workflow
+
+### Quick Development Cycle
+
+```bash
+# 1. Make changes to packages/hunyo-capture/ or packages/hunyo-mcp-server/
+
+# 2. Run relevant tests
+hatch run test:test-capture        # If you changed capture code
+hatch run test:test-mcp           # If you changed MCP server code  
+hatch run test tests/integration/ # If you changed integration points
+
+# 3. Run quality checks
+hatch run style && hatch run typing
+
+# 4. Full test suite before commit
+hatch run test
+```
+
+### Testing Specific Functionality
+
+<table>
+  <tr>
+    <th>Functionality</th>
+    <th>Command</th>
+  </tr>
+  <tr>
+    <td>Marimo integration</td>
+    <td><code>hatch run test:pytest -k "marimo"</code></td>
+  </tr>
+  <tr>
+    <td>DataFrame tracking</td>
+    <td><code>hatch run test:pytest -k "dataframe"</code></td>
+  </tr>
+  <tr>
+    <td>Database operations</td>
+    <td><code>hatch run test:pytest -k "database"</code></td>
+  </tr>
+  <tr>
+    <td>Schema validation</td>
+    <td><code>hatch run test:pytest -k "schema"</code></td>
+  </tr>
+</table>
+
+## Troubleshooting
 
 ### Environment Issues
 
 ```bash
-# Clean slate - remove environment and recreate
+# Clean slate - remove all environments and recreate
 hatch env prune
-hatch shell
+hatch run test
 
-# Check environment location
-hatch env find
-
-# Show environment info
-hatch env show
+# Check what's installed in test environment
+hatch run test:pip list | grep hunyo
 ```
 
 ### Import Errors
 
 ```bash
-# Make sure package is installed in editable mode
-hatch run pip install -e .
-
-# Check that modules exist
-ls -la src/hunyo_mcp_server/
+# Reinstall packages in development mode
+hatch run test:pip install -e ./packages/hunyo-mcp-server
+hatch run test:pip install -e ./packages/hunyo-capture
 ```
 
-### CLI Not Working
+### Marimo Integration Issues
 
 ```bash
-# Verify entry point configuration in pyproject.toml
-[project.scripts]
-hunyo-mcp-server = "hunyo_mcp_server.server:main"
+# Verify marimo is available
+hatch run test:python -c "import marimo; print(f'Marimo version: {marimo.__version__}')"
 
-# Reinstall in editable mode
-hatch run pip install -e .
+# Test hooks directly
+hatch run test:python -c "
+from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+tracker = enable_unified_tracking()
+print(f'Tracker active: {tracker.interceptor_active}')
+"
 ```
 
-## 📚 Development Tips
-
-### 1. Use Hatch Scripts for Common Tasks
-
-Instead of remembering long commands, use the scripts defined in `pyproject.toml`:
+### Test Failures
 
 ```bash
-hatch run test      # Instead of: pytest
-hatch run fmt       # Instead of: black src/ test/
-hatch run lint      # Instead of: ruff check src/ test/
+# Debug specific failing test
+hatch run test:pytest path/to/test.py::test_name -v -s
+
+# Run only failed tests from last run
+hatch run test:pytest --lf
+
+# Get minimal traceback for cleaner output
+hatch run test --tb=short
 ```
 
-### 2. Environment Management
+## CI/CD Compatibility
+
+Your local commands work identically in CI:
 
 ```bash
-# List all environments
-hatch env show
-
-# Use specific environment
-hatch -e test run pytest    # Use test environment
-
-# Create named environment
-hatch env create docs
+# These are the exact commands used in CI
+hatch run test      # Full test matrix
+hatch run style     # Style checks  
+hatch run typing    # Type checking
 ```
 
-### 3. Building and Distribution
+**CI Matrix:**
+- **Python versions**: 3.10, 3.11, 3.12, 3.13
+- **Operating systems**: Ubuntu, Windows, macOS
+- **Package separation**: Both packages tested independently and together
+- **Total**: 12 test jobs ensuring universal compatibility
 
-```bash
-# Build wheel and sdist
-hatch build
+## Your First PR
 
-# Clean build artifacts
-hatch clean
+1. **Fork the repository** and create a feature branch
+2. **Make your changes** following the package structure
+3. **Add tests** for your changes
+4. **Run the checklist**:
+   ```bash
+   hatch run test           # All 107 tests should pass
+   hatch run style          # Style checks should pass
+   hatch run typing         # Type checks should pass
+   ```
+5. **Test marimo integration** if you modified capture functionality:
+   ```bash
+   hatch run test tests/integration/test_unified_system_integration.py
+   ```
+6. **Submit your PR** with a clear description of changes
 
-# Publish to PyPI (when ready)
-hatch publish
-```
-
-## 🎯 Next Steps for New Contributors
-
-1. **Explore the codebase**: Start with `src/capture/` to understand the existing capture layer
-2. **Read ROADMAP.md**: Understand the project architecture and current status
-3. **Run existing tests**: `hatch run test` to see what's working
-4. **Pick a task**: Check ROADMAP.md for "Next Immediate Steps"
-5. **Set up your environment**: `hatch shell` and you're ready to code!
-
-## 🔗 Useful Links
+## Useful Links
 
 - **Hatch Documentation**: https://hatch.pypa.io
-- **PyProject.toml Guide**: https://packaging.python.org/specifications/pyproject-toml/
 - **MCP Protocol**: https://spec.modelcontextprotocol.io/
 - **OpenLineage**: https://openlineage.io/
+- **Marimo**: https://marimo.io/
 
 ---
 
-**Questions?** Check the existing issues or create a new one in the repository. 
-
-## 🛡️ **Import Standards & Enforcement**
-
-### ✅ **Proper Package Imports**
-This project enforces **strict import standards** to prevent common CI/development issues:
-
-```python
-# ✅ CORRECT - Use proper package imports
-from capture.live_lineage_interceptor import MarimoLiveInterceptor
-from hunyo_mcp_server.config import get_hunyo_data_dir
-
-# ❌ BANNED - src. imports are automatically flagged
-from src.capture.live_lineage_interceptor import MarimoLiveInterceptor  # TID253 error
-from src.hunyo_mcp_server.config import get_hunyo_data_dir            # TID253 error
-```
-
-### 🚫 **Why `src.` Imports Are Banned**
-
-**Root Cause of Major Issues**: Using `from src.module` imports caused:
-- **Test isolation failures** - Wrong module resolution during pytest collection 
-- **CI/CD dependency conflicts** - Modules not found during test discovery
-- **Development environment inconsistencies** - Different behavior locally vs CI
-- **Package installation problems** - Broke when project installed in development mode
-
-**Technical Details**: The `src.` import pattern assumes the `src/` directory is in `PYTHONPATH`, but modern Python packaging (hatch, pip install -e) creates proper package namespaces that don't include `src/` in the module path.
-
-### 🔧 **Automatic Enforcement**
-
-Our **ruff configuration** automatically prevents these problematic imports:
-
-```toml
-[tool.ruff.lint.flake8-tidy-imports]
-banned-module-level-imports = [
-    "src",          # Ban any import starting with "src."
-    "src.*",        # Ban all submodules of src package  
-]
-```
-
-**Error Code**: `TID253` - Shows whenever someone tries to use `src.` imports
-
-**Resolution**: Use proper package imports based on your `pyproject.toml` package structure
-
-## 🧪 Development Workflow
-
-### 🚀 **CI/CD & Quality Assurance**
-
-**Full Cross-Platform Testing Matrix**: Our CI/CD pipeline runs comprehensive tests across:
-- **Python versions**: 3.10, 3.11, 3.12, 3.13
-- **Operating systems**: Ubuntu, Windows, macOS  
-- **Total matrix**: 12 test jobs ensuring universal compatibility
-
-```bash
-# Check all quality gates locally before pushing
-hatch run style    # Black + Ruff checks (includes Windows Unicode detection)
-hatch run typing   # MyPy type checking
-hatch run test     # Full test suite
-hatch run test-cov # Tests with coverage report
-```
-
-### 🛡️ **Windows Compatibility**
-
-**Unicode Safety**: Automatic prevention of Windows CI failures:
-- **Ruff rules** - `RUF001`, `RUF002`, `RUF003` detect problematic Unicode characters
-- **CI environment** - UTF-8 encoding enforcement with `PYTHONIOENCODING=utf-8`
-- **ASCII-safe output** - All CI messages use `[OK]`, `[INFO]` instead of emojis
-- **Strategic exceptions** - Unicode allowed in tests, docs, and appropriate files
-
-**Testing Windows Locally**:
-```bash
-# Test Unicode detection (should show warnings)
-echo 'test = "✅ Unicode emoji"' > test_unicode.py
-hatch run style test_unicode.py
-
-# Current codebase should be clean
-hatch run style --select RUF001,RUF002,RUF003
-```
-
-### 🔒 **Pre-commit Hooks**
-
-**Automated Quality Enforcement**:
-```bash
-# Install pre-commit hooks (one-time setup)
-hatch run pre-commit install
-
-# Manual run on all files
-hatch run pre-commit run --all-files
-```
-
-**Hooks Active:**
-- **Auto-fixing**: Black formatting, Ruff auto-fixes, import sorting
-- **Quality checks**: Ruff linting, MyPy type checking, test execution
-- **Standards enforcement**: Prevents `src.` imports, ensures import structure
+**Questions?** Open an issue or start a discussion in the repository.

@@ -19,6 +19,7 @@ import pandas as pd
 import pytest
 from hunyo_capture.logger import get_logger
 
+# Check marimo availability (will be verified at test execution time)
 # Import the REAL implementations (not mocks)
 from hunyo_capture.unified_marimo_interceptor import (
     UnifiedMarimoInterceptor,
@@ -245,8 +246,8 @@ if __name__ == "__main__":
             # Install hooks
             interceptor.install()
 
-            if not interceptor.interceptor_active:
-                pytest.skip("Hook installation failed - marimo hooks not available")
+            # Verify hooks were installed successfully
+            assert interceptor.interceptor_active, "Hook installation failed"
 
             # Check that hooks were actually installed
             from marimo._runtime.runner.hooks import (
@@ -323,8 +324,8 @@ if __name__ == "__main__":
         try:
             interceptor.install()
 
-            if not interceptor.interceptor_active:
-                pytest.skip("Hook installation failed")
+            # Verify hooks were installed successfully
+            assert interceptor.interceptor_active, "Hook installation failed"
 
             test_logger.tracking("Simulating marimo cell execution with REAL hooks...")
 

@@ -117,11 +117,15 @@ class UnifiedMarimoInterceptor:
 
     def _install_marimo_hooks(self):
         """Install marimo's native execution hooks"""
-        from marimo._runtime.runner.hooks import (
-            ON_FINISH_HOOKS,
-            POST_EXECUTION_HOOKS,
-            PRE_EXECUTION_HOOKS,
-        )
+        try:
+            from marimo._runtime.runner.hooks import (
+                ON_FINISH_HOOKS,
+                POST_EXECUTION_HOOKS,
+                PRE_EXECUTION_HOOKS,
+            )
+        except ImportError as e:
+            unified_logger.error(f"[ERROR] Failed to import marimo hooks: {e}")
+            raise
 
         unified_logger.info("[INSTALL] Installing marimo native hooks...")
 

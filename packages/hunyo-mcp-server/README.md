@@ -230,7 +230,7 @@ cd hunyo-notebook-memories-mcp
 hatch shell
 
 # Run tests
-hatch run test
+hatch run test          # (or: hatch run test:pytest)
 
 # Check code quality
 hatch run style

@@ -169,16 +169,18 @@ class TestGetProjectRoot:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         (project_dir / ".git").mkdir()
+        # Create schemas directory to prevent fallback to real project root
+        (project_dir / "schemas").mkdir()
 
         # Create a subdirectory
         subdir = project_dir / "src" / "module"
         subdir.mkdir(parents=True)
 
-        # Mock __file__ to be in the subdirectory
-        with patch("hunyo_mcp_server.utils.paths.__file__", str(subdir / "paths.py")):
-            result = get_project_root()
+        # Use the optional start_path parameter instead of mocking
+        mock_file_path = subdir / "paths.py"
+        result = get_project_root(start_path=mock_file_path)
 
-            assert result == project_dir
+        assert result == project_dir
 
     def test_find_project_root_with_pyproject(self, tmp_path):
         """Test finding project root using pyproject.toml"""
@@ -186,16 +188,18 @@ class TestGetProjectRoot:
         project_dir = tmp_path / "project"
         project_dir.mkdir()
         (project_dir / "pyproject.toml").touch()
+        # Create schemas directory to prevent fallback to real project root
+        (project_dir / "schemas").mkdir()
 
         # Create a subdirectory
         subdir = project_dir / "src" / "module"
         subdir.mkdir(parents=True)
 
-        # Mock __file__ to be in the subdirectory
-        with patch("hunyo_mcp_server.utils.paths.__file__", str(subdir / "paths.py")):
-            result = get_project_root()
+        # Use the optional start_path parameter instead of mocking
+        mock_file_path = subdir / "paths.py"
+        result = get_project_root(start_path=mock_file_path)
 
-            assert result == project_dir
+        assert result == project_dir
 
     def test_find_project_root_fallback_to_cwd(self, tmp_path):
         """Test fallback to current working directory"""
@@ -208,12 +212,10 @@ class TestGetProjectRoot:
         subdir = project_dir / "src" / "module"
         subdir.mkdir(parents=True)
 
-        # Mock __file__ to be in the subdirectory and cwd to be project_dir
-        with (
-            patch("hunyo_mcp_server.utils.paths.__file__", str(subdir / "paths.py")),
-            patch("pathlib.Path.cwd", return_value=project_dir),
-        ):
-            result = get_project_root()
+        # Use start_path parameter and mock cwd
+        mock_file_path = subdir / "paths.py"
+        with patch("pathlib.Path.cwd", return_value=project_dir):
+            result = get_project_root(start_path=mock_file_path)
 
             assert result == project_dir
 
@@ -226,13 +228,11 @@ class TestGetProjectRoot:
         subdir = project_dir / "src" / "module"
         subdir.mkdir(parents=True)
 
-        # Mock __file__ and cwd to directories without markers
-        with (
-            patch("hunyo_mcp_server.utils.paths.__file__", str(subdir / "paths.py")),
-            patch("pathlib.Path.cwd", return_value=subdir),
-        ):
+        # Use start_path parameter and mock cwd to directories without markers
+        mock_file_path = subdir / "paths.py"
+        with patch("pathlib.Path.cwd", return_value=subdir):
             with pytest.raises(RuntimeError, match="Could not find project root"):
-                get_project_root()
+                get_project_root(start_path=mock_file_path)
 
 
 class TestGetSchemaPath:

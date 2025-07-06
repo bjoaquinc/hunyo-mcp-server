@@ -556,7 +556,7 @@ def setup_tracking():
         sys.path.insert(0, str(src_path))
 
     # Import and enable unified tracking
-            from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+    from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
 
     # Enable tracking with specific files
     tracker = enable_unified_tracking(

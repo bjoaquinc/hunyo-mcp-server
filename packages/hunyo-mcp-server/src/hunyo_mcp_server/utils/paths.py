@@ -85,10 +85,13 @@ def get_cross_platform_temp_dir() -> str:
         return temp_dir
 
 
-def get_project_root() -> Path:
+def get_project_root(start_path: Path | None = None) -> Path:
     """
     Find the project root by looking for .git directory or pyproject.toml.
     For monorepo structure, prefers the root containing schemas/ directory.
+
+    Args:
+        start_path: Optional starting path for search (defaults to this module's location)
 
     Returns:
         Path: Project root directory
@@ -96,8 +99,11 @@ def get_project_root() -> Path:
     Raises:
         RuntimeError: If project root cannot be found
     """
-    # Use module's __file__ attribute to allow mocking in tests
-    current_file = Path(globals()["__file__"]).resolve()
+    if start_path is None:
+        # Use module's __file__ attribute as default starting point
+        current_file = Path(globals()["__file__"]).resolve()
+    else:
+        current_file = Path(start_path).resolve()
 
     # Walk up the directory tree - collect all potential roots
     candidate_roots = []

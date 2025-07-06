@@ -29,9 +29,13 @@ class MockConfig:
 @pytest.fixture
 def temp_hunyo_dir() -> Generator[Path, None, None]:
     """Provides a temporary .hunyo directory for testing"""
+    import os
     import platform
     import shutil
     import time
+
+    # Preserve original working directory to prevent sys.path interference
+    original_cwd = os.getcwd()
 
     temp_dir = tempfile.mkdtemp()
     hunyo_dir = Path(temp_dir) / ".hunyo"
@@ -45,6 +49,16 @@ def temp_hunyo_dir() -> Generator[Path, None, None]:
     try:
         yield hunyo_dir
     finally:
+        # Ensure we restore original working directory to prevent import issues
+        try:
+            os.chdir(original_cwd)
+        except OSError:
+            # If original directory no longer exists, use project root
+            import sys
+
+            project_root = Path(sys.path[0]).parent if sys.path else Path.cwd()
+            os.chdir(project_root)
+
         # Windows-specific cleanup with retry logic
         if platform.system() == "Windows":
             max_attempts = 5
