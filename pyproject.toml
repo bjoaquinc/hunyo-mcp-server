@@ -59,7 +59,7 @@ dependencies = [
 post-install-commands = [
     "pip install -e ./packages/hunyo-mcp-server",
     "pip install -e ./packages/hunyo-capture",
-    "playwright install chromium",  # Install browser binaries for CI/CD
+    "python -m playwright install chromium",  # Install browser binaries for CI/CD
 ]
 
 # Integration testing from repo root - configuration in main pytest section below

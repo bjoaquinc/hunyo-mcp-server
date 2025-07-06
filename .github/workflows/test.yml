@@ -124,15 +124,14 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install hatch
         
-        # Build both packages
-        cd packages/hunyo-mcp-server
-        hatch build
-        cd ../hunyo-capture
+        # Build both packages from root (workspace handles both)
         hatch build
         
-        # Validate build artifacts exist
-        ls -la packages/hunyo-mcp-server/dist/
-        ls -la packages/hunyo-capture/dist/
+        # Validate build artifacts exist in root dist/ directory
+        ls -la dist/
+        echo "✅ Checking for expected package files..."
+        ls -la dist/*hunyo_mcp_server*
+        ls -la dist/*hunyo_capture*
 
   # Test environment isolation (validates package separation architecture)
   test-environment-isolation:
