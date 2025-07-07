@@ -3,7 +3,7 @@
 Event Processor - Validates and processes JSONL events for database insertion.
 
 Handles parsing, validation, transformation, and batch insertion of events
-from both runtime and lineage JSONL files into DuckDB.
+from runtime, lineage, and DataFrame lineage JSONL files into DuckDB.
 """
 
 import json
@@ -33,6 +33,7 @@ class EventProcessor:
     - Transforms events to database schema format
     - Batch processing for efficiency
     - Error handling and logging
+    - Supports runtime, lineage, and DataFrame lineage events
     """
 
     def __init__(
@@ -48,6 +49,9 @@ class EventProcessor:
         # Load JSON schemas at initialization for performance
         self.runtime_schema = self._load_schema("runtime_events_schema.json")
         self.openlineage_schema = self._load_schema("openlineage_events_schema.json")
+        self.dataframe_lineage_schema = self._load_schema(
+            "dataframe_lineage_schema.json"
+        )
 
         processor_logger.status(
             f"Event Processor initialized (strict_validation={strict_validation})"
@@ -201,13 +205,68 @@ class EventProcessor:
 
         return successful
 
+    def process_dataframe_lineage_events(self, events: list[dict[str, Any]]) -> int:
+        """
+        Process DataFrame lineage events with individual transaction boundaries for Windows compatibility.
+
+        Args:
+            events: List of DataFrame lineage event dictionaries
+
+        Returns:
+            Number of successfully processed events
+        """
+        if not events:
+            return 0
+
+        successful = 0
+
+        for event in events:
+            try:
+                # Schema validation first
+                is_valid, validation_error = self._validate_event_against_schema(
+                    event, self.dataframe_lineage_schema, "dataframe_lineage"
+                )
+
+                if not is_valid:
+                    processor_logger.warning(
+                        f"DataFrame lineage event schema validation failed: {validation_error}"
+                    )
+                    self.failed_events += 1
+                    continue
+
+                # Transform event
+                transformed_event = self._transform_dataframe_lineage_event(event)
+
+                # Insert with individual transaction and constraint handling
+                if self._insert_single_event_with_recovery(
+                    transformed_event, "dataframe_lineage"
+                ):
+                    successful += 1
+                else:
+                    self.failed_events += 1
+
+            except Exception as e:
+                processor_logger.warning(
+                    f"Failed to process DataFrame lineage event: {e}"
+                )
+                self.failed_events += 1
+
+        self.processed_events += successful
+
+        if successful > 0:
+            processor_logger.success(
+                f"[OK] Processed {successful} DataFrame lineage events"
+            )
+
+        return successful
+
     def process_jsonl_file(self, file_path: Path, event_type: str) -> int:
         """
         Process all events from a JSONL file with schema validation.
 
         Args:
             file_path: Path to JSONL file
-            event_type: 'runtime' or 'lineage'
+            event_type: 'runtime', 'lineage', or 'dataframe_lineage'
 
         Returns:
             Number of successfully processed events
@@ -217,7 +276,7 @@ class EventProcessor:
             return 0
 
         processor_logger.info(
-            f"📄 Processing {event_type} events from: {file_path.name}"
+            f"[FILE] Processing {event_type} events from: {file_path.name}"
         )
 
         events = []
@@ -250,6 +309,8 @@ class EventProcessor:
             return self.process_runtime_events(events)
         elif event_type == "lineage":
             return self.process_lineage_events(events)
+        elif event_type == "dataframe_lineage":
+            return self.process_dataframe_lineage_events(events)
         else:
             processor_logger.error(f"Unknown event type: {event_type}")
             return 0
@@ -362,6 +423,60 @@ class EventProcessor:
                 "column_metrics_json": event.get("column_metrics"),
                 "other_facets_json": event.get("other_facets"),
             }
+
+        return transformed
+
+    def _transform_dataframe_lineage_event(
+        self, event: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Transform DataFrame lineage event to database schema format."""
+        import platform
+        import time
+        import uuid
+
+        # With schema validation, we can trust the event structure more
+        # But still do basic validation for critical database fields
+        required_fields = ["event_type", "session_id", "emitted_at", "operation_type"]
+        for field in required_fields:
+            if field not in event:
+                msg = f"Missing required field: {field}"
+                raise ValueError(msg)
+
+        # Generate platform-specific primary key to avoid Windows time resolution issues
+        if platform.system() == "Windows":
+            # Windows has ~15.6ms system clock ticks - use UUID to avoid duplicates
+            df_event_id = abs(hash(str(uuid.uuid4()))) % (
+                10**15
+            )  # Ensure positive 15-digit max
+        else:
+            # Unix systems have microsecond precision - use high-resolution timestamp
+            df_event_id = (
+                int(time.perf_counter() * 1000000) + hash(str(uuid.uuid4())) % 1000
+            )
+
+        # Extract performance fields from nested structure
+        performance = event.get("performance", {})
+
+        # Transform event to match database schema
+        transformed = {
+            "df_event_id": df_event_id,
+            "event_type": event.get("event_type"),
+            "execution_id": event.get("execution_id"),
+            "cell_id": event.get("cell_id"),
+            "session_id": event.get("session_id"),
+            "timestamp": self._parse_timestamp(event.get("timestamp")),
+            "emitted_at": self._parse_timestamp(event.get("emitted_at")),
+            "operation_type": event.get("operation_type"),
+            "operation_method": event.get("operation_method"),
+            "operation_code": event.get("operation_code"),
+            "operation_parameters": event.get("operation_parameters"),
+            "input_dataframes": event.get("input_dataframes"),
+            "output_dataframes": event.get("output_dataframes"),
+            "column_lineage": event.get("column_lineage"),
+            "overhead_ms": performance.get("overhead_ms"),
+            "df_size_mb": performance.get("df_size_mb"),
+            "sampled": performance.get("sampled"),
+        }
 
         return transformed
 
@@ -480,6 +595,8 @@ class EventProcessor:
                     self.db_manager.insert_runtime_event(event_data)
                 elif event_type == "lineage":
                     self.db_manager.insert_lineage_event(event_data)
+                elif event_type == "dataframe_lineage":
+                    self.db_manager.insert_dataframe_lineage_event(event_data)
                 else:
                     error_msg = f"Unknown event type: {event_type}"
                     raise ValueError(error_msg)
@@ -539,5 +656,6 @@ class EventProcessor:
             "schemas_loaded": {
                 "runtime_schema": self.runtime_schema is not None,
                 "openlineage_schema": self.openlineage_schema is not None,
+                "dataframe_lineage_schema": self.dataframe_lineage_schema is not None,
             },
         }

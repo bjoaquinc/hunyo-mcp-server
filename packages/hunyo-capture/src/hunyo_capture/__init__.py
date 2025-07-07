@@ -49,7 +49,7 @@ def get_notebook_name(notebook_path: str) -> str:
     return safe_name
 
 
-def get_event_filenames(notebook_path: str, data_dir: str) -> tuple[str, str]:
+def get_event_filenames(notebook_path: str, data_dir: str) -> tuple[str, str, str]:
     """Generate unique event filenames for a notebook.
 
     Args:
@@ -57,18 +57,22 @@ def get_event_filenames(notebook_path: str, data_dir: str) -> tuple[str, str]:
         data_dir: Base directory for storing event files
 
     Returns:
-        Tuple of (runtime_events_file, lineage_events_file) paths
+        Tuple of (runtime_events_file, lineage_events_file, dataframe_lineage_events_file) paths
     """
     file_hash = get_notebook_file_hash(notebook_path)
     notebook_name = get_notebook_name(notebook_path)
 
     runtime_file = f"{file_hash}_{notebook_name}_runtime_events.jsonl"
     lineage_file = f"{file_hash}_{notebook_name}_lineage_events.jsonl"
+    dataframe_lineage_file = (
+        f"{file_hash}_{notebook_name}_dataframe_lineage_events.jsonl"
+    )
 
     data_path = Path(data_dir)
     return (
         str(data_path / "events" / "runtime" / runtime_file),
         str(data_path / "events" / "lineage" / lineage_file),
+        str(data_path / "events" / "dataframe_lineage" / dataframe_lineage_file),
     )
 
 
@@ -133,6 +137,7 @@ def get_user_data_dir() -> str:
     # Created directory structure
     (data_dir / "events" / "runtime").mkdir(parents=True, exist_ok=True)
     (data_dir / "events" / "lineage").mkdir(parents=True, exist_ok=True)
+    (data_dir / "events" / "dataframe_lineage").mkdir(parents=True, exist_ok=True)
     (data_dir / "database").mkdir(parents=True, exist_ok=True)
     (data_dir / "config").mkdir(parents=True, exist_ok=True)
 

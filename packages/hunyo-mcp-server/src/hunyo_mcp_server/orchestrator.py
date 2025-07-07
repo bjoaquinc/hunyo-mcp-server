@@ -16,9 +16,12 @@ import time
 from pathlib import Path
 
 from hunyo_mcp_server.config import (
+    ensure_directory_structure,
     get_database_path,
+    get_dataframe_lineage_events_dir,
     get_event_directories,
     get_hunyo_data_dir,
+    get_notebook_file_hash,
 )
 from hunyo_mcp_server.ingestion.duckdb_manager import DuckDBManager
 from hunyo_mcp_server.ingestion.event_processor import EventProcessor
@@ -46,10 +49,14 @@ class HunyoOrchestrator:
         self.verbose = verbose
         self.running = False
 
+        # Calculate notebook hash for notebook-specific database
+        self.notebook_hash = get_notebook_file_hash(notebook_path)
+
         # Data paths
         self.data_dir = get_hunyo_data_dir()
-        self.database_path = get_database_path()
+        self.database_path = get_database_path(self.notebook_hash)
         self.runtime_dir, self.lineage_dir = get_event_directories()
+        self.dataframe_lineage_dir = get_dataframe_lineage_events_dir()
 
         # Component instances
         self.db_manager: DuckDBManager | None = None
@@ -63,8 +70,14 @@ class HunyoOrchestrator:
 
         orchestrator_logger.status("Hunyo MCP Orchestrator initialized")
         orchestrator_logger.config(f"Notebook: {self.notebook_path}")
+        orchestrator_logger.config(f"Notebook hash: {self.notebook_hash}")
         orchestrator_logger.config(f"Data directory: {self.data_dir}")
         orchestrator_logger.config(f"Database: {self.database_path}")
+        orchestrator_logger.config(f"Runtime events: {self.runtime_dir}")
+        orchestrator_logger.config(f"Lineage events: {self.lineage_dir}")
+        orchestrator_logger.config(
+            f"DataFrame lineage events: {self.dataframe_lineage_dir}"
+        )
 
     def start(self) -> None:
         """Start all components in the correct order."""
@@ -82,6 +95,9 @@ class HunyoOrchestrator:
 
         # Start ingestion components
         try:
+            # Ensure directory structure exists
+            ensure_directory_structure()
+
             self._start_capture_layer()
             self._start_ingestion_components()
 
@@ -203,6 +219,7 @@ class HunyoOrchestrator:
         self.file_watcher = FileWatcher(
             runtime_dir=self.runtime_dir,
             lineage_dir=self.lineage_dir,
+            dataframe_lineage_dir=self.dataframe_lineage_dir,
             event_processor=self.event_processor,
             verbose=self.verbose,
         )

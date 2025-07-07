@@ -182,18 +182,25 @@ class TestEventFilenames:
         notebook_path = "/path/to/test_notebook.py"
         data_dir = "/tmp/data"  # noqa: S108 # Test fixture using hardcoded path
 
-        runtime_file, lineage_file = get_event_filenames(notebook_path, data_dir)
+        runtime_file, lineage_file, dataframe_lineage_file = get_event_filenames(
+            notebook_path, data_dir
+        )
 
         # Should return tuple of strings
         assert isinstance(runtime_file, str)
         assert isinstance(lineage_file, str)
+        assert isinstance(dataframe_lineage_file, str)
 
         # Files should be in correct subdirectories (platform-aware)
         expected_runtime_path = Path(data_dir) / "events" / "runtime"
         expected_lineage_path = Path(data_dir) / "events" / "lineage"
+        expected_dataframe_lineage_path = (
+            Path(data_dir) / "events" / "dataframe_lineage"
+        )
 
         assert str(expected_runtime_path) in runtime_file
         assert str(expected_lineage_path) in lineage_file
+        assert str(expected_dataframe_lineage_path) in dataframe_lineage_file
 
         # Files should contain hash and notebook name
         hash_val = get_notebook_file_hash(notebook_path)
@@ -203,39 +210,56 @@ class TestEventFilenames:
         assert notebook_name in runtime_file
         assert hash_val in lineage_file
         assert notebook_name in lineage_file
+        assert hash_val in dataframe_lineage_file
+        assert notebook_name in dataframe_lineage_file
 
         # Files should have correct extensions
         assert runtime_file.endswith("_runtime_events.jsonl")
         assert lineage_file.endswith("_lineage_events.jsonl")
+        assert dataframe_lineage_file.endswith("_dataframe_lineage_events.jsonl")
 
     def test_filename_uniqueness(self):
         """Test that different notebooks get different filenames"""
         data_dir = "/tmp/data"  # noqa: S108 # Test fixture using hardcoded path
 
-        runtime1, lineage1 = get_event_filenames("/path/notebook1.py", data_dir)
-        runtime2, lineage2 = get_event_filenames("/path/notebook2.py", data_dir)
+        runtime1, lineage1, dataframe_lineage1 = get_event_filenames(
+            "/path/notebook1.py", data_dir
+        )
+        runtime2, lineage2, dataframe_lineage2 = get_event_filenames(
+            "/path/notebook2.py", data_dir
+        )
 
         # Different notebooks should have different filenames
         assert runtime1 != runtime2
         assert lineage1 != lineage2
+        assert dataframe_lineage1 != dataframe_lineage2
 
     def test_filename_consistency(self):
         """Test that same notebook path consistently produces same filenames"""
         notebook_path = "/home/user/analysis.py"
         data_dir = "/data"
 
-        runtime1, lineage1 = get_event_filenames(notebook_path, data_dir)
-        runtime2, lineage2 = get_event_filenames(notebook_path, data_dir)
+        runtime1, lineage1, dataframe_lineage1 = get_event_filenames(
+            notebook_path, data_dir
+        )
+        runtime2, lineage2, dataframe_lineage2 = get_event_filenames(
+            notebook_path, data_dir
+        )
 
         assert runtime1 == runtime2
         assert lineage1 == lineage2
+        assert dataframe_lineage1 == dataframe_lineage2
 
     def test_different_data_directories(self):
         """Test filename generation with different data directories"""
         notebook_path = "/notebooks/test.py"
 
-        runtime1, lineage1 = get_event_filenames(notebook_path, "/data1")
-        runtime2, lineage2 = get_event_filenames(notebook_path, "/data2")
+        runtime1, lineage1, dataframe_lineage1 = get_event_filenames(
+            notebook_path, "/data1"
+        )
+        runtime2, lineage2, dataframe_lineage2 = get_event_filenames(
+            notebook_path, "/data2"
+        )
 
         # Base filenames should be same, but paths should differ
         filename1 = Path(runtime1).name
@@ -248,19 +272,27 @@ class TestEventFilenames:
         assert expected_path1 in runtime1
         assert expected_path2 in runtime2
 
+        # Check dataframe lineage paths as well
+        expected_df_path1 = str(Path("/data1") / "events" / "dataframe_lineage")
+        expected_df_path2 = str(Path("/data2") / "events" / "dataframe_lineage")
+        assert expected_df_path1 in dataframe_lineage1
+        assert expected_df_path2 in dataframe_lineage2
+
     def test_path_object_handling(self):
         """Test that function works with Path objects"""
         notebook_path = Path("/notebooks/test.py")
         data_dir = Path("/data")
 
-        runtime_file, lineage_file = get_event_filenames(
+        runtime_file, lineage_file, dataframe_lineage_file = get_event_filenames(
             str(notebook_path), str(data_dir)
         )
 
         assert isinstance(runtime_file, str)
         assert isinstance(lineage_file, str)
+        assert isinstance(dataframe_lineage_file, str)
         assert "test" in runtime_file
         assert "test" in lineage_file
+        assert "test" in dataframe_lineage_file
 
 
 class TestUserDataDir:
@@ -346,6 +378,7 @@ class TestUserDataDir:
                     assert data_path.exists()
                     assert (data_path / "events" / "runtime").exists()
                     assert (data_path / "events" / "lineage").exists()
+                    assert (data_path / "events" / "dataframe_lineage").exists()
                     assert (data_path / "database").exists()
                     assert (data_path / "config").exists()
 
@@ -370,6 +403,7 @@ class TestUserDataDir:
                     # Should still create missing subdirectories
                     assert (hunyo_dir / "events" / "runtime").exists()
                     assert (hunyo_dir / "events" / "lineage").exists()
+                    assert (hunyo_dir / "events" / "dataframe_lineage").exists()
 
     def test_parent_directory_search(self):
         """Test searching parent directories for development markers"""
@@ -429,7 +463,7 @@ class TestIntegrationScenarios:
             # Test complete workflow
             hash_val = get_notebook_file_hash(str(notebook_path))
             name = get_notebook_name(str(notebook_path))
-            runtime_file, lineage_file = get_event_filenames(
+            runtime_file, lineage_file, dataframe_lineage_file = get_event_filenames(
                 str(notebook_path), str(data_dir)
             )
 
@@ -438,10 +472,15 @@ class TestIntegrationScenarios:
             assert name in runtime_file
             assert hash_val in lineage_file
             assert name in lineage_file
+            assert hash_val in dataframe_lineage_file
+            assert name in dataframe_lineage_file
 
             # Verify paths
             assert str(data_dir / "events" / "runtime") in runtime_file
             assert str(data_dir / "events" / "lineage") in lineage_file
+            assert (
+                str(data_dir / "events" / "dataframe_lineage") in dataframe_lineage_file
+            )
 
     def test_cross_platform_compatibility(self):
         """Test functions work on different path formats"""

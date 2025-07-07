@@ -74,11 +74,5 @@ marimo_live_lineage.jsonl
 htmlcov/
 coverage.xml
 
-# Notebooks for testing
-sandbox/
-
-# temporary plan file
-DEPRECATION_PLAN.md
-
 # plan files
-PACKAGE_SEPARATION_PLAN.md
+*_PLAN.md

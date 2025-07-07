@@ -599,6 +599,62 @@ class DuckDBManager:
 
         self._execute_with_timeout(_insert, timeout)
 
+    def insert_dataframe_lineage_event(
+        self, event_data: dict[str, Any], timeout: float = 10.0
+    ) -> None:
+        """Insert a DataFrame lineage event into the database with timeout."""
+        query = """
+        INSERT INTO dataframe_lineage_events (
+            df_event_id, event_type, execution_id, cell_id, session_id,
+            timestamp, emitted_at, operation_type, operation_method, operation_code,
+            operation_parameters, input_dataframes, output_dataframes, column_lineage,
+            overhead_ms, df_size_mb, sampled
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+
+        parameters = [
+            event_data.get("df_event_id"),
+            event_data.get("event_type"),
+            event_data.get("execution_id"),
+            event_data.get("cell_id"),
+            event_data.get("session_id"),
+            event_data.get("timestamp"),
+            event_data.get("emitted_at"),
+            event_data.get("operation_type"),
+            event_data.get("operation_method"),
+            event_data.get("operation_code"),
+            (
+                json.dumps(event_data.get("operation_parameters"))
+                if event_data.get("operation_parameters")
+                else None
+            ),
+            (
+                json.dumps(event_data.get("input_dataframes"))
+                if event_data.get("input_dataframes")
+                else None
+            ),
+            (
+                json.dumps(event_data.get("output_dataframes"))
+                if event_data.get("output_dataframes")
+                else None
+            ),
+            (
+                json.dumps(event_data.get("column_lineage"))
+                if event_data.get("column_lineage")
+                else None
+            ),
+            event_data.get("overhead_ms"),
+            event_data.get("df_size_mb"),
+            event_data.get("sampled"),
+        ]
+
+        self._ensure_connected()
+
+        def _insert():
+            return self.connection.execute(query, parameters)
+
+        self._execute_with_timeout(_insert, timeout)
+
     def get_table_info(self, table_name: str) -> list[dict[str, Any]]:
         """Get information about a table's structure."""
         query = f"DESCRIBE {table_name}"
@@ -663,6 +719,9 @@ def get_database_stats(database_path: Path) -> dict[str, Any]:
         stats = {
             "runtime_events_count": db.get_table_count("runtime_events"),
             "lineage_events_count": db.get_table_count("lineage_events"),
+            "dataframe_lineage_events_count": db.get_table_count(
+                "dataframe_lineage_events"
+            ),
             "database_size_bytes": (
                 database_path.stat().st_size if database_path.exists() else 0
             ),

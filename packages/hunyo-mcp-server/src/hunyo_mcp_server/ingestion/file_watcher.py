@@ -84,7 +84,7 @@ class FileWatcher:
     Main file watcher for monitoring JSONL event files.
 
     Features:
-    - Monitors runtime and lineage event directories
+    - Monitors runtime, lineage, and DataFrame lineage event directories
     - Debounced file processing to handle rapid changes
     - Automatic file type detection
     - Error handling and recovery
@@ -95,6 +95,7 @@ class FileWatcher:
         self,
         runtime_dir: Path,
         lineage_dir: Path,
+        dataframe_lineage_dir: Path,
         event_processor: EventProcessor,
         *,
         verbose: bool = False,
@@ -102,6 +103,7 @@ class FileWatcher:
         # Normalize directory paths for consistent comparison across platforms
         self.runtime_dir = Path(runtime_dir).resolve()
         self.lineage_dir = Path(lineage_dir).resolve()
+        self.dataframe_lineage_dir = Path(dataframe_lineage_dir).resolve()
         self.event_processor = event_processor
         self.verbose = verbose
 
@@ -122,6 +124,9 @@ class FileWatcher:
         watcher_logger.status("[SCAN] Starting file watcher...")
         watcher_logger.info(f"Runtime directory: {self.runtime_dir}")
         watcher_logger.info(f"Lineage directory: {self.lineage_dir}")
+        watcher_logger.info(
+            f"DataFrame lineage directory: {self.dataframe_lineage_dir}"
+        )
 
     async def start(self) -> None:
         """Start watching for file changes."""
@@ -135,10 +140,14 @@ class FileWatcher:
             # Ensure directories exist
             self.runtime_dir.mkdir(parents=True, exist_ok=True)
             self.lineage_dir.mkdir(parents=True, exist_ok=True)
+            self.dataframe_lineage_dir.mkdir(parents=True, exist_ok=True)
 
             # Set up file system watching
             self.observer.schedule(self.handler, str(self.runtime_dir), recursive=False)
             self.observer.schedule(self.handler, str(self.lineage_dir), recursive=False)
+            self.observer.schedule(
+                self.handler, str(self.dataframe_lineage_dir), recursive=False
+            )
 
             # Start the observer
             self.observer.start()
@@ -201,9 +210,17 @@ class FileWatcher:
             watcher_logger.info(f"Processing existing lineage file: {file_path.name}")
             await self._process_file(file_path, "lineage")
 
-        if runtime_files or lineage_files:
+        # Process DataFrame lineage files
+        dataframe_lineage_files = list(self.dataframe_lineage_dir.glob("*.jsonl"))
+        for file_path in dataframe_lineage_files:
+            watcher_logger.info(
+                f"Processing existing DataFrame lineage file: {file_path.name}"
+            )
+            await self._process_file(file_path, "dataframe_lineage")
+
+        if runtime_files or lineage_files or dataframe_lineage_files:
             watcher_logger.success(
-                f"[OK] Processed {len(runtime_files)} runtime + {len(lineage_files)} lineage files"
+                f"[OK] Processed {len(runtime_files)} runtime + {len(lineage_files)} lineage + {len(dataframe_lineage_files)} DataFrame lineage files"
             )
         else:
             watcher_logger.info("No existing JSONL files found")
@@ -237,11 +254,14 @@ class FileWatcher:
                 file_parent = file_path.parent.resolve()
                 runtime_dir_resolved = self.runtime_dir.resolve()
                 lineage_dir_resolved = self.lineage_dir.resolve()
+                dataframe_lineage_dir_resolved = self.dataframe_lineage_dir.resolve()
 
                 if file_parent == runtime_dir_resolved:
                     event_type = "runtime"
                 elif file_parent == lineage_dir_resolved:
                     event_type = "lineage"
+                elif file_parent == dataframe_lineage_dir_resolved:
+                    event_type = "dataframe_lineage"
                 else:
                     watcher_logger.warning(f"[WARN] Unknown file location: {file_path}")
                     continue
@@ -314,11 +334,14 @@ class FileWatcher:
         file_parent = file_path.parent.resolve()
         runtime_dir_resolved = self.runtime_dir.resolve()
         lineage_dir_resolved = self.lineage_dir.resolve()
+        dataframe_lineage_dir_resolved = self.dataframe_lineage_dir.resolve()
 
         if file_parent == runtime_dir_resolved:
             event_type = "runtime"
         elif file_parent == lineage_dir_resolved:
             event_type = "lineage"
+        elif file_parent == dataframe_lineage_dir_resolved:
+            event_type = "dataframe_lineage"
         else:
             msg = f"File not in watched directories: {file_path}"
             raise ValueError(msg)
@@ -333,6 +356,7 @@ class FileWatcher:
 async def watch_directories(
     runtime_dir: Path,
     lineage_dir: Path,
+    dataframe_lineage_dir: Path,
     event_processor: EventProcessor,
     duration: float | None = None,
 ) -> FileWatcher:
@@ -342,13 +366,16 @@ async def watch_directories(
     Args:
         runtime_dir: Directory containing runtime JSONL files
         lineage_dir: Directory containing lineage JSONL files
+        dataframe_lineage_dir: Directory containing DataFrame lineage JSONL files
         event_processor: Event processor instance
         duration: How long to watch (None = indefinite)
 
     Returns:
         FileWatcher instance
     """
-    watcher = FileWatcher(runtime_dir, lineage_dir, event_processor)
+    watcher = FileWatcher(
+        runtime_dir, lineage_dir, dataframe_lineage_dir, event_processor
+    )
 
     if duration:
         # Watch for specified duration using asyncio.wait_for

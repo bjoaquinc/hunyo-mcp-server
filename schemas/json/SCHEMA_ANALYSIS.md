@@ -198,6 +198,105 @@ The OpenLineage events capture various pandas operations:
 
 ### OpenLineage Events
 - **Data Governance**: Full lineage tracking for compliance
+- **Schema Discovery**: Automatic detection of data structures
+- **Impact Analysis**: Understanding downstream effects of changes
+- **Quality Monitoring**: Column-level metrics and validation
+
+## DataFrame Lineage Events Analysis (NEW)
+
+### Purpose
+DataFrame lineage events provide computational lineage tracking specifically for pandas DataFrame operations, filling the gap between basic OpenLineage events and runtime monitoring by capturing detailed operation-level transformations.
+
+### Structure
+DataFrame lineage events follow a structured format designed to track specific DataFrame transformations:
+
+- **Event Type**: Always `"dataframe_lineage"`
+- **Size**: ~500-1500 bytes per event  
+- **Focus**: Computational operations, column lineage, variable tracking
+
+### Key Fields
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `event_type` | string | Always "dataframe_lineage" | `"dataframe_lineage"` |
+| `execution_id` | string | Links to runtime execution | `"cac41f13"` |
+| `cell_id` | string | Marimo cell identifier | `"vblA"` |
+| `session_id` | string | Session identifier | `"12c3604f"` |
+| `operation_type` | string | Operation category | `"selection"`, `"aggregation"`, `"join"` |
+| `operation_method` | string | Pandas method called | `"__getitem__"`, `"groupby"`, `"merge"` |
+| `operation_code` | string | Source code | `"df[df['age'] > 25]"` |
+| `input_dataframes` | array | Input DataFrame info | Variable names, shapes, columns |
+| `output_dataframes` | array | Output DataFrame info | Variable names, shapes, columns |
+| `column_lineage` | object | Column-level lineage | `{"output.col": ["input.col"]}` |
+| `performance` | object | Operation monitoring | Overhead, size, sampling info |
+
+### MVP Operation Types
+
+The DataFrame lineage schema supports three core operation categories:
+
+1. **Selection** (`"selection"`)
+   - Methods: `__getitem__`
+   - Captures: Filtering, column selection, slicing
+   - Example: `df[df['age'] > 25]`, `df['name']`
+
+2. **Aggregation** (`"aggregation"`)
+   - Methods: `groupby`, `sum`, `mean`, `count`
+   - Captures: GroupBy operations and aggregations
+   - Example: `df.groupby('dept').sum()`
+
+3. **Join** (`"join"`)
+   - Methods: `merge`
+   - Captures: DataFrame merging operations
+   - Example: `df1.merge(df2, on='id')`
+
+### DataFrame Info Schema
+
+Each DataFrame reference includes:
+```json
+{
+  "variable_name": "df_filtered_123",
+  "object_id": "140234567891",
+  "shape": [3, 3],
+  "columns": ["name", "age", "salary"],
+  "memory_usage_mb": 0.001
+}
+```
+
+### Column Lineage Mapping
+
+Column lineage uses dot notation to map output columns to input columns:
+```json
+{
+  "column_lineage": {
+    "df_filtered.name": ["df.name"],
+    "df_filtered.age": ["df.age"],
+    "df_filtered.salary": ["df.salary"]
+  }
+}
+```
+
+## Comprehensive Schema Comparison
+
+| Aspect | Runtime Events | OpenLineage Events | DataFrame Lineage Events |
+|--------|----------------|-------------------|-------------------------|
+| **Purpose** | Execution monitoring | Data lineage tracking | Computational lineage |
+| **Granularity** | Cell-level | Dataset/Job-level | Operation-level |
+| **DataFrame Focus** | None | Basic creation/modification | Detailed transformations |
+| **Variable Tracking** | None | Object IDs only | Variable names + object IDs |
+| **Column Lineage** | None | Complex facet-based | Simple dot notation |
+| **Operation Details** | Source code only | Job metadata | Method + parameters |
+| **Performance** | Memory usage | Duration | Overhead + sampling |
+| **Primary Gap Addressed** | N/A | N/A | **Missing DataFrame transformations** |
+
+### Schema Integration Strategy
+
+The three schemas work together to provide comprehensive coverage:
+
+1. **Runtime Events** → Execution context and performance baseline
+2. **OpenLineage Events** → Standard data lineage and external I/O operations  
+3. **DataFrame Lineage Events** → **NEW** Computational transformations and column-level lineage
+
+This addresses the **critical gap** where filtering operations like `df[df['age'] > 25]` were completely missing from lineage tracking.
 - **Impact Analysis**: Understand data flow dependencies
 - **Data Quality**: Track schema changes and data metrics
 - **Debugging**: Detailed column-level data flow analysis

@@ -63,6 +63,7 @@ hunyo-notebook-memories-mcp/
 │       ├── tests/                  # Server tests (60 tests)
 │       └── pyproject.toml          # Server package config
 ├── tests/                          # Integration tests (23 tests)
+├── sandbox/                        # Interactive development playground
 ├── schemas/                        # Database and JSON schemas
 └── pyproject.toml                  # Workspace configuration
 ```
@@ -233,6 +234,93 @@ hatch run test tests/integration/test_schema_validation_integration.py
 - ✅ DataFrame operation detection in real marimo cells  
 - ✅ WebSocket communication with marimo server
 - ✅ Complete capture pipeline functionality
+
+## Interactive Development Sandbox
+
+**🎮 Interactive Development Playground**: The `sandbox/` directory provides an interactive development environment for manual testing and experimentation.
+
+> [!NOTE]  
+> Sandbox is for **interactive development**, not automated testing. Use `tests/fixtures/` for test data.
+
+### Sandbox Files
+
+<table>
+  <tr>
+    <th>File</th>
+    <th>Purpose</th>
+    <th>Usage</th>
+  </tr>
+  <tr>
+    <td><code>test_notebook.py</code></td>
+    <td>🌐 Interactive marimo app</td>
+    <td>Browser-based development and testing</td>
+  </tr>
+  <tr>
+    <td><code>__marimo__/</code></td>
+    <td>📁 Marimo cache directory</td>
+    <td>Auto-generated marimo state</td>
+  </tr>
+</table>
+
+### Interactive Development Commands
+
+<table>
+  <tr>
+    <th>Development Type</th>
+    <th>Command</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td>Interactive Notebook</td>
+    <td><code>marimo edit sandbox/test_notebook.py</code></td>
+    <td>🌐 Launch marimo in browser for interactive development</td>
+  </tr>
+  <tr>
+    <td>From Root</td>
+    <td><code>cd sandbox && marimo edit test_notebook.py</code></td>
+    <td>🎯 Run from sandbox directory</td>
+  </tr>
+</table>
+
+### Sandbox Development Workflow
+
+**For developing new capture features:**
+
+```bash
+# 1. Make changes to packages/hunyo-capture/src/
+# 2. Test interactively in browser
+marimo edit sandbox/test_notebook.py
+```
+
+**What sandbox provides:**
+- ✅ Automatic unified tracking initialization
+- ✅ Interactive DataFrame operations in browser
+- ✅ Real-time event capture to `.hunyo/events/`
+- ✅ Session summary and debugging information
+- ✅ Automatic package path configuration
+
+### Event Capture Verification
+
+The sandbox automatically captures events to:
+
+```bash
+# Events are saved to these locations:
+.hunyo/events/lineage/    # Lineage events (DataFrame operations)
+.hunyo/events/runtime/    # Runtime events (marimo execution)
+```
+
+**Check captured events:**
+
+```bash
+# View lineage events
+ls -la .hunyo/events/lineage/
+
+# View runtime events  
+ls -la .hunyo/events/runtime/
+
+# Count events in latest session
+wc -l .hunyo/events/lineage/*.jsonl
+```
 
 ## Environment Management
 

@@ -5,6 +5,7 @@ Handles data directory resolution, environment detection, and path management
 for both development and production environments.
 """
 
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -177,15 +178,38 @@ def get_event_directories() -> tuple[Path, Path]:
     return runtime_dir, lineage_dir
 
 
-def get_database_path() -> Path:
+def get_notebook_file_hash(notebook_path: str | Path) -> str:
+    """
+    Generate 8-character SHA256 hash from notebook file path.
+
+    Args:
+        notebook_path: Path to the notebook file
+
+    Returns:
+        str: 8-character hash for notebook identification
+    """
+    path_bytes = str(Path(notebook_path).resolve()).encode("utf-8")
+    return hashlib.sha256(path_bytes).hexdigest()[:8]
+
+
+def get_database_path(notebook_hash: str | None = None) -> Path:
     """
     Get the DuckDB database file path with cross-platform normalization.
+
+    Args:
+        notebook_hash: Optional notebook hash for notebook-specific database
 
     Returns:
         Path: Normalized database file path
     """
     data_dir = get_hunyo_data_dir()
-    db_path = data_dir / "database" / "lineage.duckdb"
+
+    if notebook_hash:
+        db_name = f"{notebook_hash}.duckdb"
+    else:
+        db_name = "lineage.duckdb"  # Keep existing default for backward compatibility
+
+    db_path = data_dir / "database" / db_name
     normalized_path = normalize_database_path(str(db_path))
     return Path(normalized_path)
 
@@ -207,7 +231,7 @@ def ensure_directory_structure() -> None:
 
     Creates:
     - Main data directory (.hunyo)
-    - Events subdirectories (runtime, lineage)
+    - Events subdirectories (runtime, lineage, dataframe_lineage)
     - Database directory
     - Config directory
 
@@ -222,6 +246,7 @@ def ensure_directory_structure() -> None:
     event_subdirs = [
         data_dir / "events" / "runtime",
         data_dir / "events" / "lineage",
+        data_dir / "events" / "dataframe_lineage",
     ]
 
     for subdir in event_subdirs:
@@ -237,23 +262,27 @@ def ensure_directory_structure() -> None:
 
     mcp_logger.config(f"[OK] Directory structure created at: {data_dir}")
 
+    # Additional specific setup for DataFrame lineage
+    if is_dataframe_lineage_enabled():
+        ensure_dataframe_lineage_directory()
+
 
 def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Path:
     """
     Get the full path for an event file.
 
     Args:
-        event_type: 'runtime' or 'lineage'
+        event_type: 'runtime', 'lineage', or 'dataframe_lineage'
         notebook_path: Optional notebook path for unique naming
 
     Returns:
         Path: Full path to the event file
 
     Raises:
-        ValueError: If event_type is not 'runtime' or 'lineage'
+        ValueError: If event_type is not supported
     """
-    if event_type not in {"runtime", "lineage"}:
-        msg = f"event_type must be 'runtime' or 'lineage', got: {event_type}"
+    if event_type not in {"runtime", "lineage", "dataframe_lineage"}:
+        msg = f"event_type must be 'runtime', 'lineage', or 'dataframe_lineage', got: {event_type}"
         raise ValueError(msg)
 
     data_dir = get_hunyo_data_dir()
@@ -270,6 +299,85 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
     return events_dir / filename
 
 
+def get_dataframe_lineage_config() -> dict[str, Any]:
+    """
+    Get DataFrame lineage configuration settings from environment variables.
+
+    Returns:
+        dict: DataFrame lineage configuration with the following keys:
+            - enabled: Whether DataFrame lineage tracking is enabled
+            - sample_large_dataframes: Whether to sample large DataFrames
+            - size_threshold_mb: Size threshold for sampling (MB)
+            - sample_rate: Sampling rate for large DataFrames (0.0-1.0)
+            - max_overhead_ms: Maximum acceptable overhead per operation (ms)
+    """
+    try:
+        return {
+            "enabled": os.environ.get("HUNYO_TRACK_DATAFRAME_LINEAGE", "true").lower()
+            == "true",
+            "sample_large_dataframes": os.environ.get(
+                "HUNYO_SAMPLE_LARGE_DF", "true"
+            ).lower()
+            == "true",
+            "size_threshold_mb": float(
+                os.environ.get("HUNYO_DF_SIZE_THRESHOLD", "10.0")
+            ),
+            "sample_rate": float(os.environ.get("HUNYO_DF_SAMPLE_RATE", "0.1")),
+            "max_overhead_ms": float(os.environ.get("HUNYO_DF_MAX_OVERHEAD", "5.0")),
+        }
+    except (ValueError, TypeError) as e:
+        mcp_logger.warning(f"[CONFIG] Invalid DataFrame lineage config value: {e}")
+        # Return safe defaults
+        return {
+            "enabled": True,
+            "sample_large_dataframes": True,
+            "size_threshold_mb": 10.0,
+            "sample_rate": 0.1,
+            "max_overhead_ms": 5.0,
+        }
+
+
+def is_dataframe_lineage_enabled() -> bool:
+    """
+    Check if DataFrame lineage tracking is enabled.
+
+    Returns:
+        bool: True if DataFrame lineage tracking is enabled, False otherwise
+    """
+    return get_dataframe_lineage_config()["enabled"]
+
+
+def get_dataframe_lineage_events_dir() -> Path:
+    """
+    Get the DataFrame lineage events directory.
+
+    Returns:
+        Path: Directory path for DataFrame lineage events
+    """
+    data_dir = get_hunyo_data_dir()
+    return data_dir / "events" / "dataframe_lineage"
+
+
+def ensure_dataframe_lineage_directory() -> None:
+    """
+    Ensure the DataFrame lineage events directory exists.
+
+    Creates the directory with proper cross-platform permissions.
+    """
+    df_lineage_dir = get_dataframe_lineage_events_dir()
+    df_lineage_dir.mkdir(parents=True, exist_ok=True)
+
+    # Apply cross-platform permissions
+    try:
+        if os.name != "nt":  # Not Windows
+            df_lineage_dir.chmod(0o755)
+    except (OSError, NotImplementedError):
+        # Some filesystems don't support chmod, skip silently
+        pass
+
+    mcp_logger.config(f"[OK] DataFrame lineage directory created: {df_lineage_dir}")
+
+
 def get_environment_info() -> dict[str, Any]:
     """
     Get comprehensive environment information for debugging.
@@ -282,6 +390,8 @@ def get_environment_info() -> dict[str, Any]:
         db_path = get_database_path()
         config_path = get_config_path()
         runtime_dir, lineage_dir = get_event_directories()
+        df_lineage_dir = get_dataframe_lineage_events_dir()
+        df_lineage_config = get_dataframe_lineage_config()
 
         return {
             "development_mode": is_development_mode(),
@@ -290,9 +400,11 @@ def get_environment_info() -> dict[str, Any]:
             "config_path": str(config_path),
             "runtime_events_dir": str(runtime_dir),
             "lineage_events_dir": str(lineage_dir),
+            "dataframe_lineage_dir": str(df_lineage_dir),
             "data_dir_exists": data_dir.exists(),
             "database_exists": db_path.exists(),
             "config_exists": config_path.exists(),
+            "dataframe_lineage_config": df_lineage_config,
         }
     except Exception as e:
         return {
@@ -350,6 +462,21 @@ class HunyoConfig:
         """Get the lineage events directory."""
         _, lineage_dir = get_event_directories()
         return lineage_dir
+
+    @property
+    def dataframe_lineage_dir(self) -> Path:
+        """Get the DataFrame lineage events directory."""
+        return get_dataframe_lineage_events_dir()
+
+    @property
+    def dataframe_lineage_config(self) -> dict[str, Any]:
+        """Get DataFrame lineage configuration settings."""
+        return get_dataframe_lineage_config()
+
+    @property
+    def is_dataframe_lineage_enabled(self) -> bool:
+        """Check if DataFrame lineage tracking is enabled."""
+        return is_dataframe_lineage_enabled()
 
     def get_event_file_path(
         self, event_type: str, notebook_path: str | None = None

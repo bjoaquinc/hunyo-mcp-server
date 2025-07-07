@@ -59,7 +59,44 @@ CREATE INDEX IF NOT EXISTS idx_lineage_event_time ON lineage_events(event_time);
 CREATE INDEX IF NOT EXISTS idx_lineage_job_name ON lineage_events(job_name);
 
 ------------------------------------------------------------
--- 3. Convenience views
+-- 3. DataFrame computational lineage events (MVP)
+------------------------------------------------------------
+CREATE SEQUENCE IF NOT EXISTS dataframe_lineage_events_seq START 1;
+
+CREATE TABLE IF NOT EXISTS dataframe_lineage_events (
+    df_event_id         BIGINT      PRIMARY KEY DEFAULT nextval('dataframe_lineage_events_seq'),
+    event_type          VARCHAR     NOT NULL DEFAULT 'dataframe_lineage',
+    execution_id        CHAR(8)     NOT NULL,
+    cell_id             VARCHAR     NOT NULL,
+    session_id          CHAR(8)     NOT NULL,
+    timestamp           TIMESTAMPTZ NOT NULL,
+    emitted_at          TIMESTAMPTZ NOT NULL,
+    
+    -- Operation Information (MVP Core)
+    operation_type      VARCHAR     NOT NULL,           -- selection, aggregation, join
+    operation_method    VARCHAR     NOT NULL,           -- __getitem__, groupby, sum, mean, count, merge
+    operation_code      VARCHAR,                        -- Source code
+    operation_parameters JSON,                          -- Operation-specific parameters
+    
+    -- DataFrame Information (MVP)
+    input_dataframes    JSON        NOT NULL,           -- Array of input DataFrame info
+    output_dataframes   JSON        NOT NULL,           -- Array of output DataFrame info
+    column_lineage      JSON,                           -- Column-level lineage mapping
+    
+    -- Performance Monitoring (MVP - Simplified)
+    overhead_ms         DOUBLE,                         -- Time spent in interception logic (ms)
+    df_size_mb          DOUBLE,                         -- Size of input DataFrame in MB
+    sampled             BOOLEAN                         -- Whether sampling was used
+);
+
+-- Indexes for dataframe_lineage_events
+CREATE INDEX IF NOT EXISTS idx_df_lineage_execution_id ON dataframe_lineage_events(execution_id);
+CREATE INDEX IF NOT EXISTS idx_df_lineage_session_time ON dataframe_lineage_events(session_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_df_lineage_operation ON dataframe_lineage_events(operation_type, operation_method);
+CREATE INDEX IF NOT EXISTS idx_df_lineage_timestamp ON dataframe_lineage_events(timestamp);
+
+------------------------------------------------------------
+-- 4. Convenience views
 ------------------------------------------------------------
 
 -- Lineage I/O Summary View
@@ -109,4 +146,44 @@ SELECT
     
 FROM runtime_events r
 LEFT JOIN lineage_events l ON r.execution_id = l.execution_id
-WHERE r.event_type IN ('cell_execution_start', 'cell_execution_end'); 
+WHERE r.event_type IN ('cell_execution_start', 'cell_execution_end');
+
+-- DataFrame Lineage Summary View
+CREATE OR REPLACE VIEW vw_dataframe_lineage AS
+SELECT
+    df_event_id,
+    execution_id,
+    cell_id,
+    session_id,
+    timestamp,
+    operation_type,
+    operation_method,
+    operation_code,
+    
+    -- Extract DataFrame information from JSON
+    json_array_length(input_dataframes) AS input_df_count,
+    json_array_length(output_dataframes) AS output_df_count,
+    json_extract(input_dataframes, '$[0].variable_name') AS input_variable,
+    json_extract(output_dataframes, '$[0].variable_name') AS output_variable,
+    json_extract(input_dataframes, '$[0].shape[0]') AS input_rows,
+    json_extract(input_dataframes, '$[0].shape[1]') AS input_cols,
+    json_extract(output_dataframes, '$[0].shape[0]') AS output_rows,
+    json_extract(output_dataframes, '$[0].shape[1]') AS output_cols,
+    
+    -- Column lineage summary
+    json_keys(column_lineage) AS output_columns,
+    
+    -- Performance metrics
+    overhead_ms,
+    df_size_mb,
+    sampled,
+    
+    -- Calculate transformation ratios
+    CASE 
+        WHEN json_extract(input_dataframes, '$[0].shape[0]') > 0 
+        THEN CAST(json_extract(output_dataframes, '$[0].shape[0]') AS DOUBLE) / 
+             CAST(json_extract(input_dataframes, '$[0].shape[0]') AS DOUBLE)
+        ELSE NULL 
+    END AS row_retention_ratio
+
+FROM dataframe_lineage_events; 

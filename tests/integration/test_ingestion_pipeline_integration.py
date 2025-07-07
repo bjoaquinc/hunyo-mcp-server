@@ -76,18 +76,20 @@ class TestIngestionPipelineIntegration:
         # Use centralized cross-platform directory setup
         directories = setup_cross_platform_directories(str(temp_hunyo_dir))
 
-        # Create specific runtime and lineage subdirectories within events directory
+        # Create specific runtime, lineage, and DataFrame lineage subdirectories within events directory
         events_base = Path(directories["events"])
         runtime_dir = events_base / "runtime"
         lineage_dir = events_base / "lineage"
+        dataframe_lineage_dir = events_base / "dataframe_lineage"
 
-        for dir_path in [runtime_dir, lineage_dir]:
+        for dir_path in [runtime_dir, lineage_dir, dataframe_lineage_dir]:
             dir_path.mkdir(parents=True, exist_ok=True)
 
         return {
             "events": events_base,
             "runtime": runtime_dir,
             "lineage": lineage_dir,
+            "dataframe_lineage": dataframe_lineage_dir,
         }
 
     def validate_event_against_schema(
@@ -365,6 +367,7 @@ class TestIngestionPipelineIntegration:
         file_watcher = FileWatcher(
             runtime_dir=events_directory["runtime"],
             lineage_dir=events_directory["lineage"],
+            dataframe_lineage_dir=events_directory["dataframe_lineage"],
             event_processor=real_event_processor,
             verbose=True,  # Enable verbose logging for testing
         )

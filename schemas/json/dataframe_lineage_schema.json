@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://marimo.io/schemas/dataframe-lineage-event.json",
+  "title": "Marimo DataFrame Lineage Event",
+  "description": "Schema for DataFrame computational lineage events in Marimo notebooks",
+  "type": "object",
+  "required": [
+    "event_type",
+    "execution_id",
+    "cell_id",
+    "session_id",
+    "timestamp",
+    "emitted_at",
+    "operation_type",
+    "operation_method",
+    "operation_code",
+    "input_dataframes",
+    "output_dataframes"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "description": "Type of DataFrame lineage event",
+      "const": "dataframe_lineage"
+    },
+    "execution_id": {
+      "type": "string",
+      "description": "Unique identifier linking to runtime execution (8-character hex)",
+      "pattern": "^[a-f0-9]{8}$"
+    },
+    "cell_id": {
+      "type": "string",
+      "description": "Marimo cell identifier"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Session identifier (8-character hex)",
+      "pattern": "^[a-f0-9]{8}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when operation occurred"
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when event was emitted"
+    },
+    "operation_type": {
+      "type": "string",
+      "description": "MVP operation categories (core operations only)",
+      "enum": [
+        "selection",
+        "aggregation", 
+        "join"
+      ]
+    },
+    "operation_method": {
+      "type": "string",
+      "description": "Pandas method name that was called (MVP core methods)",
+      "enum": [
+        "__getitem__",
+        "groupby",
+        "sum",
+        "mean",
+        "count",
+        "merge"
+      ]
+    },
+    "operation_code": {
+      "type": "string",
+      "description": "Source code that generated this operation"
+    },
+    "operation_parameters": {
+      "type": "object",
+      "description": "MVP operation parameters (simplified for core operations)",
+      "properties": {
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names involved in operation"
+        },
+        "how": {
+          "type": "string",
+          "description": "Join type ('inner', 'outer', 'left', 'right') or aggregation method"
+        },
+        "on": {
+          "type": [
+            "string",
+            "array"
+          ],
+          "description": "Join keys or grouping columns"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Filter condition (for selection operations)"
+        },
+        "is_boolean_mask": {
+          "type": "boolean",
+          "description": "Whether selection uses boolean masking"
+        }
+      },
+      "additionalProperties": true
+    },
+    "input_dataframes": {
+      "type": "array",
+      "description": "Array of input DataFrame information",
+      "items": {
+        "$ref": "#/definitions/dataframe_info"
+      }
+    },
+    "output_dataframes": {
+      "type": "array",
+      "description": "Array of output DataFrame information",
+      "items": {
+        "$ref": "#/definitions/dataframe_info"
+      }
+    },
+    "column_lineage": {
+      "type": "object",
+      "description": "Column-level lineage mapping from output to input columns",
+      "patternProperties": {
+        "^[^.]+\\.[^.]+$": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Array of source column names (format: 'variable.column')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "performance": {
+      "type": "object",
+      "description": "Simplified performance monitoring for MVP",
+      "properties": {
+        "overhead_ms": {
+          "type": "number",
+          "description": "Time spent in interception logic (ms)",
+          "minimum": 0
+        },
+        "df_size_mb": {
+          "type": "number",
+          "description": "Size of input DataFrame in MB",
+          "minimum": 0
+        },
+        "sampled": {
+          "type": "boolean",
+          "description": "Whether this event was captured via sampling"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "definitions": {
+    "dataframe_info": {
+      "type": "object",
+      "description": "Information about a DataFrame involved in the operation",
+      "required": [
+        "variable_name",
+        "shape",
+        "columns"
+      ],
+      "properties": {
+        "variable_name": {
+          "type": "string",
+          "description": "Variable name or identifier for the DataFrame"
+        },
+        "object_id": {
+          "type": "string",
+          "description": "Python object ID for tracking (optional)"
+        },
+        "shape": {
+          "type": "array",
+          "description": "DataFrame shape as [rows, columns]",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "columns": {
+          "type": "array",
+          "description": "List of column names",
+          "items": {
+            "type": "string"
+          }
+        },
+        "memory_usage_mb": {
+          "type": "number",
+          "description": "Memory usage of the DataFrame in MB",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+} 

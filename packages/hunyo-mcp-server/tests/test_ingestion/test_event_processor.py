@@ -431,6 +431,7 @@ class TestEventProcessor:
             "schemas_loaded": {
                 "runtime_schema": True,
                 "openlineage_schema": True,
+                "dataframe_lineage_schema": True,
             },
         }
 

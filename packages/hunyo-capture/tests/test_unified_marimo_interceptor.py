@@ -193,10 +193,13 @@ class TestUnifiedMarimoInterceptor:
             assert interceptor._get_current_execution_context() is None
 
             # Simulate adding execution context
+            import time
+
             context_data = {
                 "execution_id": "test123",
                 "cell_id": "cell1",
                 "timestamp": "2023-01-01T00:00:00Z",
+                "context_created_at": time.time(),  # Add required timestamp field
             }
 
             import threading
@@ -206,6 +209,78 @@ class TestUnifiedMarimoInterceptor:
 
             assert interceptor._is_in_marimo_execution()
             assert interceptor._get_current_execution_context() == context_data
+
+    def test_multiple_execution_contexts_timestamp_selection(self):
+        """Test that _get_current_execution_context returns the most recent context by timestamp."""
+        import time
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            interceptor = UnifiedMarimoInterceptor(
+                notebook_path=str(Path(tmp_dir) / "test.py"),
+                runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
+                lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+            )
+
+            # Create multiple execution contexts with different timestamps
+            # Simulate the bug scenario: Cell A executes first, then Cell B
+            base_time = time.time()
+
+            # First context (Cell A - older)
+            context_a = {
+                "execution_id": "cell_a_exec",
+                "cell_id": "cell_a",
+                "cell_code": "df = pd.DataFrame(data)",
+                "start_time": base_time,
+                "context_created_at": base_time,  # Older timestamp
+            }
+
+            # Second context (Cell B - newer)
+            context_b = {
+                "execution_id": "cell_b_exec",
+                "cell_id": "cell_b",
+                "cell_code": "df_filtered = df[df['age'] > 25]",
+                "start_time": base_time + 1,
+                "context_created_at": base_time + 1,  # Newer timestamp
+            }
+
+            # Store both contexts (simulating concurrent execution tracking)
+            interceptor._execution_contexts["cell_a"] = context_a
+            interceptor._execution_contexts["cell_b"] = context_b
+
+            # Test that the most recent context is returned
+            current_context = interceptor._get_current_execution_context()
+
+            # Should return context_b (most recent) not context_a (first in dict)
+            assert current_context is not None
+            assert current_context["execution_id"] == "cell_b_exec"
+            assert current_context["cell_id"] == "cell_b"
+
+            # Test edge case: add third context even newer
+            context_c = {
+                "execution_id": "cell_c_exec",
+                "cell_id": "cell_c",
+                "cell_code": "result = df_filtered.groupby('col').sum()",
+                "start_time": base_time + 2,
+                "context_created_at": base_time + 2,  # Newest timestamp
+            }
+
+            interceptor._execution_contexts["cell_c"] = context_c
+
+            # Should now return context_c (newest)
+            current_context = interceptor._get_current_execution_context()
+            assert current_context["execution_id"] == "cell_c_exec"
+            assert current_context["cell_id"] == "cell_c"
+
+            # Test that method still works with single context
+            interceptor._execution_contexts.clear()
+            interceptor._execution_contexts["single"] = context_a
+
+            current_context = interceptor._get_current_execution_context()
+            assert current_context["execution_id"] == "cell_a_exec"
+
+            # Test empty contexts
+            interceptor._execution_contexts.clear()
+            assert interceptor._get_current_execution_context() is None
 
     def test_uninstall_functionality(self):
         """Test that interceptor can be uninstalled properly."""

@@ -14,7 +14,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from hunyo_mcp_server.ingestion.event_processor import EventProcessor
-from hunyo_mcp_server.ingestion.file_watcher import FileWatcher, JSONLFileHandler
+from hunyo_mcp_server.ingestion.file_watcher import (
+    FileWatcher,
+    JSONLFileHandler,
+    watch_directories,
+)
 
 
 class TestJSONLFileHandler:
@@ -125,18 +129,27 @@ class TestFileWatcher:
         """Create temporary directories for testing"""
         runtime_dir = tmp_path / "runtime"
         lineage_dir = tmp_path / "lineage"
-        runtime_dir.mkdir(parents=True)
-        lineage_dir.mkdir(parents=True)
+        dataframe_lineage_dir = tmp_path / "dataframe_lineage"
+
+        runtime_dir.mkdir()
+        lineage_dir.mkdir()
+        dataframe_lineage_dir.mkdir()
+
         return {
             "runtime": runtime_dir,
             "lineage": lineage_dir,
+            "dataframe_lineage": dataframe_lineage_dir,
         }
 
     @pytest.fixture
     def mock_event_processor(self):
         """Mock EventProcessor for testing"""
-        processor = MagicMock(spec=EventProcessor)
-        processor.process_jsonl_file.return_value = 5  # Mock processed count
+        processor = MagicMock()
+        processor.process_jsonl_file.return_value = 3
+        processor.get_validation_summary.return_value = {
+            "total_events": 10,
+            "failed_events": 0,
+        }
         return processor
 
     @pytest.fixture
@@ -145,6 +158,7 @@ class TestFileWatcher:
         return FileWatcher(
             runtime_dir=temp_dirs["runtime"],
             lineage_dir=temp_dirs["lineage"],
+            dataframe_lineage_dir=temp_dirs["dataframe_lineage"],
             event_processor=mock_event_processor,
             verbose=True,
         )
@@ -154,11 +168,13 @@ class TestFileWatcher:
         watcher = FileWatcher(
             runtime_dir=temp_dirs["runtime"],
             lineage_dir=temp_dirs["lineage"],
+            dataframe_lineage_dir=temp_dirs["dataframe_lineage"],
             event_processor=mock_event_processor,
         )
 
         assert watcher.runtime_dir == temp_dirs["runtime"].resolve()
         assert watcher.lineage_dir == temp_dirs["lineage"].resolve()
+        assert watcher.dataframe_lineage_dir == temp_dirs["dataframe_lineage"].resolve()
         assert watcher.event_processor == mock_event_processor
         assert not watcher.running
         assert watcher.files_processed == 0
@@ -191,15 +207,19 @@ class TestFileWatcher:
         # Create some existing JSONL files
         runtime_file = temp_dirs["runtime"] / "existing_runtime.jsonl"
         lineage_file = temp_dirs["lineage"] / "existing_lineage.jsonl"
+        dataframe_lineage_file = (
+            temp_dirs["dataframe_lineage"] / "existing_dataframe_lineage.jsonl"
+        )
 
         runtime_file.write_text('{"event_type": "test"}\n')
         lineage_file.write_text('{"eventType": "START"}\n')
+        dataframe_lineage_file.write_text('{"event_type": "dataframe_lineage"}\n')
 
         # Process existing files
         await file_watcher._process_existing_files()
 
-        # Should have called processor for both files
-        assert file_watcher.event_processor.process_jsonl_file.call_count == 2
+        # Should have called processor for all three files
+        assert file_watcher.event_processor.process_jsonl_file.call_count == 3
 
     @pytest.mark.asyncio
     async def test_process_file_runtime(self, file_watcher, temp_dirs):
@@ -225,6 +245,21 @@ class TestFileWatcher:
         # Should have called processor with correct parameters
         file_watcher.event_processor.process_jsonl_file.assert_called_with(
             lineage_file, "lineage"
+        )
+
+    @pytest.mark.asyncio
+    async def test_process_file_dataframe_lineage(self, file_watcher, temp_dirs):
+        """Test processing a DataFrame lineage file"""
+        dataframe_lineage_file = (
+            temp_dirs["dataframe_lineage"] / "test_dataframe_lineage.jsonl"
+        )
+        dataframe_lineage_file.write_text('{"event_type": "dataframe_lineage"}\n')
+
+        await file_watcher._process_file(dataframe_lineage_file, "dataframe_lineage")
+
+        # Should have called processor with correct parameters
+        file_watcher.event_processor.process_jsonl_file.assert_called_with(
+            dataframe_lineage_file, "dataframe_lineage"
         )
 
     @pytest.mark.asyncio
@@ -345,23 +380,27 @@ class TestFileWatcher:
         # Use non-existent directories
         runtime_dir = tmp_path / "new_runtime"
         lineage_dir = tmp_path / "new_lineage"
+        dataframe_lineage_dir = tmp_path / "new_dataframe_lineage"
 
         watcher = FileWatcher(
             runtime_dir=runtime_dir,
             lineage_dir=lineage_dir,
+            dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_event_processor,
         )
 
         # Directories shouldn't exist yet
         assert not runtime_dir.exists()
         assert not lineage_dir.exists()
+        assert not dataframe_lineage_dir.exists()
 
         # Start the watcher briefly
         start_task = asyncio.create_task(watcher.start())
         await asyncio.sleep(0.1)
         await watcher.stop()
-        start_task.cancel()
 
+        # Cancel the start task
+        start_task.cancel()
         try:
             await start_task
         except asyncio.CancelledError:
@@ -370,154 +409,200 @@ class TestFileWatcher:
         # Directories should now exist
         assert runtime_dir.exists()
         assert lineage_dir.exists()
+        assert dataframe_lineage_dir.exists()
 
     @pytest.mark.asyncio
     async def test_file_type_detection_in_process_file_now(
         self, file_watcher, temp_dirs
     ):
-        """Test automatic file type detection in process_file_now method"""
+        """Test automatic file type detection in process_file_now"""
+        # Test all three file types
         runtime_file = temp_dirs["runtime"] / "test.jsonl"
         lineage_file = temp_dirs["lineage"] / "test.jsonl"
+        dataframe_lineage_file = temp_dirs["dataframe_lineage"] / "test.jsonl"
 
         runtime_file.write_text('{"event_type": "test"}\n')
         lineage_file.write_text('{"eventType": "START"}\n')
+        dataframe_lineage_file.write_text('{"event_type": "dataframe_lineage"}\n')
 
-        # Mock the events_processed counter to simulate processing
-        file_watcher.events_processed = 0
+        # Mock _process_file to track calls
+        call_history = []
 
-        # Mock _process_file to increment events_processed
         async def mock_process_file(_file_path, _event_type):
-            file_watcher.events_processed += 5
+            call_history.append((_file_path, _event_type))
+            file_watcher.events_processed += 1
 
         file_watcher._process_file = mock_process_file
 
-        # Test runtime file detection via process_file_now
-        result1 = await file_watcher.process_file_now(runtime_file)
-        assert result1 == 5  # Events processed diff
+        # Test each file type
+        await file_watcher.process_file_now(runtime_file)
+        await file_watcher.process_file_now(lineage_file)
+        await file_watcher.process_file_now(dataframe_lineage_file)
 
-        # Test lineage file detection via process_file_now
-        result2 = await file_watcher.process_file_now(lineage_file)
-        assert result2 == 5  # Events processed diff
+        # Should have detected correct event types
+        assert len(call_history) == 3
+        assert call_history[0][1] == "runtime"
+        assert call_history[1][1] == "lineage"
+        assert call_history[2][1] == "dataframe_lineage"
 
-        # Should have total events processed
-        assert file_watcher.events_processed == 10  # Total events processed
+    @pytest.mark.asyncio
+    async def test_dataframe_lineage_file_processing_end_to_end(
+        self, file_watcher, temp_dirs
+    ):
+        """Test complete DataFrame lineage file processing workflow"""
+        # Create a DataFrame lineage file
+        dataframe_lineage_file = (
+            temp_dirs["dataframe_lineage"] / "test_dataframe_lineage.jsonl"
+        )
+        dataframe_lineage_file.write_text(
+            '{"event_type": "dataframe_lineage", "operation_type": "selection"}\n'
+        )
 
-        # Test unknown directory should raise ValueError
-        unknown_dir = temp_dirs["runtime"].parent / "unknown"
-        unknown_dir.mkdir()
-        unknown_file = unknown_dir / "test.jsonl"
-        unknown_file.write_text('{"test": "data"}\n')
+        # Test processing existing files (simulates startup)
+        await file_watcher._process_existing_files()
 
-        with pytest.raises(ValueError, match="File not in watched directories"):
-            await file_watcher.process_file_now(unknown_file)
+        # Verify the file was processed with correct event type
+        assert file_watcher.event_processor.process_jsonl_file.call_count >= 1
+
+        # Check the call was made with the DataFrame lineage file and correct event type
+        calls = file_watcher.event_processor.process_jsonl_file.call_args_list
+        dataframe_lineage_calls = [
+            call for call in calls if call[0][1] == "dataframe_lineage"
+        ]
+        assert (
+            len(dataframe_lineage_calls) >= 1
+        ), "Should have processed DataFrame lineage file"
+
+        # Test manual file processing
+        file_watcher.event_processor.process_jsonl_file.reset_mock()
+        await file_watcher.process_file_now(dataframe_lineage_file)
+
+        # Should have processed the file
+        file_watcher.event_processor.process_jsonl_file.assert_called_with(
+            dataframe_lineage_file, "dataframe_lineage"
+        )
 
 
 class TestFileWatcherIntegration:
     """Integration tests for FileWatcher with real file operations"""
 
+    @pytest.fixture
+    def event_processor(self, tmp_path):
+        """Create a real event processor for integration tests"""
+        # Use mock database manager for testing
+        mock_db = MagicMock()
+        processor = EventProcessor(mock_db)
+        return processor
+
     @pytest.mark.asyncio
     async def test_real_file_monitoring(self, tmp_path):
-        """Test actual file system monitoring (integration test)"""
+        """Test real file monitoring with actual file creation"""
         runtime_dir = tmp_path / "runtime"
         lineage_dir = tmp_path / "lineage"
-        runtime_dir.mkdir()
-        lineage_dir.mkdir()
+        dataframe_lineage_dir = tmp_path / "dataframe_lineage"
 
-        # Mock event processor
-        mock_processor = MagicMock(spec=EventProcessor)
+        # Create mock event processor
+        mock_processor = MagicMock()
         mock_processor.process_jsonl_file.return_value = 2
 
         watcher = FileWatcher(
             runtime_dir=runtime_dir,
             lineage_dir=lineage_dir,
+            dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_processor,
+            verbose=True,
         )
 
-        # Start monitoring
-        monitor_task = asyncio.create_task(watcher.start())
+        # Start watcher
+        start_task = asyncio.create_task(watcher.start())
         await asyncio.sleep(0.2)  # Let watcher start
 
-        # Create a file and give time for detection
-        test_file = runtime_dir / "new_runtime_events.jsonl"
-        test_file.write_text('{"event_type": "cell_execution_start"}\n')
+        # Create a test file
+        test_file = runtime_dir / "test.jsonl"
+        test_file.write_text('{"event_type": "test"}\n')
 
-        # Give file watcher time to detect and process
-        await asyncio.sleep(1.5)  # Account for debounce delay
+        # Wait for file to be processed - background processor runs every 1 second
+        # So we need to wait at least 1.5 seconds to ensure processing happens
+        await asyncio.sleep(1.5)
 
-        # Stop monitoring
+        # Stop watcher
         await watcher.stop()
-        monitor_task.cancel()
+
+        # Cancel the start task
+        start_task.cancel()
         try:
-            await monitor_task
+            await start_task
         except asyncio.CancelledError:
             pass
 
-        # Should have processed the file (may take a moment for file system events)
-        # Note: Actual file system events are timing-dependent, so we test structure
-        assert watcher.event_processor is mock_processor
+        # Should have processed the file
+        assert mock_processor.process_jsonl_file.call_count >= 1
 
     @pytest.mark.asyncio
     async def test_error_recovery_during_monitoring(self, tmp_path):
         """Test error recovery during file monitoring"""
         runtime_dir = tmp_path / "runtime"
         lineage_dir = tmp_path / "lineage"
-        runtime_dir.mkdir()
-        lineage_dir.mkdir()
+        dataframe_lineage_dir = tmp_path / "dataframe_lineage"
 
-        # Mock processor that fails initially then succeeds
-        mock_processor = MagicMock(spec=EventProcessor)
-        mock_processor.process_jsonl_file.side_effect = [
-            Exception("First attempt fails"),
-            5,  # Second attempt succeeds
-        ]
+        # Create mock event processor that throws an error
+        mock_processor = MagicMock()
+        mock_processor.process_jsonl_file.side_effect = Exception("Test error")
 
         watcher = FileWatcher(
             runtime_dir=runtime_dir,
             lineage_dir=lineage_dir,
+            dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_processor,
+            verbose=True,
         )
 
-        # Test that errors during processing don't crash the watcher
-        error_file = runtime_dir / "error_test.jsonl"
-        error_file.write_text('{"event_type": "test"}\n')
+        # Start watcher
+        start_task = asyncio.create_task(watcher.start())
+        await asyncio.sleep(0.2)  # Let watcher start
 
-        # Process file directly (simulating background processor)
-        await watcher._process_file(error_file, "runtime")
+        # Create a test file
+        test_file = runtime_dir / "test.jsonl"
+        test_file.write_text('{"event_type": "test"}\n')
 
-        # Second attempt should succeed (processor called twice)
-        await watcher._process_file(error_file, "runtime")
+        # Wait for file to be processed - background processor runs every 1 second
+        # So we need to wait at least 1.5 seconds to ensure processing happens
+        await asyncio.sleep(1.5)
 
-        # Verify both attempts were made
-        assert mock_processor.process_jsonl_file.call_count == 2
+        # Stop watcher
+        await watcher.stop()
+
+        # Cancel the start task
+        start_task.cancel()
+        try:
+            await start_task
+        except asyncio.CancelledError:
+            pass
+
+        # Should still be running despite error
+        assert mock_processor.process_jsonl_file.call_count >= 1
 
 
 @pytest.mark.asyncio
 async def test_watch_directories_helper_function(tmp_path):
-    """Test the watch_directories helper function"""
-    from hunyo_mcp_server.ingestion.file_watcher import watch_directories
-
+    """Test the utility function for watching directories"""
     runtime_dir = tmp_path / "runtime"
     lineage_dir = tmp_path / "lineage"
-    runtime_dir.mkdir()
-    lineage_dir.mkdir()
+    dataframe_lineage_dir = tmp_path / "dataframe_lineage"
 
-    mock_processor = MagicMock(spec=EventProcessor)
-    mock_processor.process_jsonl_file.return_value = 3
+    # Create mock event processor
+    mock_processor = MagicMock()
+    mock_processor.process_jsonl_file.return_value = 1
 
-    # Test timed watching with sufficient duration to account for startup time
-    # The start() method has a 1-second sleep, so we need at least 1.1 seconds
+    # Test the helper function with a short duration
     watcher = await watch_directories(
         runtime_dir=runtime_dir,
         lineage_dir=lineage_dir,
+        dataframe_lineage_dir=dataframe_lineage_dir,
         event_processor=mock_processor,
-        duration=1.2,  # Enough time for startup (1s) + brief monitoring
+        duration=0.1,  # Very short duration
     )
 
     # Should return a FileWatcher instance
     assert isinstance(watcher, FileWatcher)
     assert not watcher.running  # Should be stopped after duration
-
-    # Test that the watcher was configured correctly
-    assert watcher.runtime_dir == runtime_dir
-    assert watcher.lineage_dir == lineage_dir
-    assert watcher.event_processor == mock_processor

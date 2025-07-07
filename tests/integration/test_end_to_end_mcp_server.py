@@ -218,7 +218,11 @@ class TestEndToEndMCPServer:
                 # Non-Windows: Unix CI with pre-installed extensions should be faster
                 timeout = 30.0
 
-            db_path = temp_hunyo_dir / "database" / "lineage.duckdb"
+            # Calculate expected database path based on notebook hash (matches orchestrator behavior)
+            from hunyo_mcp_server.config import get_notebook_file_hash
+
+            notebook_hash = get_notebook_file_hash(test_notebook_path)
+            db_path = temp_hunyo_dir / "database" / f"{notebook_hash}.duckdb"
 
             def wait_for_database_ready(
                 db_path: Path, timeout: float = timeout
