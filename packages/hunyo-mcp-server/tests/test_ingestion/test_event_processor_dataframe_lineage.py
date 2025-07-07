@@ -31,7 +31,8 @@ class TestDataFrameLineageEventProcessing:
         """Create a DuckDBManager instance."""
         manager = DuckDBManager(temp_db_path)
         manager.initialize_database()
-        return manager
+        yield manager
+        manager.close()
 
     @pytest.fixture
     def event_processor(self, db_manager):
