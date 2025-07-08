@@ -1,18 +1,13 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
+Always run tests from the project root dir.
 After any file update, always run:
 
 hatch run style    # Black + Ruff checks  
 hatch run typing   # MyPy type checking
-hatch run test test/test_capture/ -v  # Unit tests for capture changes
-hatch run test test/integration/ -v   # Integration tests for component interactions
-hatch run test test/e2e/ -v           # End-to-end tests for complete workflows
-
-Commands for all tests/test fixes:
-hatch run test - Run all tests
-hatch run test-cov - Tests with coverage report
-hatch run fmt - Auto-fix style issues
-hatch run style - Check style without fixing
+hatch run test test/test_capture/ -v  # Integration tests and misc tests
+hatch run test-capture                # Unit tests for the hunyo-capture package
+hatch run test-mcp                    # Unit tests for the hunyo-mcp-server package

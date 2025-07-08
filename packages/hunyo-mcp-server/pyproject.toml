@@ -18,6 +18,7 @@ dependencies = [
     "watchdog>=3.0.0",
     "websockets>=11.0.0",
     "openlineage-python>=0.28.0",
+    "sqlparse>=0.4.0",  # Enhanced SQL security validation
 ]
 
 [project.scripts]

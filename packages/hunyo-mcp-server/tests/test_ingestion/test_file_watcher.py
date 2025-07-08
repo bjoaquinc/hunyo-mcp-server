@@ -28,6 +28,7 @@ class TestJSONLFileHandler:
     def mock_file_watcher(self):
         """Mock FileWatcher for testing"""
         watcher = MagicMock(spec=FileWatcher)
+        watcher.notebook_hash = "test_hash"
         return watcher
 
     @pytest.fixture
@@ -49,14 +50,14 @@ class TestJSONLFileHandler:
         # Mock file creation event
         event = MagicMock()
         event.is_directory = False
-        event.src_path = "/test/path/new_file.jsonl"
+        event.src_path = "/test/path/test_hash_new_file.jsonl"
 
         file_handler.on_created(event)
 
         # Should add file to pending files
         pending = file_handler.get_pending_files()
         assert len(pending) == 1
-        assert Path("/test/path/new_file.jsonl") in pending
+        assert Path("/test/path/test_hash_new_file.jsonl") in pending
 
     def test_on_created_non_jsonl_file(self, file_handler):
         """Test file creation event handling for non-JSONL files"""
@@ -89,7 +90,7 @@ class TestJSONLFileHandler:
         # Mock file modification event
         event = MagicMock()
         event.is_directory = False
-        event.src_path = "/test/path/modified.jsonl"
+        event.src_path = "/test/path/test_hash_modified.jsonl"
 
         # First modification - should be processed immediately
         file_handler.on_modified(event)
@@ -106,10 +107,10 @@ class TestJSONLFileHandler:
         # Add some files to pending
         event = MagicMock()
         event.is_directory = False
-        event.src_path = "/test/file1.jsonl"
+        event.src_path = "/test/test_hash_file1.jsonl"
         file_handler.on_created(event)
 
-        event.src_path = "/test/file2.jsonl"
+        event.src_path = "/test/test_hash_file2.jsonl"
         file_handler.on_created(event)
 
         # Get pending files
@@ -153,6 +154,13 @@ class TestFileWatcher:
         return processor
 
     @pytest.fixture
+    def file_handler(self):
+        """Create JSONLFileHandler for testing"""
+        mock_file_watcher = MagicMock()
+        mock_file_watcher.notebook_hash = "test_hash"
+        return JSONLFileHandler(mock_file_watcher)
+
+    @pytest.fixture
     def file_watcher(self, temp_dirs, mock_event_processor):
         """Create FileWatcher instance for testing"""
         return FileWatcher(
@@ -160,6 +168,7 @@ class TestFileWatcher:
             lineage_dir=temp_dirs["lineage"],
             dataframe_lineage_dir=temp_dirs["dataframe_lineage"],
             event_processor=mock_event_processor,
+            notebook_hash="test_hash",
             verbose=True,
         )
 
@@ -170,6 +179,7 @@ class TestFileWatcher:
             lineage_dir=temp_dirs["lineage"],
             dataframe_lineage_dir=temp_dirs["dataframe_lineage"],
             event_processor=mock_event_processor,
+            notebook_hash="test_hash",
         )
 
         assert watcher.runtime_dir == temp_dirs["runtime"].resolve()
@@ -205,10 +215,11 @@ class TestFileWatcher:
     async def test_process_existing_files(self, file_watcher, temp_dirs):
         """Test processing existing files on startup"""
         # Create some existing JSONL files
-        runtime_file = temp_dirs["runtime"] / "existing_runtime.jsonl"
-        lineage_file = temp_dirs["lineage"] / "existing_lineage.jsonl"
+        runtime_file = temp_dirs["runtime"] / "test_hash_existing_runtime.jsonl"
+        lineage_file = temp_dirs["lineage"] / "test_hash_existing_lineage.jsonl"
         dataframe_lineage_file = (
-            temp_dirs["dataframe_lineage"] / "existing_dataframe_lineage.jsonl"
+            temp_dirs["dataframe_lineage"]
+            / "test_hash_existing_dataframe_lineage.jsonl"
         )
 
         runtime_file.write_text('{"event_type": "test"}\n')
@@ -387,6 +398,7 @@ class TestFileWatcher:
             lineage_dir=lineage_dir,
             dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_event_processor,
+            notebook_hash="test_hash",
         )
 
         # Directories shouldn't exist yet
@@ -452,7 +464,7 @@ class TestFileWatcher:
         """Test complete DataFrame lineage file processing workflow"""
         # Create a DataFrame lineage file
         dataframe_lineage_file = (
-            temp_dirs["dataframe_lineage"] / "test_dataframe_lineage.jsonl"
+            temp_dirs["dataframe_lineage"] / "test_hash_dataframe_lineage.jsonl"
         )
         dataframe_lineage_file.write_text(
             '{"event_type": "dataframe_lineage", "operation_type": "selection"}\n'
@@ -510,6 +522,7 @@ class TestFileWatcherIntegration:
             lineage_dir=lineage_dir,
             dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_processor,
+            notebook_hash="test_hash",
             verbose=True,
         )
 
@@ -518,7 +531,7 @@ class TestFileWatcherIntegration:
         await asyncio.sleep(0.2)  # Let watcher start
 
         # Create a test file
-        test_file = runtime_dir / "test.jsonl"
+        test_file = runtime_dir / "test_hash_test.jsonl"
         test_file.write_text('{"event_type": "test"}\n')
 
         # Wait for file to be processed - background processor runs every 1 second
@@ -554,6 +567,7 @@ class TestFileWatcherIntegration:
             lineage_dir=lineage_dir,
             dataframe_lineage_dir=dataframe_lineage_dir,
             event_processor=mock_processor,
+            notebook_hash="test_hash",
             verbose=True,
         )
 
@@ -562,7 +576,7 @@ class TestFileWatcherIntegration:
         await asyncio.sleep(0.2)  # Let watcher start
 
         # Create a test file
-        test_file = runtime_dir / "test.jsonl"
+        test_file = runtime_dir / "test_hash_test.jsonl"
         test_file.write_text('{"event_type": "test"}\n')
 
         # Wait for file to be processed - background processor runs every 1 second
@@ -600,6 +614,7 @@ async def test_watch_directories_helper_function(tmp_path):
         lineage_dir=lineage_dir,
         dataframe_lineage_dir=dataframe_lineage_dir,
         event_processor=mock_processor,
+        notebook_hash="test_hash",
         duration=0.1,  # Very short duration
     )
 

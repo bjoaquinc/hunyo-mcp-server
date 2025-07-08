@@ -188,8 +188,38 @@ def get_notebook_file_hash(notebook_path: str | Path) -> str:
     Returns:
         str: 8-character hash for notebook identification
     """
-    path_bytes = str(Path(notebook_path).resolve()).encode("utf-8")
-    return hashlib.sha256(path_bytes).hexdigest()[:8]
+    # Enhanced logging for hash calculation debugging
+    mcp_logger.config("[HASH] Hash calculation started")
+    mcp_logger.config(f"[HASH] Input path: {notebook_path}")
+    mcp_logger.config(f"[HASH] Input path type: {type(notebook_path)}")
+
+    # Convert to Path object first
+    path_obj = Path(notebook_path)
+    mcp_logger.config(f"[HASH] Path object: {path_obj}")
+    mcp_logger.config(f"[HASH] Path exists: {path_obj.exists()}")
+    mcp_logger.config(f"[HASH] Path is absolute: {path_obj.is_absolute()}")
+
+    # Resolve the path
+    resolved_path = path_obj.resolve()
+    mcp_logger.config(f"[HASH] Resolved path: {resolved_path}")
+
+    # Convert to string and encode
+    path_str = str(resolved_path)
+    mcp_logger.config(f"[HASH] Path string: {path_str}")
+    mcp_logger.config(f"[HASH] Path string length: {len(path_str)}")
+
+    path_bytes = path_str.encode("utf-8")
+    mcp_logger.config(f"[HASH] Path bytes length: {len(path_bytes)}")
+
+    # Generate hash
+    full_hash = hashlib.sha256(path_bytes).hexdigest()
+    truncated_hash = full_hash[:8]
+
+    mcp_logger.config(f"[HASH] Full hash: {full_hash}")
+    mcp_logger.config(f"[HASH] Truncated hash: {truncated_hash}")
+    mcp_logger.config("[HASH] Hash calculation complete")
+
+    return truncated_hash
 
 
 def get_database_path(notebook_hash: str | None = None) -> Path:

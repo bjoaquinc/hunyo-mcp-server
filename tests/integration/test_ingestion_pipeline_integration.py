@@ -350,6 +350,100 @@ class TestIngestionPipelineIntegration:
         )
 
     @pytest.mark.integration
+    @pytest.mark.timeout(30)
+    def test_dataframe_lineage_events_file_to_database_pipeline(
+        self,
+        events_directory,
+        real_event_processor,
+        fresh_db_manager,
+    ):
+        """Test complete pipeline: DataFrame lineage JSONL → EventProcessor → Database"""
+
+        test_logger.info(
+            "[TEST] Starting DataFrame lineage events pipeline integration test"
+        )
+
+        # Load DataFrame lineage schema for validation
+        dataframe_lineage_schema_path = Path(
+            "schemas/json/dataframe_lineage_schema.json"
+        )
+        if not dataframe_lineage_schema_path.exists():
+            pytest.skip("DataFrame lineage schema not found")
+
+        with open(dataframe_lineage_schema_path, encoding="utf-8") as f:
+            json.load(f)  # Validate schema file exists and is readable
+
+        # 1. Create test DataFrame lineage events
+        dataframe_lineage_events = [create_dataframe_lineage_event(i) for i in range(6)]
+        dataframe_lineage_file = (
+            events_directory["dataframe_lineage"]
+            / "test_dataframe_lineage_events.jsonl"
+        )
+        self.write_events_to_jsonl(dataframe_lineage_events, dataframe_lineage_file)
+
+        # 2. Process events through REAL EventProcessor
+        test_logger.info(
+            "[PROCESS] Processing DataFrame lineage events with real EventProcessor..."
+        )
+        processed_count = real_event_processor.process_jsonl_file(
+            dataframe_lineage_file, "dataframe_lineage"
+        )
+
+        # 3. Validate processing results
+        assert processed_count > 0, f"Expected processed events, got {processed_count}"
+        test_logger.info(f"[OK] Processed {processed_count} DataFrame lineage events")
+
+        # 4. Verify events in database
+        test_logger.info("[VALIDATE] Checking DataFrame lineage events in database...")
+        db_count = fresh_db_manager.get_table_count("dataframe_lineage_events")
+        assert (
+            db_count > 0
+        ), f"Expected DataFrame lineage events in database, found {db_count}"
+
+        # 5. Retrieve and validate stored DataFrame lineage events
+        stored_events = fresh_db_manager.execute_query(
+            "SELECT * FROM dataframe_lineage_events ORDER BY timestamp LIMIT 10"
+        )
+
+        assert (
+            len(stored_events) >= 6
+        ), f"Expected at least 6 stored events, found {len(stored_events)}"
+
+        # 6. Validate DataFrame lineage data structure preservation
+        test_logger.info("[VALIDATE] Checking DataFrame lineage data integrity...")
+
+        # Check that execution_ids were preserved
+        execution_ids = {event["execution_id"] for event in stored_events}
+        assert (
+            len(execution_ids) >= 6
+        ), "Should have unique execution IDs for each event"
+
+        # Check operation types are correct
+        operation_types = {event["operation_type"] for event in stored_events}
+        assert "selection" in operation_types, "Should have selection operation type"
+
+        # Check operation methods are correct
+        operation_methods = {event["operation_method"] for event in stored_events}
+        assert (
+            "__getitem__" in operation_methods
+        ), "Should have __getitem__ operation method"
+
+        # Check that JSON fields are preserved
+        for event in stored_events:
+            assert (
+                event["operation_parameters"] is not None
+            ), "Should have operation_parameters"
+            assert event["input_dataframes"] is not None, "Should have input_dataframes"
+            assert (
+                event["output_dataframes"] is not None
+            ), "Should have output_dataframes"
+            assert event["column_lineage"] is not None, "Should have column_lineage"
+
+        test_logger.info(
+            f"[OK] Database contains {len(stored_events)} DataFrame lineage events with {len(execution_ids)} executions"
+        )
+
+    @pytest.mark.integration
     @pytest.mark.asyncio
     @pytest.mark.timeout(45)
     async def test_file_watcher_to_database_integration(
@@ -369,6 +463,7 @@ class TestIngestionPipelineIntegration:
             lineage_dir=events_directory["lineage"],
             dataframe_lineage_dir=events_directory["dataframe_lineage"],
             event_processor=real_event_processor,
+            notebook_hash="test_notebook_hash",
             verbose=True,  # Enable verbose logging for testing
         )
 
@@ -383,7 +478,9 @@ class TestIngestionPipelineIntegration:
             # 3. Create events file while FileWatcher is running
             test_logger.info("[CREATE] Creating runtime events file...")
             runtime_events = self.create_sample_runtime_events(count=5)
-            runtime_file = events_directory["runtime"] / "watched_runtime_events.jsonl"
+            runtime_file = (
+                events_directory["runtime"] / "test_notebook_hash_runtime_events.jsonl"
+            )
             self.write_events_to_jsonl(runtime_events, runtime_file)
 
             # 4. Wait for FileWatcher to detect and process
@@ -457,21 +554,27 @@ class TestIngestionPipelineIntegration:
         runtime_events_schema,
         openlineage_events_schema,
     ):
-        """Test processing mixed runtime and lineage events simultaneously"""
+        """Test processing mixed runtime, lineage, and DataFrame lineage events simultaneously"""
 
         test_logger.info("[TEST] Starting mixed events pipeline integration test")
 
-        # 1. Create mixed event files
+        # 1. Create mixed event files for all three event types
         runtime_events = self.create_sample_runtime_events(count=7)
         lineage_events = self.create_sample_openlineage_events(count=5)
+        dataframe_lineage_events = [create_dataframe_lineage_event(i) for i in range(4)]
 
         runtime_file = events_directory["runtime"] / "mixed_runtime_events.jsonl"
         lineage_file = events_directory["lineage"] / "mixed_lineage_events.jsonl"
+        dataframe_lineage_file = (
+            events_directory["dataframe_lineage"]
+            / "mixed_dataframe_lineage_events.jsonl"
+        )
 
         self.write_events_to_jsonl(runtime_events, runtime_file)
         self.write_events_to_jsonl(lineage_events, lineage_file)
+        self.write_events_to_jsonl(dataframe_lineage_events, dataframe_lineage_file)
 
-        # 2. Process both file types
+        # 2. Process all three file types
         test_logger.info("[PROCESS] Processing mixed event types...")
 
         runtime_processed = real_event_processor.process_jsonl_file(
@@ -480,22 +583,31 @@ class TestIngestionPipelineIntegration:
         lineage_processed = real_event_processor.process_jsonl_file(
             lineage_file, "lineage"
         )
+        dataframe_lineage_processed = real_event_processor.process_jsonl_file(
+            dataframe_lineage_file, "dataframe_lineage"
+        )
 
-        # 3. Validate both were processed
+        # 3. Validate all were processed
         assert (
             runtime_processed > 0
         ), f"Expected runtime events processed, got {runtime_processed}"
         assert (
             lineage_processed > 0
         ), f"Expected lineage events processed, got {lineage_processed}"
+        assert (
+            dataframe_lineage_processed > 0
+        ), f"Expected DataFrame lineage events processed, got {dataframe_lineage_processed}"
 
         test_logger.info(
-            f"[OK] Processed {runtime_processed} runtime + {lineage_processed} lineage events"
+            f"[OK] Processed {runtime_processed} runtime + {lineage_processed} lineage + {dataframe_lineage_processed} DataFrame lineage events"
         )
 
-        # 4. Verify both tables have data
+        # 4. Verify all three tables have data
         runtime_count = fresh_db_manager.get_table_count("runtime_events")
         lineage_count = fresh_db_manager.get_table_count("lineage_events")
+        dataframe_lineage_count = fresh_db_manager.get_table_count(
+            "dataframe_lineage_events"
+        )
 
         assert (
             runtime_count >= 14
@@ -503,6 +615,9 @@ class TestIngestionPipelineIntegration:
         assert (
             lineage_count >= 5
         ), f"Expected at least 5 lineage events, found {lineage_count}"
+        assert (
+            dataframe_lineage_count >= 4
+        ), f"Expected at least 4 DataFrame lineage events, found {dataframe_lineage_count}"
 
         # 5. Test cross-table queries (validate schema consistency)
         test_logger.info("[VALIDATE] Testing cross-table consistency...")
@@ -516,11 +631,15 @@ class TestIngestionPipelineIntegration:
         SELECT
             'lineage' as event_source, COUNT(*) as event_count
         FROM lineage_events
+        UNION ALL
+        SELECT
+            'dataframe_lineage' as event_source, COUNT(*) as event_count
+        FROM dataframe_lineage_events
         ORDER BY event_source
         """
 
         session_results = fresh_db_manager.execute_query(session_query)
-        assert len(session_results) >= 2, "Should have results from both tables"
+        assert len(session_results) >= 3, "Should have results from all three tables"
 
         total_events = sum(result["event_count"] for result in session_results)
         test_logger.info(
@@ -681,3 +800,348 @@ class TestIngestionPipelineIntegration:
             f"[PERFORMANCE] Bulk retrieval of {len(bulk_events)} events in {bulk_duration:.3f}s"
         )
         test_logger.info("[OK] Performance pipeline test completed successfully")
+
+    @pytest.mark.integration
+    @pytest.mark.asyncio
+    @pytest.mark.timeout(30)
+    async def test_orchestrator_background_thread_database_operations(
+        self,
+        events_directory,
+        runtime_events_schema,
+    ):
+        """Test that would have caught the signal.alarm() threading issue.
+
+        This test uses the actual orchestrator threading setup where database operations
+        happen in a background thread, which would trigger the signal.alarm() error
+        that was missed by other tests.
+        """
+        from hunyo_mcp_server.orchestrator import HunyoOrchestrator
+
+        test_logger = get_logger("hunyo.test.ingestion_integration")
+        test_logger.info("[TEST] Starting orchestrator background thread database test")
+
+        # Use a temporary notebook file for testing
+        notebook_file = events_directory["events"].parent / "test_notebook.py"
+        notebook_file.write_text("# Test notebook")
+
+        # Create orchestrator (this creates background thread)
+        orchestrator = HunyoOrchestrator(notebook_file, verbose=True)
+
+        try:
+            test_logger.info(
+                "[SETUP] Starting orchestrator (creates background thread)..."
+            )
+            orchestrator.start()
+
+            # Wait for orchestrator to be ready
+            time.sleep(1)
+
+            # Get the notebook hash from the orchestrator
+            notebook_hash = orchestrator.notebook_hash
+
+            # Get the file watcher for creating files in the correct directories
+            file_watcher = orchestrator.file_watcher
+
+            # Create event files that should trigger filesystem events
+            test_logger.info(
+                f"[SETUP] Creating event files for notebook hash: {notebook_hash}"
+            )
+
+            # Create runtime events file in the actual monitored directory
+            runtime_file = (
+                file_watcher.runtime_dir
+                / f"{notebook_hash}_test_notebook_runtime_events.jsonl"
+            )
+            runtime_events = [
+                create_runtime_event(runtime_events_schema, i) for i in range(5)
+            ]
+            with runtime_file.open("w") as f:
+                for event in runtime_events:
+                    f.write(json.dumps(event) + "\n")
+            test_logger.info(
+                f"[SETUP] Wrote {len(runtime_events)} events to {runtime_file}"
+            )
+
+            # Create lineage events file in the actual monitored directory
+            lineage_file = (
+                file_watcher.lineage_dir
+                / f"{notebook_hash}_test_notebook_lineage_events.jsonl"
+            )
+            lineage_events = [create_lineage_event(notebook_hash, i) for i in range(2)]
+            with lineage_file.open("w") as f:
+                for event in lineage_events:
+                    f.write(json.dumps(event) + "\n")
+            test_logger.info(
+                f"[SETUP] Wrote {len(lineage_events)} events to {lineage_file}"
+            )
+
+            # Create DataFrame lineage events file in the actual monitored directory
+            dataframe_lineage_file = (
+                file_watcher.dataframe_lineage_dir
+                / f"{notebook_hash}_test_notebook_dataframe_lineage_events.jsonl"
+            )
+            dataframe_lineage_events = [
+                create_dataframe_lineage_event(i) for i in range(3)
+            ]
+            with dataframe_lineage_file.open("w") as f:
+                for event in dataframe_lineage_events:
+                    f.write(json.dumps(event) + "\n")
+            test_logger.info(
+                f"[SETUP] Wrote {len(dataframe_lineage_events)} events to {dataframe_lineage_file}"
+            )
+
+            # Instead of relying on filesystem events, directly process the files
+            # This tests the threading issue more directly
+            test_logger.info(
+                "[TRIGGER] Directly processing files through background thread..."
+            )
+
+            # Process runtime file directly - this will happen in background thread
+            test_logger.info(
+                "[PROCESS] Processing runtime file in background thread..."
+            )
+            runtime_count = await file_watcher.process_file_now(runtime_file)
+            test_logger.info(
+                f"[PROCESS] Runtime file processed: {runtime_count} events"
+            )
+
+            # Process lineage file directly - this will happen in background thread
+            test_logger.info(
+                "[PROCESS] Processing lineage file in background thread..."
+            )
+            lineage_count = await file_watcher.process_file_now(lineage_file)
+            test_logger.info(
+                f"[PROCESS] Lineage file processed: {lineage_count} events"
+            )
+
+            # Process DataFrame lineage file directly - this will happen in background thread
+            test_logger.info(
+                "[PROCESS] Processing DataFrame lineage file in background thread..."
+            )
+            dataframe_lineage_count = await file_watcher.process_file_now(
+                dataframe_lineage_file
+            )
+            test_logger.info(
+                f"[PROCESS] DataFrame lineage file processed: {dataframe_lineage_count} events"
+            )
+
+            # Verify that events were processed successfully
+            if (
+                runtime_count == 0
+                and lineage_count == 0
+                and dataframe_lineage_count == 0
+            ):
+                test_logger.error(
+                    "[FAIL] No events processed by direct file processing"
+                )
+                pytest.fail(
+                    "No events processed by direct file processing. "
+                    "This could indicate a threading issue with database operations."
+                )
+
+            # Verify events are in the database - this tests database operations from background thread
+            try:
+                result = orchestrator.get_db_manager().execute_query(
+                    "SELECT COUNT(*) as count FROM runtime_events"
+                )
+                if result and len(result) > 0:
+                    # Handle both count formats
+                    first_row = result[0]
+                    processed_events = first_row.get("count", 0) or first_row.get(
+                        "COUNT(*)", 0
+                    )
+                else:
+                    processed_events = 0
+
+                if processed_events == 0:
+                    test_logger.error(
+                        "[FAIL] No events found in database after processing"
+                    )
+                    pytest.fail("No events found in database after processing")
+
+            except Exception as e:
+                # This is where the original signal.alarm() error would have occurred
+                test_logger.error(
+                    f"Database operation failed in background thread - threading issue detected: {e}"
+                )
+                pytest.fail(
+                    f"Database operation failed in background thread - threading issue detected: {e}"
+                )
+
+            # Verify that the test would have caught the signal.alarm() error
+            test_logger.info(
+                "[SUCCESS] Background thread database operations completed successfully"
+            )
+            test_logger.info(
+                "[SUCCESS] This test would have caught the signal.alarm() threading issue"
+            )
+
+            # Additional verification - test that we can query the database from main thread
+            total_events = orchestrator.get_db_manager().execute_query(
+                "SELECT COUNT(*) as count FROM runtime_events"
+            )[0].get("count", 0) or orchestrator.get_db_manager().execute_query(
+                "SELECT COUNT(*) as count FROM runtime_events"
+            )[
+                0
+            ].get(
+                "COUNT(*)", 0
+            )
+
+            assert total_events >= 5, f"Expected at least 5 events, got {total_events}"
+            test_logger.info(f"[SUCCESS] Verified {total_events} events in database")
+
+        finally:
+            test_logger.info("[CLEANUP] Stopping orchestrator...")
+            orchestrator.stop()
+
+
+# Helper functions for creating test events
+def create_runtime_event(_schema: dict[str, Any], index: int) -> dict[str, Any]:
+    """Create a runtime event that validates against the schema"""
+    import uuid
+    from datetime import datetime, timezone
+
+    base_time = datetime.now(timezone.utc)
+    execution_id = uuid.uuid4().hex[:8]
+    session_id = uuid.uuid4().hex[:8]
+
+    return {
+        "event_type": "cell_execution_start",
+        "execution_id": execution_id,
+        "cell_id": f"test_cell_{index}",
+        "cell_source": f"# Test cell {index}\nimport pandas as pd\ndf_{index} = pd.DataFrame({{'col': [1, 2, 3]}})",
+        "cell_source_lines": 3,
+        "session_id": session_id,
+        "timestamp": base_time.isoformat(),
+        "emitted_at": base_time.isoformat(),
+        "duration_ms": 100 + index * 10,
+        "start_memory_mb": 50.0 + index,
+        "end_memory_mb": 55.0 + index,
+    }
+
+
+def create_lineage_event(_notebook_hash: str, index: int) -> dict[str, Any]:
+    """Create a lineage event for testing"""
+    import uuid
+    from datetime import datetime, timezone
+
+    base_time = datetime.now(timezone.utc)
+
+    return {
+        "eventType": "START",
+        "eventTime": base_time.isoformat(),
+        "run": {
+            "runId": str(uuid.uuid4()),
+            "facets": {
+                "parent": {
+                    "run": {"runId": str(uuid.uuid4())},
+                    "job": {"namespace": "test", "name": f"test_job_{index}"},
+                }
+            },
+        },
+        "job": {"namespace": "marimo", "name": f"test_operation_{index}", "facets": {}},
+        "inputs": [],
+        "outputs": [
+            {
+                "namespace": "marimo",
+                "name": f"test_output_{index}",
+                "facets": {
+                    "schema": {
+                        "_producer": "marimo-lineage-tracker",
+                        "_schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+                        "fields": [
+                            {"name": "col_1", "type": "int64"},
+                            {"name": "col_2", "type": "string"},
+                        ],
+                    }
+                },
+            }
+        ],
+        "producer": "marimo-lineage-tracker",
+        "schemaURL": "https://openlineage.io/spec/1-0-5/OpenLineage.json",
+        "session_id": uuid.uuid4().hex[:8],
+        "emitted_at": base_time.isoformat(),
+    }
+
+
+def create_dataframe_lineage_event(index: int) -> dict[str, Any]:
+    """Create a DataFrame lineage event for testing"""
+    import uuid
+    from datetime import datetime, timezone
+
+    base_time = datetime.now(timezone.utc)
+    execution_id = uuid.uuid4().hex[:8]
+    session_id = uuid.uuid4().hex[:8]
+
+    return {
+        "event_type": "dataframe_lineage",
+        "execution_id": execution_id,
+        "cell_id": f"test_cell_{index}",
+        "session_id": session_id,
+        "timestamp": base_time.isoformat(),
+        "emitted_at": base_time.isoformat(),
+        "operation_type": "selection",
+        "operation_method": "__getitem__",
+        "operation_code": f"df_{index}[df_{index}['column'] > {index * 10}]",
+        "operation_parameters": {
+            "columns": ["column"],
+            "condition": f"column > {index * 10}",
+            "is_boolean_mask": True,
+        },
+        "input_dataframes": [
+            {
+                "variable_name": f"df_{index}",
+                "object_id": f"df_{index}",
+                "shape": [1000, 5],
+                "columns": [
+                    "column",
+                    "other_col",
+                    "third_col",
+                    "fourth_col",
+                    "fifth_col",
+                ],
+                "memory_usage_mb": 0.4,
+            }
+        ],
+        "output_dataframes": [
+            {
+                "variable_name": f"filtered_df_{index}",
+                "object_id": f"df_{index + 1000}",
+                "shape": [150, 5],
+                "columns": [
+                    "column",
+                    "other_col",
+                    "third_col",
+                    "fourth_col",
+                    "fifth_col",
+                ],
+                "memory_usage_mb": 0.06,
+            }
+        ],
+        "column_lineage": {
+            "column_mapping": {
+                f"filtered_df_{index}.column": [f"df_{index}.column"],
+                f"filtered_df_{index}.other_col": [f"df_{index}.other_col"],
+                f"filtered_df_{index}.third_col": [f"df_{index}.third_col"],
+                f"filtered_df_{index}.fourth_col": [f"df_{index}.fourth_col"],
+                f"filtered_df_{index}.fifth_col": [f"df_{index}.fifth_col"],
+            },
+            "input_columns": [
+                f"df_{index}.column",
+                f"df_{index}.other_col",
+                f"df_{index}.third_col",
+                f"df_{index}.fourth_col",
+                f"df_{index}.fifth_col",
+            ],
+            "output_columns": [
+                f"filtered_df_{index}.column",
+                f"filtered_df_{index}.other_col",
+                f"filtered_df_{index}.third_col",
+                f"filtered_df_{index}.fourth_col",
+                f"filtered_df_{index}.fifth_col",
+            ],
+            "operation_method": "__getitem__",
+            "lineage_type": "selection",
+        },
+        "performance": {"overhead_ms": 2.5, "df_size_mb": 0.5, "sampled": False},
+    }

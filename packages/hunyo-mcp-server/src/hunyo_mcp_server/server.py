@@ -19,7 +19,7 @@ from hunyo_mcp_server.mcp_instance import mcp
 from hunyo_mcp_server.orchestrator import HunyoOrchestrator, set_global_orchestrator
 
 # Import tools so they get registered with the MCP server
-from hunyo_mcp_server.tools import lineage_tool, query_tool, schema_tool  # noqa: F401
+from hunyo_mcp_server.tools import query_tool, schema_tool  # noqa: F401
 
 
 @click.command()
@@ -80,6 +80,19 @@ def main(notebook: Path, *, dev_mode: bool, verbose: bool, standalone: bool):
 
     try:
         # Create and start the orchestrator
+        click.echo(f"[HASH] Server.py received notebook path: {notebook}", err=True)
+        click.echo(f"[HASH] Server.py notebook path type: {type(notebook)}", err=True)
+        click.echo(
+            f"[HASH] Server.py notebook path exists: {notebook.exists()}", err=True
+        )
+        click.echo(
+            f"[HASH] Server.py notebook path absolute: {notebook.is_absolute()}",
+            err=True,
+        )
+        click.echo(
+            f"[HASH] Server.py notebook path resolved: {notebook.resolve()}", err=True
+        )
+
         orchestrator = HunyoOrchestrator(notebook_path=notebook, verbose=verbose)
 
         # Set global orchestrator for MCP tools

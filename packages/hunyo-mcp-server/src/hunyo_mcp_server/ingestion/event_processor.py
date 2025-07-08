@@ -126,7 +126,7 @@ class EventProcessor:
                 )
 
                 if not is_valid:
-                    processor_logger.warning(
+                    processor_logger.error(
                         f"Runtime event schema validation failed: {validation_error}"
                     )
                     self.failed_events += 1
@@ -144,7 +144,7 @@ class EventProcessor:
                     self.failed_events += 1
 
             except Exception as e:
-                processor_logger.warning(f"Failed to process runtime event: {e}")
+                processor_logger.error(f"Failed to process runtime event: {e}")
                 self.failed_events += 1
 
         self.processed_events += successful
@@ -177,7 +177,7 @@ class EventProcessor:
                 )
 
                 if not is_valid:
-                    processor_logger.warning(
+                    processor_logger.error(
                         f"OpenLineage event schema validation failed: {validation_error}"
                     )
                     self.failed_events += 1
@@ -195,7 +195,7 @@ class EventProcessor:
                     self.failed_events += 1
 
             except Exception as e:
-                processor_logger.warning(f"Failed to process lineage event: {e}")
+                processor_logger.error(f"Failed to process lineage event: {e}")
                 self.failed_events += 1
 
         self.processed_events += successful
@@ -216,8 +216,12 @@ class EventProcessor:
             Number of successfully processed events
         """
         if not events:
+            processor_logger.info("[DEBUG] No dataframe lineage events to process")
             return 0
 
+        processor_logger.info(
+            f"[DEBUG] Processing {len(events)} dataframe lineage events"
+        )
         successful = 0
 
         for event in events:
@@ -228,7 +232,7 @@ class EventProcessor:
                 )
 
                 if not is_valid:
-                    processor_logger.warning(
+                    processor_logger.error(
                         f"DataFrame lineage event schema validation failed: {validation_error}"
                     )
                     self.failed_events += 1
@@ -246,7 +250,7 @@ class EventProcessor:
                     self.failed_events += 1
 
             except Exception as e:
-                processor_logger.warning(
+                processor_logger.error(
                     f"Failed to process DataFrame lineage event: {e}"
                 )
                 self.failed_events += 1
@@ -631,6 +635,7 @@ class EventProcessor:
                     raise
                 else:
                     # Unknown error - return False (already rolled back)
+                    processor_logger.error(f"Database insertion failed: {e}")
                     return False
 
         try:

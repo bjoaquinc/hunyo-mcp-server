@@ -88,11 +88,29 @@ class TestDataFrameLineageEventProcessing:
                 }
             ],
             "column_lineage": {
-                "filtered_df.column": ["df.column"],
-                "filtered_df.other_col": ["df.other_col"],
-                "filtered_df.third_col": ["df.third_col"],
-                "filtered_df.fourth_col": ["df.fourth_col"],
-                "filtered_df.fifth_col": ["df.fifth_col"],
+                "column_mapping": {
+                    "filtered_df.column": ["df.column"],
+                    "filtered_df.other_col": ["df.other_col"],
+                    "filtered_df.third_col": ["df.third_col"],
+                    "filtered_df.fourth_col": ["df.fourth_col"],
+                    "filtered_df.fifth_col": ["df.fifth_col"],
+                },
+                "input_columns": [
+                    "df.column",
+                    "df.other_col",
+                    "df.third_col",
+                    "df.fourth_col",
+                    "df.fifth_col",
+                ],
+                "output_columns": [
+                    "filtered_df.column",
+                    "filtered_df.other_col",
+                    "filtered_df.third_col",
+                    "filtered_df.fourth_col",
+                    "filtered_df.fifth_col",
+                ],
+                "operation_method": "__getitem__",
+                "lineage_type": "selection",
             },
             "performance": {"overhead_ms": 2.5, "df_size_mb": 0.5, "sampled": False},
         }
@@ -141,11 +159,22 @@ class TestDataFrameLineageEventProcessing:
         }
         assert len(transformed["input_dataframes"]) == 1
         assert len(transformed["output_dataframes"]) == 1
-        assert "filtered_df.column" in transformed["column_lineage"]
-        assert "filtered_df.other_col" in transformed["column_lineage"]
-        assert "filtered_df.third_col" in transformed["column_lineage"]
-        assert "filtered_df.fourth_col" in transformed["column_lineage"]
-        assert "filtered_df.fifth_col" in transformed["column_lineage"]
+
+        # Check nested column_lineage structure
+        column_lineage = transformed["column_lineage"]
+        assert "column_mapping" in column_lineage
+        assert "input_columns" in column_lineage
+        assert "output_columns" in column_lineage
+        assert "operation_method" in column_lineage
+        assert "lineage_type" in column_lineage
+
+        # Check column_mapping contents
+        column_mapping = column_lineage["column_mapping"]
+        assert "filtered_df.column" in column_mapping
+        assert "filtered_df.other_col" in column_mapping
+        assert "filtered_df.third_col" in column_mapping
+        assert "filtered_df.fourth_col" in column_mapping
+        assert "filtered_df.fifth_col" in column_mapping
 
         # Check performance fields (now extracted from nested structure)
         assert transformed["overhead_ms"] == 2.5

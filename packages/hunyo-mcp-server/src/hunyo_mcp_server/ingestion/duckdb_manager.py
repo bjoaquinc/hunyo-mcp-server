@@ -229,32 +229,20 @@ class DuckDBManager:
     def _execute_with_timeout(
         self, func, timeout_seconds: float = 30.0, *args, **kwargs
     ):
-        """Execute a function with cross-platform timeout handling."""
-        if os.name == "nt":  # Windows
-            # Use ThreadPoolExecutor for Windows (no signal.alarm support)
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(func, *args, **kwargs)
-                try:
-                    return future.result(timeout=timeout_seconds)
-                except concurrent.futures.TimeoutError as e:
-                    timeout_msg = f"Operation timed out after {timeout_seconds} seconds"
-                    db_logger.error(timeout_msg)
-                    raise TimeoutError(timeout_msg) from e
-        else:  # Unix-like systems
-            # Use signal.alarm for Unix systems
-            import signal
+        """Execute a function with cross-platform timeout handling.
 
-            def timeout_handler(_signum, _frame):
-                timeout_msg = f"Operation timed out after {timeout_seconds} seconds"
-                raise TimeoutError(timeout_msg)
-
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(int(timeout_seconds))
+        Uses ThreadPoolExecutor for thread safety since database operations
+        are called from background threads (file watcher) where signal.alarm
+        is not available.
+        """
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(func, *args, **kwargs)
             try:
-                return func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+                return future.result(timeout=timeout_seconds)
+            except concurrent.futures.TimeoutError as e:
+                timeout_msg = f"Operation timed out after {timeout_seconds} seconds"
+                db_logger.error(timeout_msg)
+                raise TimeoutError(timeout_msg) from e
 
     def _connect(self) -> None:
         """Legacy connect method - use _connect_with_retry instead."""

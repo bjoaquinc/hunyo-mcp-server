@@ -6,7 +6,11 @@ Provides a secure interface for LLMs to query the captured notebook data
 using SQL with safety constraints and helpful query templates.
 """
 
-from typing import Any
+from typing import Any, ClassVar
+
+import sqlparse
+from sqlparse import tokens
+from sqlparse.sql import Statement
 
 from hunyo_mcp_server.orchestrator import get_global_orchestrator
 
@@ -33,25 +37,336 @@ except ImportError:
 # Constants
 MAX_QUERY_LIMIT = 1000  # Maximum number of rows that can be returned by a query
 QUERY_LOG_TRUNCATE_LENGTH = 100  # Maximum length for query logging
+QUERY_EXCERPT_LENGTH = 100  # Maximum length for query excerpts in error messages
 
 # Get the shared FastMCP instance
 from hunyo_mcp_server.mcp_instance import mcp
 
 
-@mcp.tool("query_database")
-def query_tool(
-    sql_query: str, limit: int | None = 100, *, safe_mode: bool = True
-) -> dict[str, Any]:
-    """
-    Execute SQL queries on the captured notebook execution data.
+class SQLSecurityValidator:
+    """Enhanced SQL security validator using sqlparse for AST-based validation."""
 
-    Allows querying of runtime events, lineage events, and derived views
-    to analyze notebook execution patterns, performance, and data lineage.
+    FORBIDDEN_KEYWORDS: ClassVar[set[str]] = {
+        "INSERT",
+        "UPDATE",
+        "DELETE",
+        "DROP",
+        "CREATE",
+        "ALTER",
+        "TRUNCATE",
+        "MERGE",
+        "REPLACE",
+        "EXEC",
+        "EXECUTE",
+        "CALL",
+        "LOAD",
+        "INSTALL",
+        "SET",
+        "PRAGMA",
+        "ATTACH",
+        "DETACH",
+        "COPY",
+    }
+
+    ALLOWED_TABLES: ClassVar[set[str]] = {
+        "runtime_events",
+        "lineage_events",
+        "dataframe_lineage_events",
+        "vw_lineage_io",
+        "vw_performance_metrics",
+        "vw_dataframe_lineage",
+    }
+
+    # Common dangerous patterns for fast rejection
+    DANGEROUS_PATTERNS: ClassVar[list[str]] = [
+        "--",
+        "/*",
+        "*/",
+        "xp_",
+        "sp_",
+        "exec(",
+        "execute(",
+        "union select",
+        "drop table",
+        "delete from",
+        "update set",
+        "insert into",
+        "create table",
+        "alter table",
+        "truncate table",
+        "load_extension(",
+        "system(",
+        "load_file(",
+        "file_read(",
+        "file_write(",
+        "shell(",
+        "cmd(",
+        "command(",
+        "subprocess(",
+        "into outfile",
+        "into dumpfile",
+        "load data",
+        "backup",
+        "restore",
+        "copy to",
+        "copy from",
+        "bulk insert",
+    ]
+
+    def validate_readonly_query(self, sql: str) -> dict[str, Any]:
+        """
+        Fast path for common cases, comprehensive validation for edge cases.
+
+        Uses hybrid approach:
+        1. Fast rejection for obvious violations
+        2. Quick keyword scan for performance
+        3. Comprehensive AST parsing when needed
+        """
+        try:
+            sql_clean = sql.strip().lower()
+
+            # Fast rejection for obvious violations
+            if not sql_clean.startswith("select"):
+                return {
+                    "valid": False,
+                    "error": "Only SELECT statements allowed",
+                    "suggestion": "Start your query with SELECT to retrieve data",
+                    "query_excerpt": self._get_query_excerpt(sql),
+                }
+
+            # Quick dangerous pattern scan
+            for pattern in self.DANGEROUS_PATTERNS:
+                if pattern in sql_clean:
+                    return {
+                        "valid": False,
+                        "error": f"Query contains dangerous pattern: {pattern}",
+                        "suggestion": "Remove dangerous SQL operations and use only SELECT statements",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+            # Quick keyword scan for performance
+            for keyword in self.FORBIDDEN_KEYWORDS:
+                if keyword.lower() in sql_clean:
+                    # Use AST parsing to confirm (avoid false positives)
+                    return self._comprehensive_validation(sql)
+
+            # For clean queries, still do basic AST validation
+            return self._ast_validation(sql)
+
+        except Exception as e:
+            return {
+                "valid": False,
+                "error": f"SQL parsing failed: {e!s}",
+                "query_excerpt": self._get_query_excerpt(sql),
+                "suggestion": "Check your SQL syntax and try again",
+            }
+
+    def _comprehensive_validation(self, sql: str) -> dict[str, Any]:
+        """Comprehensive AST-based validation for suspicious queries."""
+        try:
+            parsed = sqlparse.parse(sql)
+
+            if not parsed:
+                return {
+                    "valid": False,
+                    "error": "Empty or invalid SQL",
+                    "query_excerpt": self._get_query_excerpt(sql),
+                }
+
+            # Check each statement
+            for statement in parsed:
+                # Verify it's a SELECT statement
+                if not self._is_select_statement(statement):
+                    return {
+                        "valid": False,
+                        "error": "Only SELECT statements allowed",
+                        "suggestion": "Use SELECT to query data, not modify it",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+                # Check for forbidden operations
+                forbidden_op = self._get_forbidden_operation(statement)
+                if forbidden_op:
+                    return {
+                        "valid": False,
+                        "error": f"Query contains forbidden operation: {forbidden_op}",
+                        "suggestion": "Remove data modification operations and use only SELECT",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+                # Validate table access
+                unauthorized_tables = self._get_unauthorized_tables(statement)
+                if unauthorized_tables:
+                    return {
+                        "valid": False,
+                        "error": f"Query accesses unauthorized tables: {', '.join(unauthorized_tables)}",
+                        "suggestion": f"Use only authorized tables: {', '.join(self.ALLOWED_TABLES)}",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+            return {"valid": True, "error": None}
+
+        except Exception as e:
+            return {
+                "valid": False,
+                "error": f"Comprehensive validation failed: {e!s}",
+                "query_excerpt": self._get_query_excerpt(sql),
+                "suggestion": "Check your SQL syntax and try again",
+            }
+
+    def _ast_validation(self, sql: str) -> dict[str, Any]:
+        """Basic AST validation for clean queries."""
+        try:
+            parsed = sqlparse.parse(sql)
+
+            if not parsed:
+                return {
+                    "valid": False,
+                    "error": "Empty or invalid SQL",
+                    "query_excerpt": self._get_query_excerpt(sql),
+                }
+
+            # Basic checks
+            for statement in parsed:
+                if not self._is_select_statement(statement):
+                    return {
+                        "valid": False,
+                        "error": "Only SELECT statements allowed",
+                        "suggestion": "Use SELECT to query notebook memories",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+                # Basic table validation
+                unauthorized_tables = self._get_unauthorized_tables(statement)
+                if unauthorized_tables:
+                    return {
+                        "valid": False,
+                        "error": f"Query accesses unauthorized tables: {', '.join(unauthorized_tables)}",
+                        "suggestion": f"Use only authorized tables: {', '.join(self.ALLOWED_TABLES)}",
+                        "query_excerpt": self._get_query_excerpt(sql),
+                    }
+
+            return {"valid": True, "error": None}
+
+        except Exception as e:
+            return {
+                "valid": False,
+                "error": f"AST validation failed: {e!s}",
+                "query_excerpt": self._get_query_excerpt(sql),
+                "suggestion": "Check your SQL syntax and try again",
+            }
+
+    def _is_select_statement(self, statement: Statement) -> bool:
+        """Check if statement is a SELECT query."""
+        first_token = statement.token_first(skip_ws=True, skip_cm=True)
+        return (
+            first_token
+            and first_token.ttype is tokens.Keyword.DML
+            and first_token.normalized == "SELECT"
+        )
+
+    def _get_forbidden_operation(self, statement: Statement) -> str | None:
+        """Get the first forbidden operation found, or None."""
+        for token in statement.flatten():
+            if (
+                token.ttype is tokens.Keyword
+                and token.normalized in self.FORBIDDEN_KEYWORDS
+            ):
+                return token.normalized
+        return None
+
+    def _get_unauthorized_tables(self, statement: Statement) -> set[str]:
+        """Get set of unauthorized tables referenced in the query."""
+        all_tables = self._extract_table_names(statement)
+        unauthorized = all_tables - self.ALLOWED_TABLES
+        return unauthorized
+
+    def _extract_table_names(self, statement: Statement) -> set[str]:
+        """Extract table names using enhanced FROM/JOIN clause detection."""
+        tables = set()
+
+        # Convert to flat token list for easier processing
+        token_list = list(statement.flatten())
+
+        for i, token in enumerate(token_list):
+            if token.ttype is tokens.Keyword and (
+                "FROM" in token.normalized or "JOIN" in token.normalized
+            ):
+                # Look for the next identifier token
+                for j in range(i + 1, len(token_list)):
+                    next_token = token_list[j]
+
+                    # Skip whitespace and comments
+                    if next_token.ttype in (
+                        None,
+                        tokens.Whitespace,
+                        tokens.Comment.Single,
+                        tokens.Comment.Multiline,
+                    ):
+                        continue
+
+                    # Found an identifier (name, quoted string, or untyped)
+                    if (
+                        next_token.ttype is tokens.Name
+                        or next_token.ttype is None
+                        or next_token.ttype
+                        in (
+                            tokens.Literal.String.Symbol,
+                            tokens.Literal.String.Single,
+                            tokens.Literal.String.Double,
+                        )
+                    ):
+                        table_name = next_token.value.lower().strip()
+                        # Remove quotes if present
+                        table_name = table_name.strip('"`\'')
+                        if table_name:
+                            tables.add(table_name)
+                        break
+
+        return tables
+
+    def _get_query_excerpt(self, sql: str) -> str:
+        """Get a safe excerpt of the query for error reporting."""
+        if len(sql) <= QUERY_EXCERPT_LENGTH:
+            return sql
+        return sql[:QUERY_EXCERPT_LENGTH] + "..."
+
+    def _generate_suggestion(self, sql: str, error: str) -> str:
+        """Generate helpful suggestions based on the error."""
+        sql_lower = sql.lower()
+
+        if "select" not in sql_lower:
+            return (
+                "Start your query with SELECT to retrieve data from notebook memories"
+            )
+
+        if any(keyword.lower() in sql_lower for keyword in self.FORBIDDEN_KEYWORDS):
+            return "Remove data modification operations and use only SELECT statements"
+
+        if "unauthorized tables" in error:
+            return f"Use only authorized tables: {', '.join(self.ALLOWED_TABLES)}"
+
+        return "Check your SQL syntax and ensure it's a valid SELECT query"
+
+
+@mcp.tool("query_memories")
+def query_memories(sql_query: str, limit: int = 100) -> dict[str, Any]:
+    """
+    Execute SQL queries against notebook execution memories with enhanced security.
+
+    Uses sqlparse for AST-based validation to prevent SQL injection and
+    unauthorized operations. Only SELECT queries on authorized tables are allowed.
+
+    Security Features:
+    - AST-based SQL parsing prevents injection attacks
+    - Whitelist-based table access control
+    - Hybrid validation for performance and security
+    - Enhanced error reporting with suggestions
+    - Always-on security (no unsafe mode)
 
     Args:
-        sql_query: SQL query to execute (SELECT statements only in safe mode)
+        sql_query: SQL query to execute (SELECT statements only)
         limit: Maximum number of rows to return (default: 100, max: 1000)
-        safe_mode: If True, only allow SELECT queries (default: True)
 
     Returns:
         Dictionary containing query results, metadata, and execution info
@@ -59,6 +374,7 @@ def query_tool(
     Example queries:
     - "SELECT * FROM runtime_events ORDER BY timestamp DESC LIMIT 10"
     - "SELECT execution_id, duration_ms FROM vw_performance_metrics WHERE duration_ms > 1000"
+    - "SELECT operation_type, COUNT(*) FROM dataframe_lineage_events GROUP BY operation_type"
     - "SELECT job_name, input_count, output_count FROM vw_lineage_io"
     """
 
@@ -67,45 +383,23 @@ def query_tool(
         orchestrator = get_global_orchestrator()
         db_manager = orchestrator.get_db_manager()
 
-        # Security: Validate query in safe mode
-        if safe_mode:
-            sql_query_lower = sql_query.lower().strip()
+        # Security: Always-on enhanced validation
+        validator = SQLSecurityValidator()
+        validation_result = validator.validate_readonly_query(sql_query)
 
-            # Only allow SELECT queries
-            if not sql_query_lower.startswith("select"):
-                return {
-                    "error": "Only SELECT queries are allowed in safe mode",
-                    "query": sql_query,
-                    "safe_mode": safe_mode,
-                }
-
-            # Block potentially dangerous operations
-            dangerous_keywords = [
-                "delete",
-                "update",
-                "insert",
-                "drop",
-                "create",
-                "alter",
-                "truncate",
-                "replace",
-                "merge",
-                "exec",
-                "execute",
-            ]
-
-            for keyword in dangerous_keywords:
-                if keyword in sql_query_lower:
-                    return {
-                        "error": f"Query contains potentially dangerous keyword: {keyword}",
-                        "query": sql_query,
-                        "safe_mode": safe_mode,
-                    }
+        if not validation_result["valid"]:
+            return {
+                "success": False,
+                "error": validation_result["error"],
+                "query": sql_query,
+                "suggestion": validation_result.get("suggestion"),
+                "query_excerpt": validation_result.get("query_excerpt"),
+                "results": [],
+                "row_count": 0,
+            }
 
         # Apply limit constraints
-        if limit is None:
-            limit = 100
-        elif limit > MAX_QUERY_LIMIT:
+        if limit > MAX_QUERY_LIMIT:
             limit = MAX_QUERY_LIMIT
             tool_logger.warning(f"Query limit capped at {MAX_QUERY_LIMIT} rows")
 
@@ -114,10 +408,10 @@ def query_tool(
             sql_query = f"{sql_query.rstrip(';')} LIMIT {limit}"
 
         tool_logger.info(
-            f"Executing query: {sql_query[:QUERY_LOG_TRUNCATE_LENGTH]}{'...' if len(sql_query) > QUERY_LOG_TRUNCATE_LENGTH else ''}"
+            f"Querying memories: {sql_query[:QUERY_LOG_TRUNCATE_LENGTH]}{'...' if len(sql_query) > QUERY_LOG_TRUNCATE_LENGTH else ''}"
         )
 
-        # Execute query
+        # Execute query against notebook memories
         results = db_manager.execute_query(sql_query)
 
         # Prepare response
@@ -127,25 +421,25 @@ def query_tool(
             "row_count": len(results),
             "results": results,
             "limit_applied": limit,
-            "safe_mode": safe_mode,
             "metadata": {
                 "execution_time": "N/A",  # Could add timing if needed
                 "columns": list(results[0].keys()) if results else [],
             },
         }
 
-        tool_logger.info(f"Query executed successfully, returned {len(results)} rows")
+        tool_logger.info(
+            f"Memory query executed successfully, returned {len(results)} rows"
+        )
         return response
 
     except Exception as e:
         error_msg = str(e)
-        tool_logger.error(f"Query execution failed: {error_msg}")
+        tool_logger.error(f"Memory query execution failed: {error_msg}")
 
         return {
             "success": False,
             "error": error_msg,
             "query": sql_query,
-            "safe_mode": safe_mode,
             "results": [],
             "row_count": 0,
         }
@@ -269,53 +563,24 @@ def get_query_examples() -> list[dict[str, str]]:
 
 def validate_query_syntax(query: str) -> dict[str, Any]:
     """
-    Basic validation of SQL query syntax.
+    Enhanced validation using sqlparse AST parsing with helpful error reporting.
 
     Args:
         query: SQL query string
 
     Returns:
-        Validation result with success flag and any issues
+        Validation result with success flag, issues, and suggestions
     """
+    validator = SQLSecurityValidator()
+    result = validator.validate_readonly_query(query)
 
-    issues = []
-    query_lower = query.lower().strip()
+    return {
+        "valid": result["valid"],
+        "issues": [result["error"]] if result["error"] else [],
+        "suggestions": [result.get("suggestion")] if result.get("suggestion") else [],
+        "query": query,
+        "query_excerpt": result.get("query_excerpt", query),
+    }
 
-    # Check basic structure
-    if not query_lower.startswith("select"):
-        issues.append("Query should start with SELECT")
 
-    # Check for basic SQL injection patterns
-    dangerous_patterns = [
-        "--",
-        "/*",
-        "*/",
-        "xp_",
-        "sp_",
-        "exec(",
-        "execute(",
-        "union select",
-        "drop table",
-        "delete from",
-    ]
-
-    for pattern in dangerous_patterns:
-        if pattern in query_lower:
-            issues.append(f"Potentially dangerous pattern detected: {pattern}")
-
-    # Check for table references
-    known_tables = [
-        "runtime_events",
-        "lineage_events",
-        "vw_lineage_io",
-        "vw_performance_metrics",
-    ]
-    has_known_table = any(table in query_lower for table in known_tables)
-
-    if not has_known_table:
-        issues.append(
-            "Query should reference at least one known table: "
-            + ", ".join(known_tables)
-        )
-
-    return {"valid": len(issues) == 0, "issues": issues, "query": query}
+query_tool = query_memories

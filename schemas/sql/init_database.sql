@@ -171,7 +171,7 @@ SELECT
     json_extract(output_dataframes, '$[0].shape[1]') AS output_cols,
     
     -- Column lineage summary
-    json_keys(column_lineage) AS output_columns,
+    json_extract(column_lineage, '$.output_columns') AS output_columns,
     
     -- Performance metrics
     overhead_ms,

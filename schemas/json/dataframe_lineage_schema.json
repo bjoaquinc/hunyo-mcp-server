@@ -121,16 +121,47 @@
     },
     "column_lineage": {
       "type": "object",
-      "description": "Column-level lineage mapping from output to input columns",
-      "patternProperties": {
-        "^[^.]+\\.[^.]+$": {
+      "description": "Column-level lineage mapping with metadata",
+      "properties": {
+        "column_mapping": {
+          "type": "object",
+          "description": "Mapping from output columns to input columns",
+          "patternProperties": {
+            "^[^.]+\\.[^.]+$": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Array of source column names (format: 'variable.column')"
+            }
+          },
+          "additionalProperties": false
+        },
+        "input_columns": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Array of source column names (format: 'variable.column')"
+          "description": "List of input column names"
+        },
+        "output_columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of output column names"
+        },
+        "operation_method": {
+          "type": "string",
+          "description": "Method used for the operation"
+        },
+        "lineage_type": {
+          "type": "string",
+          "description": "Type of lineage operation",
+          "enum": ["selection", "aggregation", "join", "basic", "error"]
         }
       },
+      "required": ["column_mapping", "input_columns", "output_columns", "operation_method", "lineage_type"],
       "additionalProperties": false
     },
     "performance": {

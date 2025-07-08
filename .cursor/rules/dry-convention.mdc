@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+**DRY Principle Instruction: Eliminate Code Duplication**
+
+When writing code, always follow the DRY (Don't Repeat Yourself) principle by identifying and consolidating duplicate logic into reusable functions, classes, or modules. If you notice similar code patterns appearing more than once, extract them into a shared abstraction with clear parameters. Prioritize creating utility functions for common operations, use inheritance or composition for shared behavior, and leverage configuration files or constants for repeated values. Before writing new code, scan existing implementations for reusable components and prefer extending existing abstractions over creating duplicates. When refactoring, actively look for opportunities to merge similar functions, eliminate redundant conditionals, and create single sources of truth for business logic. Always ensure that your abstractions are meaningful and not forced—sometimes apparent duplication serves different purposes and should remain separate. The goal is maintainable, testable code where each piece of knowledge exists in exactly one place.

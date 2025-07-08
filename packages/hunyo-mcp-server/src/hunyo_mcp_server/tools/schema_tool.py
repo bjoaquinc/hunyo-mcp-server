@@ -20,7 +20,7 @@ from hunyo_mcp_server.mcp_instance import mcp
 
 
 @mcp.tool("inspect_schema")
-def schema_tool(
+def inspect_schema(
     table_name: str | None = None,
     *,
     include_views: bool = True,
@@ -43,8 +43,10 @@ def schema_tool(
     Available tables:
     - runtime_events: Cell execution performance and timing data
     - lineage_events: Data lineage and transformation tracking
+    - dataframe_lineage_events: DataFrame computational operations and transformations
     - vw_lineage_io: View showing input/output relationships
     - vw_performance_metrics: View combining runtime and lineage metrics
+    - vw_dataframe_lineage: View showing DataFrame operation analysis
     """
 
     try:
@@ -55,8 +57,12 @@ def schema_tool(
         tool_logger.info(f"Inspecting schema for table: {table_name or 'all tables'}")
 
         # Define known tables and views
-        tables = ["runtime_events", "lineage_events"]
-        views = ["vw_lineage_io", "vw_performance_metrics"] if include_views else []
+        tables = ["runtime_events", "lineage_events", "dataframe_lineage_events"]
+        views = (
+            ["vw_lineage_io", "vw_performance_metrics", "vw_dataframe_lineage"]
+            if include_views
+            else []
+        )
 
         schema_info = {
             "database_overview": {
@@ -131,20 +137,28 @@ def schema_tool(
         schema_info["usage_notes"] = get_schema_usage_notes()
         schema_info["relationships"] = get_table_relationships()
 
-        tool_logger.info(f"Schema inspection complete for {len(targets)} objects")
+        tool_logger.info(
+            f"Memory schema inspection complete for {len(targets)} objects"
+        )
         return schema_info
 
     except Exception as e:
         error_msg = str(e)
-        tool_logger.error(f"Schema inspection failed: {error_msg}")
+        tool_logger.error(f"Memory schema inspection failed: {error_msg}")
 
         return {
             "success": False,
             "error": error_msg,
             "table_name": table_name,
-            "available_tables": ["runtime_events", "lineage_events"],
+            "available_tables": [
+                "runtime_events",
+                "lineage_events",
+                "dataframe_lineage_events",
+            ],
             "available_views": (
-                ["vw_lineage_io", "vw_performance_metrics"] if include_views else []
+                ["vw_lineage_io", "vw_performance_metrics", "vw_dataframe_lineage"]
+                if include_views
+                else []
             ),
         }
 
@@ -170,6 +184,12 @@ def get_schema_usage_notes() -> dict[str, str]:
             "common_queries": "Data lineage analysis, input/output tracking, transformation mapping",
             "notes": "JSON fields contain detailed lineage metadata and column-level transformations",
         },
+        "dataframe_lineage_events": {
+            "purpose": "DataFrame computational operations and transformations tracking",
+            "key_fields": "execution_id, operation_type, operation_method, input_dataframes, output_dataframes, column_lineage (nested structure)",
+            "common_queries": "DataFrame operation analysis, column-level lineage, computational performance tracking",
+            "notes": "Tracks selection, aggregation, and join operations on DataFrames with rich column-level lineage metadata",
+        },
         "vw_lineage_io": {
             "purpose": "Simplified view of input/output relationships from lineage events",
             "key_fields": "input_names, output_names, input_count, output_count, job_name",
@@ -181,6 +201,12 @@ def get_schema_usage_notes() -> dict[str, str]:
             "key_fields": "execution_id (join key), duration_ms, memory_delta_mb, lineage_to_runtime_ratio",
             "common_queries": "Performance analysis with context, finding bottlenecks",
             "notes": "Joins runtime and lineage events to provide comprehensive execution metrics",
+        },
+        "vw_dataframe_lineage": {
+            "purpose": "DataFrame operation analysis with extracted JSON fields and computed metrics",
+            "key_fields": "operation_type, operation_method, input_variable, output_variable, row_retention_ratio",
+            "common_queries": "DataFrame transformation analysis, operation performance, data shape changes",
+            "notes": "Convenience view that extracts DataFrame info from JSON and computes transformation ratios",
         },
     }
 
@@ -197,6 +223,7 @@ def get_table_relationships() -> dict[str, Any]:
         "primary_keys": {
             "runtime_events": "event_id (auto-increment)",
             "lineage_events": "ol_event_id (auto-increment)",
+            "dataframe_lineage_events": "df_event_id (auto-increment)",
         },
         "foreign_keys": {"lineage_events.execution_id": "runtime_events.execution_id"},
         "common_joins": {
@@ -219,56 +246,4 @@ def get_table_relationships() -> dict[str, Any]:
     }
 
 
-@mcp.tool("get_column_info")
-def get_column_info(table_name: str, column_name: str | None = None) -> dict[str, Any]:
-    """
-    Get detailed information about specific columns in a table.
-
-    Args:
-        table_name: Name of the table to inspect
-        column_name: Specific column (None for all columns)
-
-    Returns:
-        Dictionary with detailed column information including data types and constraints
-    """
-
-    try:
-        # Get database manager from orchestrator
-        orchestrator = get_global_orchestrator()
-        db_manager = orchestrator.get_db_manager()
-
-        # Get table structure
-        table_info = db_manager.get_table_info(table_name)
-
-        if column_name:
-            # Filter for specific column
-            table_info = [
-                col
-                for col in table_info
-                if col.get("column_name", col.get("Field")) == column_name
-            ]
-
-            if not table_info:
-                return {
-                    "error": f"Column '{column_name}' not found in table '{table_name}'",
-                    "table_name": table_name,
-                    "column_name": column_name,
-                }
-
-        # Get sample values for context
-        sample_query = f"SELECT {column_name or '*'} FROM {table_name} WHERE {column_name or 'TRUE'} IS NOT NULL LIMIT 5"
-        try:
-            sample_data = db_manager.execute_query(sample_query)
-        except Exception:
-            sample_data = []
-
-        return {
-            "table_name": table_name,
-            "column_name": column_name,
-            "column_info": table_info,
-            "sample_values": sample_data,
-            "total_rows": db_manager.get_table_count(table_name),
-        }
-
-    except Exception as e:
-        return {"error": str(e), "table_name": table_name, "column_name": column_name}
+schema_tool = inspect_schema
