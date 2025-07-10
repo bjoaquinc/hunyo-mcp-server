@@ -148,7 +148,9 @@ class TestServerImplementationPreparation:
 
         try:
             # Test that the NEW unified system works for server integration
-            from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+            from hunyo_capture.unified_notebook_interceptor import (
+                enable_unified_tracking,
+            )
 
             # Test that the main functions are properly defined
             assert enable_unified_tracking is not None

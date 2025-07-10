@@ -5,15 +5,46 @@ This module handles capturing runtime and lineage events from Marimo notebooks
 with unique file naming based on notebook file paths.
 """
 
-__version__ = "0.1.0"
-
 import hashlib
-import os
 from pathlib import Path
 
+# Phase 1 abstractions - available for internal use but not exposed to users
+from .adapters.base import ExecutionContextAdapter  # noqa: F401
+from .adapters.marimo_adapter import MarimoContextAdapter  # noqa: F401
+from .constants import *  # noqa: F403
+from .constants import (
+    DATAFRAME_LINEAGE_SUFFIX,
+    EVENTS_DIR_NAME,
+    LINEAGE_SUFFIX,
+    MAX_HASH_LENGTH,
+    RUNTIME_SUFFIX,
+    VERSION,
+)
+from .environments.base import EnvironmentDetector, NotebookEnvironment  # noqa: F401
+from .factory import (  # noqa: F401
+    ComponentFactory,
+    EnvironmentNotAvailableError,
+    EnvironmentNotSupportedError,
+    create_components,
+    create_context_adapter,
+    create_hook_manager,
+)
+from .hooks.base import NotebookHooks  # noqa: F401
+from .hooks.marimo_hooks import MarimoHooks  # noqa: F401
 from .logger import get_logger
+from .unified_notebook_interceptor import (
+    UnifiedNotebookInterceptor,  # noqa: F401
+    disable_unified_tracking,
+    enable_unified_tracking,
+    get_unified_interceptor,  # noqa: F401
+    is_unified_tracking_active,
+)
 
-# Create common logger instances that were previously exported
+# Set package version
+__version__ = VERSION
+
+# Backward compatibility: Create common logger instances that were previously exported
+# These are maintained for existing code that depends on them
 capture_logger = get_logger("hunyo.capture")
 runtime_logger = get_logger("hunyo.runtime")
 lineage_logger = get_logger("hunyo.lineage")
@@ -30,7 +61,7 @@ def get_notebook_file_hash(notebook_path: str) -> str:
         8-character hex hash of the file path
     """
     path_bytes = str(Path(notebook_path).resolve()).encode("utf-8")
-    return hashlib.sha256(path_bytes).hexdigest()[:8]
+    return hashlib.sha256(path_bytes).hexdigest()[:MAX_HASH_LENGTH]
 
 
 def get_notebook_name(notebook_path: str) -> str:
@@ -49,12 +80,15 @@ def get_notebook_name(notebook_path: str) -> str:
     return safe_name
 
 
-def get_event_filenames(notebook_path: str, data_dir: str) -> tuple[str, str, str]:
+def get_event_filenames(
+    notebook_path: str, data_dir: str, environment: str = "marimo"  # noqa: ARG001
+) -> tuple[str, str, str]:
     """Generate unique event filenames for a notebook.
 
     Args:
         notebook_path: Full path to the notebook file
         data_dir: Base directory for storing event files
+        environment: Environment prefix for file naming (default: "marimo" for backward compatibility)
 
     Returns:
         Tuple of (runtime_events_file, lineage_events_file, dataframe_lineage_events_file) paths
@@ -62,17 +96,18 @@ def get_event_filenames(notebook_path: str, data_dir: str) -> tuple[str, str, st
     file_hash = get_notebook_file_hash(notebook_path)
     notebook_name = get_notebook_name(notebook_path)
 
-    runtime_file = f"{file_hash}_{notebook_name}_runtime_events.jsonl"
-    lineage_file = f"{file_hash}_{notebook_name}_lineage_events.jsonl"
+    # Generate filenames without environment prefix to maintain compatibility with MCP server
+    runtime_file = f"{file_hash}_{notebook_name}{RUNTIME_SUFFIX}.jsonl"
+    lineage_file = f"{file_hash}_{notebook_name}{LINEAGE_SUFFIX}.jsonl"
     dataframe_lineage_file = (
-        f"{file_hash}_{notebook_name}_dataframe_lineage_events.jsonl"
+        f"{file_hash}_{notebook_name}{DATAFRAME_LINEAGE_SUFFIX}.jsonl"
     )
 
     data_path = Path(data_dir)
     return (
-        str(data_path / "events" / "runtime" / runtime_file),
-        str(data_path / "events" / "lineage" / lineage_file),
-        str(data_path / "events" / "dataframe_lineage" / dataframe_lineage_file),
+        str(data_path / EVENTS_DIR_NAME / "runtime" / runtime_file),
+        str(data_path / EVENTS_DIR_NAME / "lineage" / lineage_file),
+        str(data_path / EVENTS_DIR_NAME / "dataframe_lineage" / dataframe_lineage_file),
     )
 
 
@@ -87,71 +122,21 @@ def get_user_data_dir() -> str:
     Returns:
         Path to .hunyo directory, creating it if necessary
     """
+    # Use new environment detection system while maintaining backward compatibility
 
-    # Check if we're in development mode
-    is_dev_mode = False
-
-    # Method 1: Check for environment variable override
-    env_mode = os.environ.get("HUNYO_DEV_MODE", "").lower()
-    if env_mode in {"1", "true", "yes", "on"}:
-        is_dev_mode = True
-    elif env_mode in {"0", "false", "no", "off"}:
-        is_dev_mode = False  # Explicitly force production mode
-    else:
-        # Method 2: Auto-detect based on development indicators
-        current_dir = Path.cwd()
-        for parent in [current_dir, *list(current_dir.parents)]:
-            # Check for common development indicators
-            dev_markers = [
-                ".git",  # Git repository
-                "src",  # Source code directory
-                "requirements.txt",  # Python project
-                "pyproject.toml",  # Modern Python project
-                "setup.py",  # Python package
-                ".env",  # Environment config
-                "venv",  # Virtual environment
-                "test",  # Test directory
-                "tests",  # Test directory
-            ]
-            if any((parent / marker).exists() for marker in dev_markers):
-                is_dev_mode = True
-                break
-
-    if is_dev_mode:
-        # Development mode: use project root .hunyo
-        current_dir = Path.cwd()
-        project_root = current_dir
-
-        # Look for project markers going up the directory tree
-        markers = [".git", "requirements.txt", "pyproject.toml", "setup.py", "src"]
-        for parent in [current_dir, *list(current_dir.parents)]:
-            if any((parent / marker).exists() for marker in markers):
-                project_root = parent
-                break
-
-        data_dir = project_root / ".hunyo"
-    else:
-        # Production mode: use home directory .hunyo
-        data_dir = Path.home() / ".hunyo"
-
-    # Created directory structure
-    (data_dir / "events" / "runtime").mkdir(parents=True, exist_ok=True)
-    (data_dir / "events" / "lineage").mkdir(parents=True, exist_ok=True)
-    (data_dir / "events" / "dataframe_lineage").mkdir(parents=True, exist_ok=True)
-    (data_dir / "database").mkdir(parents=True, exist_ok=True)
-    (data_dir / "config").mkdir(parents=True, exist_ok=True)
+    data_dir = EnvironmentDetector.get_data_directory()
+    EnvironmentDetector.ensure_data_directory_structure(data_dir)
 
     return str(data_dir)
 
 
 __all__ = [
-    "capture_logger",
+    # Essential tracking functions and utilities (alphabetically sorted)
+    "disable_unified_tracking",
+    "enable_unified_tracking",
     "get_event_filenames",
-    "get_logger",
     "get_notebook_file_hash",
     "get_notebook_name",
     "get_user_data_dir",
-    "hooks_logger",
-    "lineage_logger",
-    "runtime_logger",
+    "is_unified_tracking_active",
 ]

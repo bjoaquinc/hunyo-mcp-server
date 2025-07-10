@@ -8,30 +8,35 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from hunyo_capture.unified_marimo_interceptor import (
-    UnifiedMarimoInterceptor,
+from hunyo_capture import (
     disable_unified_tracking,
     enable_unified_tracking,
     get_unified_interceptor,
     is_unified_tracking_active,
 )
+from hunyo_capture.unified_notebook_interceptor import UnifiedNotebookInterceptor
 
 
-class TestUnifiedMarimoInterceptor:
-    """Test cases for the unified marimo interceptor system."""
+class TestUnifiedNotebookInterceptor:
+    """Test cases for the unified notebook interceptor system."""
 
     def test_interceptor_initialization(self):
         """Test that interceptor initializes correctly."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                dataframe_lineage_file=str(Path(tmp_dir) / "dataframe_lineage.jsonl"),
             )
 
             assert interceptor.notebook_path == str(Path(tmp_dir) / "test.py")
             assert interceptor.runtime_file == Path(tmp_dir) / "runtime.jsonl"
             assert interceptor.lineage_file == Path(tmp_dir) / "lineage.jsonl"
+            assert (
+                interceptor.dataframe_lineage_file
+                == Path(tmp_dir) / "dataframe_lineage.jsonl"
+            )
             assert interceptor.session_id is not None
             assert len(interceptor.session_id) == 8
             assert not interceptor.interceptor_active
@@ -45,7 +50,7 @@ class TestUnifiedMarimoInterceptor:
             # Create a mock notebook file
             Path(notebook_path).write_text("print('hello')")
 
-            interceptor = UnifiedMarimoInterceptor(notebook_path=notebook_path)
+            interceptor = UnifiedNotebookInterceptor(notebook_path=notebook_path)
 
             assert interceptor.notebook_path == notebook_path
             assert interceptor.runtime_file.exists()
@@ -56,16 +61,20 @@ class TestUnifiedMarimoInterceptor:
     def test_interceptor_initialization_without_notebook_path(self):
         """Test that interceptor uses defaults when no notebook path provided."""
         try:
-            interceptor = UnifiedMarimoInterceptor()
+            interceptor = UnifiedNotebookInterceptor()
 
             assert interceptor.notebook_path is None
             assert interceptor.runtime_file == Path("marimo_runtime_events.jsonl")
             assert interceptor.lineage_file == Path("marimo_lineage_events.jsonl")
+            assert interceptor.dataframe_lineage_file == Path(
+                "marimo_dataframe_lineage_events.jsonl"
+            )
         finally:
             # Clean up any files that may have been created during test
             for file_path in [
                 "marimo_runtime_events.jsonl",
                 "marimo_lineage_events.jsonl",
+                "marimo_dataframe_lineage_events.jsonl",
             ]:
                 try:
                     Path(file_path).unlink(missing_ok=True)
@@ -82,10 +91,13 @@ class TestUnifiedMarimoInterceptor:
         ):
 
             with tempfile.TemporaryDirectory() as tmp_dir:
-                interceptor = UnifiedMarimoInterceptor(
+                interceptor = UnifiedNotebookInterceptor(
                     notebook_path=str(Path(tmp_dir) / "test.py"),
                     runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                     lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                    dataframe_lineage_file=str(
+                        Path(tmp_dir) / "dataframe_lineage.jsonl"
+                    ),
                 )
 
                 interceptor.install()
@@ -97,10 +109,11 @@ class TestUnifiedMarimoInterceptor:
     def test_dataframe_monkey_patching(self):
         """Test that DataFrame methods are monkey patched correctly."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                dataframe_lineage_file=str(Path(tmp_dir) / "dataframe_lineage.jsonl"),
             )
 
             # Store original method
@@ -125,10 +138,11 @@ class TestUnifiedMarimoInterceptor:
         """Test that runtime events are emitted correctly."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             runtime_file = Path(tmp_dir) / "runtime.jsonl"
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(runtime_file),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                dataframe_lineage_file=str(Path(tmp_dir) / "dataframe_lineage.jsonl"),
             )
 
             # Emit a test runtime event
@@ -154,10 +168,11 @@ class TestUnifiedMarimoInterceptor:
         """Test that lineage events are emitted correctly."""
         with tempfile.TemporaryDirectory() as tmp_dir:
             lineage_file = Path(tmp_dir) / "lineage.jsonl"
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(lineage_file),
+                dataframe_lineage_file=str(Path(tmp_dir) / "dataframe_lineage.jsonl"),
             )
 
             # Emit a test lineage event
@@ -182,14 +197,15 @@ class TestUnifiedMarimoInterceptor:
     def test_execution_context_tracking(self):
         """Test that execution context is tracked correctly."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
+                dataframe_lineage_file=str(Path(tmp_dir) / "dataframe_lineage.jsonl"),
             )
 
             # Test execution context methods
-            assert not interceptor._is_in_marimo_execution()
+            assert not interceptor._is_in_execution()
             assert interceptor._get_current_execution_context() is None
 
             # Simulate adding execution context
@@ -207,7 +223,7 @@ class TestUnifiedMarimoInterceptor:
             thread_id = threading.current_thread().ident
             interceptor._execution_contexts[thread_id] = context_data
 
-            assert interceptor._is_in_marimo_execution()
+            assert interceptor._is_in_execution()
             assert interceptor._get_current_execution_context() == context_data
 
     def test_multiple_execution_contexts_timestamp_selection(self):
@@ -215,7 +231,7 @@ class TestUnifiedMarimoInterceptor:
         import time
 
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
@@ -292,7 +308,7 @@ class TestUnifiedMarimoInterceptor:
         ):
 
             with tempfile.TemporaryDirectory() as tmp_dir:
-                interceptor = UnifiedMarimoInterceptor(
+                interceptor = UnifiedNotebookInterceptor(
                     notebook_path=str(Path(tmp_dir) / "test.py"),
                     runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                     lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
@@ -327,7 +343,7 @@ class TestUnifiedMarimoInterceptor:
     def test_create_openlineage_event(self):
         """Test that OpenLineage events are created with correct structure."""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
@@ -374,7 +390,7 @@ class TestUnifiedMarimoInterceptor:
             import pandas as pd
 
             with tempfile.TemporaryDirectory() as tmp_dir:
-                interceptor = UnifiedMarimoInterceptor(
+                interceptor = UnifiedNotebookInterceptor(
                     notebook_path=str(Path(tmp_dir) / "test.py"),
                     runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                     lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
@@ -424,7 +440,7 @@ class TestUnifiedMarimoInterceptor:
 
             with tempfile.TemporaryDirectory() as tmp_dir:
                 lineage_file = Path(tmp_dir) / "lineage.jsonl"
-                interceptor = UnifiedMarimoInterceptor(
+                interceptor = UnifiedNotebookInterceptor(
                     notebook_path=str(Path(tmp_dir) / "test.py"),
                     runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                     lineage_file=str(lineage_file),
@@ -478,7 +494,7 @@ class TestUnifiedMarimoInterceptor:
 
             with tempfile.TemporaryDirectory() as tmp_dir:
                 lineage_file = Path(tmp_dir) / "lineage.jsonl"
-                interceptor = UnifiedMarimoInterceptor(
+                interceptor = UnifiedNotebookInterceptor(
                     notebook_path=str(Path(tmp_dir) / "test.py"),
                     runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                     lineage_file=str(lineage_file),
@@ -530,7 +546,7 @@ class TestUnifiedMarimoInterceptor:
         ) as runtime_file:
             runtime_file_path = runtime_file.name
 
-        interceptor = UnifiedMarimoInterceptor(
+        interceptor = UnifiedNotebookInterceptor(
             notebook_path="test_notebook.py",
             lineage_file=lineage_file_path,
             runtime_file=runtime_file_path,
@@ -548,7 +564,7 @@ class TestUnifiedMarimoInterceptor:
         test_df = pd.DataFrame({"col": [1, 2, 3]})
         test_error = ValueError("Test error for DataFrame creation")
 
-        # Call the failure capture method
+        # Call the failure capture method (now exists in new system)
         interceptor._capture_dataframe_failure(
             df=test_df,
             execution_context=execution_context,
@@ -607,7 +623,7 @@ class TestUnifiedMarimoInterceptor:
         ) as runtime_file:
             runtime_file_path = runtime_file.name
 
-        interceptor = UnifiedMarimoInterceptor(
+        interceptor = UnifiedNotebookInterceptor(
             notebook_path="test_notebook.py",
             lineage_file=lineage_file_path,
             runtime_file=runtime_file_path,
@@ -673,7 +689,7 @@ class TestUnifiedMarimoInterceptor:
     def test_create_openlineage_event_with_error_info(self):
         """Test OpenLineage event creation with error information"""
         with tempfile.TemporaryDirectory() as tmp_dir:
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 notebook_path=str(Path(tmp_dir) / "test_notebook.py"),
                 runtime_file=str(Path(tmp_dir) / "runtime.jsonl"),
                 lineage_file=str(Path(tmp_dir) / "lineage.jsonl"),
@@ -744,7 +760,7 @@ class TestUnifiedMarimoInterceptor:
         ) as runtime_file:
             runtime_file_path = runtime_file.name
 
-        interceptor = UnifiedMarimoInterceptor(
+        interceptor = UnifiedNotebookInterceptor(
             notebook_path="test_notebook.py",
             lineage_file=lineage_file_path,
             runtime_file=runtime_file_path,
@@ -804,7 +820,7 @@ class TestUnifiedMarimoInterceptor:
         ) as runtime_file:
             runtime_file_path = runtime_file.name
 
-        interceptor = UnifiedMarimoInterceptor(
+        interceptor = UnifiedNotebookInterceptor(
             notebook_path="test_notebook.py",
             lineage_file=lineage_file_path,
             runtime_file=runtime_file_path,
@@ -858,7 +874,7 @@ class TestUnifiedMarimoInterceptor:
         ) as abort_runtime_file:
             abort_runtime_file_path = abort_runtime_file.name
 
-        abort_interceptor = UnifiedMarimoInterceptor(
+        abort_interceptor = UnifiedNotebookInterceptor(
             notebook_path="test_notebook.py",
             lineage_file=abort_lineage_file_path,
             runtime_file=abort_runtime_file_path,

@@ -9,13 +9,14 @@ the JSON schemas in /schemas/json.
 
 import json
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
 import jsonschema
 import pytest
 from hunyo_capture.logger import get_logger
-from hunyo_capture.unified_marimo_interceptor import (
+from hunyo_capture.unified_notebook_interceptor import (
     disable_unified_tracking,
     enable_unified_tracking,
 )
@@ -42,6 +43,13 @@ class TestSchemaValidationIntegration:
             return json.load(f)
 
     @pytest.fixture
+    def dataframe_lineage_schema(self):
+        """Load DataFrame lineage events schema for validation"""
+        schema_path = Path("schemas/json/dataframe_lineage_schema.json")
+        with open(schema_path, encoding="utf-8") as f:
+            return json.load(f)
+
+    @pytest.fixture
     def runtime_events_file(self, temp_hunyo_dir):
         """Path for runtime events output"""
         events_file = temp_hunyo_dir / "runtime_events.jsonl"
@@ -52,6 +60,13 @@ class TestSchemaValidationIntegration:
     def lineage_events_file(self, temp_hunyo_dir):
         """Path for lineage events output"""
         events_file = temp_hunyo_dir / "lineage_events.jsonl"
+        events_file.parent.mkdir(parents=True, exist_ok=True)
+        return events_file
+
+    @pytest.fixture
+    def dataframe_lineage_file(self, temp_hunyo_dir):
+        """Path for dataframe lineage events output"""
+        events_file = temp_hunyo_dir / "dataframe_lineage_events.jsonl"
         events_file.parent.mkdir(parents=True, exist_ok=True)
         return events_file
 
@@ -76,6 +91,9 @@ class TestSchemaValidationIntegration:
         interceptor = enable_unified_tracking(
             runtime_file=str(runtime_events_file),
             lineage_file=str(runtime_events_file.parent / "lineage_events.jsonl"),
+            dataframe_lineage_file=str(
+                runtime_events_file.parent / "dataframe_lineage_events.jsonl"
+            ),
         )
 
         try:
@@ -195,6 +213,9 @@ class TestSchemaValidationIntegration:
         interceptor = enable_unified_tracking(
             runtime_file=str(lineage_events_file.parent / "runtime_events.jsonl"),
             lineage_file=str(lineage_events_file),
+            dataframe_lineage_file=str(
+                lineage_events_file.parent / "dataframe_lineage_events.jsonl"
+            ),
         )
 
         try:
@@ -219,7 +240,7 @@ class TestSchemaValidationIntegration:
 
                 # Verify that monkey patches are installed and context is active
                 assert (
-                    interceptor._is_in_marimo_execution()
+                    interceptor._is_in_execution()
                 ), "Should be in active execution context"
 
                 # Create test DataFrames - these should trigger _capture_dataframe_creation via monkey patches
@@ -303,3 +324,163 @@ class TestSchemaValidationIntegration:
 
         # Should have some valid events
         assert valid_count > 0, "No valid OpenLineage events found"
+
+    def test_dataframe_lineage_schema_compliance(
+        self,
+        dataframe_lineage_file,
+        dataframe_lineage_schema,
+        config_with_temp_dir,
+    ):
+        """Test unified interceptor generates schema-compliant DataFrame lineage events"""
+        # Initialize unified tracking with specific file paths
+        interceptor = enable_unified_tracking(
+            runtime_file=str(dataframe_lineage_file.parent / "runtime_events.jsonl"),
+            lineage_file=str(dataframe_lineage_file.parent / "lineage_events.jsonl"),
+            dataframe_lineage_file=str(dataframe_lineage_file),
+        )
+
+        try:
+            # Test the ACTUAL DataFrame lineage capture by creating real execution context
+            # and triggering DataFrame operations that generate lineage events
+            execution_id = str(uuid.uuid4())[:8]  # Generate proper 8-character hex ID
+            cell_id = "test_df_lineage_cell"
+
+            # Set up execution context to simulate active notebook execution
+            execution_context = {
+                "execution_id": execution_id,
+                "cell_id": cell_id,
+                "cell_source": "# Test DataFrame lineage operations",
+                "start_time": time.time(),
+            }
+            interceptor._execution_contexts[execution_id] = execution_context
+
+            try:
+                # Test the ACTUAL DataFrame lineage tracking by creating real DataFrames
+                # This should trigger the unified system's DataFrame lineage capture
+                import pandas as pd
+
+                # Verify that monkey patches are installed and context is active
+                assert (
+                    interceptor._is_in_execution()
+                ), "Should be in active execution context"
+
+                # Create test DataFrames - these should trigger DataFrame lineage events
+                df1 = pd.DataFrame(
+                    {
+                        "id": [1, 2, 3],
+                        "name": ["Alice", "Bob", "Charlie"],
+                        "age": [25, 30, 35],
+                    }
+                )
+                df2 = pd.DataFrame(
+                    {
+                        "id": [1, 2, 3],
+                        "salary": [50000, 60000, 70000],
+                        "department_id": [1, 2, 3],
+                    }
+                )
+
+                # These operations should be captured by the DataFrame lineage tracking system
+                # Only if DataFrame lineage is enabled
+                if interceptor.dataframe_lineage_enabled:
+                    # Column access - should generate lineage event
+                    df_names = df1[["name", "age"]]
+
+                    # Merge operation - should generate lineage event
+                    df_merged = df1.merge(df2, on="id")
+
+                    # GroupBy operation - should generate lineage event (using numeric columns only)
+                    df_grouped = df_merged.groupby("department_id")[
+                        ["age", "salary"]
+                    ].mean()
+
+                    # ALSO test the direct capture method to ensure events are generated
+                    # This guarantees at least one event is generated
+                    interceptor._capture_dataframe_operation(
+                        input_df=df1,
+                        output_df=df_names,
+                        operation_method="__getitem__",
+                        execution_context=execution_context,
+                        operation_args=(["name", "age"],),
+                        operation_kwargs={},
+                    )
+
+                    interceptor._capture_dataframe_operation(
+                        input_df=df_merged,
+                        output_df=df_grouped,
+                        operation_method="mean",
+                        execution_context=execution_context,
+                        operation_args=(),
+                        operation_kwargs={"by": "department_id"},
+                    )
+
+            finally:
+                # Clean up execution context
+                interceptor._execution_contexts.clear()
+
+            # Give time for events to be written
+            time.sleep(0.1)
+
+        finally:
+            # Clean up tracking
+            disable_unified_tracking()
+
+        # Check if events were generated
+        if (
+            not dataframe_lineage_file.exists()
+            or dataframe_lineage_file.stat().st_size == 0
+        ):
+            pytest.skip(
+                "No DataFrame lineage events generated - lineage may be disabled"
+            )
+            return
+
+        # Load and validate DataFrame lineage events
+        events = []
+        with open(dataframe_lineage_file, encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    try:
+                        event = json.loads(line)
+                        events.append(event)
+                    except json.JSONDecodeError:
+                        continue  # Skip malformed lines
+
+        if not events:
+            pytest.skip("No valid DataFrame lineage events found in output")
+            return
+
+        # Validate against DataFrame lineage schema
+        valid_count = 0
+        invalid_count = 0
+        validation_errors = []
+
+        for i, event in enumerate(events):
+            is_valid, error = self.validate_event_against_schema(
+                event, dataframe_lineage_schema
+            )
+
+            if is_valid:
+                valid_count += 1
+            else:
+                invalid_count += 1
+                validation_errors.append(f"Event {i + 1}: {error}")
+
+        test_logger.info("[VALIDATION] DataFrame Lineage Events Validation:")
+        test_logger.info(f"[OK] Valid events: {valid_count}")
+        test_logger.info(f"[ERROR] Invalid events: {invalid_count}")
+        test_logger.info(f"[INFO] Total events: {len(events)}")
+
+        if validation_errors:
+            test_logger.error("[ERROR] Validation errors:")
+            for error in validation_errors[:3]:  # Show first 3 errors
+                test_logger.error(f"  {error}")
+
+        # Should have some valid events
+        assert valid_count > 0, "No valid DataFrame lineage events found"
+
+        # Should have high compliance rate
+        compliance_rate = valid_count / len(events) * 100
+        assert (
+            compliance_rate >= 80
+        ), f"DataFrame lineage events compliance rate too low: {compliance_rate:.1f}%"

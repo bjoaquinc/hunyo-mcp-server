@@ -17,9 +17,9 @@ def _():
         0, str(Path(__file__).parent.parent / "packages" / "hunyo-capture" / "src")
     )
 
-    # UNIFIED APPROACH: Use unified marimo interceptor
+    # UNIFIED APPROACH: Use unified notebook interceptor
     try:
-        from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+        from hunyo_capture.unified_notebook_interceptor import enable_unified_tracking
 
         # Enable unified tracking with proper naming convention
         notebook_path = str(Path(__file__).resolve())

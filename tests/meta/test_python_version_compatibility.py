@@ -43,16 +43,18 @@ def test_capture_modules_importable():
     """Test that our capture modules can be imported."""
     try:
         from hunyo_capture import logger
-        from hunyo_capture.unified_marimo_interceptor import UnifiedMarimoInterceptor
+        from hunyo_capture.unified_notebook_interceptor import (
+            UnifiedNotebookInterceptor,
+        )
 
         # Basic smoke test - check for actual classes and functions
         assert hasattr(logger, "get_logger")
         assert hasattr(logger, "HunyoLogger")
 
         # Test the unified system
-        assert hasattr(UnifiedMarimoInterceptor, "install")
-        assert hasattr(UnifiedMarimoInterceptor, "uninstall")
-        assert hasattr(UnifiedMarimoInterceptor, "get_session_summary")
+        assert hasattr(UnifiedNotebookInterceptor, "install")
+        assert hasattr(UnifiedNotebookInterceptor, "uninstall")
+        assert hasattr(UnifiedNotebookInterceptor, "get_session_summary")
 
         # Test that utility functions are available
         from hunyo_capture import (

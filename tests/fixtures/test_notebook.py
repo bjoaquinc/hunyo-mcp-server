@@ -12,7 +12,7 @@ def cell_1():
     import pandas as pd
 
     # Import hunyo capture functionality
-    from hunyo_capture.unified_marimo_interceptor import (
+    from hunyo_capture.unified_notebook_interceptor import (
         enable_unified_tracking,
         is_unified_tracking_active,
     )

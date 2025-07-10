@@ -426,7 +426,7 @@ class HunyoOrchestrator:
             "  # Install capture layer: pip install hunyo-capture"
         )
         orchestrator_logger.status(
-            "  from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking"
+            "  from hunyo_capture.unified_notebook_interceptor import enable_unified_tracking"
         )
         orchestrator_logger.status(
             f"  enable_unified_tracking(notebook_path='{self.notebook_path}')"

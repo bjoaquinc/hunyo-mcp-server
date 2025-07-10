@@ -31,12 +31,13 @@ def setup_tracking():
         sys.path.insert(0, str(src_path))
 
     # Import and enable unified tracking
-    from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+    from hunyo_capture.unified_notebook_interceptor import enable_unified_tracking
 
     # Enable unified tracking (creates and installs interceptor)
     tracker = enable_unified_tracking(
         runtime_file="test_marimo_runtime_events.jsonl",
         lineage_file="test_marimo_lineage_events.jsonl",
+        dataframe_lineage_file="test_marimo_dataframe_lineage_events.jsonl",
     )
 
     print(f"[SETUP] Unified tracker installed: {tracker.session_id}")

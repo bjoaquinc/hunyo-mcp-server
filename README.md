@@ -1,8 +1,8 @@
 # Hunyo MCP Server
 
-**Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP**
+**Zero-configuration DataFrame tracking and runtime debugging for multiple notebook environments via MCP**
 
-A single-command orchestrator that provides automatic marimo notebook instrumentation, real-time event capture, DuckDB ingestion, and LLM-accessible query tools via the Model Context Protocol (MCP).
+A single-command orchestrator that provides automatic notebook instrumentation, real-time event capture, DuckDB ingestion, and LLM-accessible query tools via the Model Context Protocol (MCP). Supports Marimo notebooks with extensible architecture for Jupyter and other environments.
 
 ## 🚀 Quick Start
 
@@ -41,9 +41,9 @@ hunyo-mcp-server --notebook my_analysis.py
 
 ## ��️ Architecture
 
-### Dual-Package System
+### Environment-Agnostic Dual-Package System
 
-**Hunyo MCP Server** uses a **dual-package architecture** for optimal deployment flexibility:
+**Hunyo MCP Server** uses a **dual-package architecture** with **environment-agnostic design** for optimal deployment flexibility across multiple notebook environments:
 
 #### **Package 1: `hunyo-mcp-server` (pipx installable)**
 - **Purpose**: Global CLI tool for orchestration and data analysis
@@ -52,17 +52,24 @@ hunyo-mcp-server --notebook my_analysis.py
 - **Features**: Database management, MCP tools, file watching, graceful fallback
 
 #### **Package 2: `hunyo-capture` (pip installable)**
-- **Purpose**: Lightweight DataFrame instrumentation layer
+- **Purpose**: Lightweight DataFrame instrumentation layer with multi-environment support
 - **Installation**: `pip install hunyo-capture` (in notebook environment)
 - **Dependencies**: Minimal (pandas only)
-- **Features**: DataFrame tracking, event generation, marimo integration
+- **Features**: DataFrame tracking, event generation, **environment-agnostic architecture**
+  - **🔧 Marimo support**: Full integration with Marimo runtime hooks
+  - **📝 Jupyter support**: Extensible design for future Jupyter integration  
+  - **🤖 Auto-detection**: Automatically detects and adapts to notebook environment
+  - **🔄 Unified API**: Same tracking functions work across all supported environments
 
 ### Data Flow
 ```
-Marimo Notebook → hunyo-capture → JSONL Events → File Watcher → 
-DuckDB Database → MCP Query Tools → LLM Analysis
-         ↑                                          ↑
-   (pip install)                            (pipx install)
+Notebook Environment → hunyo-capture → JSONL Events → File Watcher → 
+(Marimo/Jupyter/etc.)     ↓           (Environment-aware)
+                   Auto-detects environment
+                         ↓
+              Unified tracking interface → DuckDB Database → MCP Query Tools → LLM Analysis
+                         ↑                                          ↑
+                   (pip install)                            (pipx install)
 ```
 
 ### Environment Isolation Benefits
@@ -81,6 +88,8 @@ pip install hunyo-capture
 - ✅ **Minimal notebook overhead**: Only lightweight capture layer installed
 - ✅ **Graceful fallback**: MCP server works without capture layer
 - ✅ **Easy management**: Global server, environment-specific capture
+- ✅ **Environment flexibility**: Same capture layer works across Marimo, Jupyter, and future environments
+- ✅ **Auto-detection**: Automatically adapts to detected notebook environment without configuration
 
 ### Graceful Fallback System
 
@@ -91,9 +100,31 @@ hunyo-mcp-server --notebook analysis.py
 # Output: 
 # [INFO] To enable notebook tracking, add this to your notebook:
 # [INFO]   # Install capture layer: pip install hunyo-capture
-# [INFO]   from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
-# [INFO]   enable_unified_tracking()
+# [INFO]   from hunyo_capture import enable_unified_tracking
+# [INFO]   enable_unified_tracking()  # Auto-detects environment
 ```
+
+### Environment-Agnostic Architecture
+
+The capture layer automatically detects and adapts to different notebook environments:
+
+```python
+# Same API works across all supported environments
+from hunyo_capture import enable_unified_tracking
+
+# Auto-detects environment (Marimo, Jupyter, etc.)
+enable_unified_tracking()
+
+# Or specify environment explicitly  
+enable_unified_tracking(environment='marimo')
+```
+
+**Architecture Components:**
+- **Environment Detection**: Auto-identifies notebook type (Marimo, Jupyter, etc.)
+- **Hook Abstractions**: Environment-specific hook management (MarimoHooks, JupyterHooks)  
+- **Context Adapters**: Normalize cell execution context across environments
+- **Component Factory**: Creates appropriate components for detected environment
+- **Unified API**: Same tracking functions work across all environments
 
 ### Storage Structure
 ```
@@ -101,7 +132,8 @@ hunyo-mcp-server --notebook analysis.py
 # Development: {repo}/.hunyo/
 ├── events/
 │   ├── runtime/           # Cell execution metrics, timing, memory
-│   └── lineage/          # DataFrame operations, OpenLineage events
+│   ├── lineage/          # DataFrame operations, OpenLineage events  
+│   └── dataframe_lineage/ # Column-level lineage and transformations
 ├── database/
 │   └── lineage.duckdb    # Queryable database with rich schema
 └── config/
@@ -163,7 +195,10 @@ GROUP BY operation;
 
 ### Prerequisites
 - **Python 3.10+** (3.11+ recommended) 
-- **Marimo notebooks** - Works with `.py` marimo notebook files
+- **Notebook environments** - Supports multiple notebook types:
+  - **Marimo notebooks** - Full support for `.py` marimo notebook files
+  - **Jupyter notebooks** - Extensible architecture for future integration
+  - **Auto-detection** - Automatically detects and adapts to environment
 - **Cross-platform** - Fully compatible with Windows, macOS, and Linux
 
 ### Installation Options
@@ -177,8 +212,8 @@ pipx install hunyo-mcp-server
 pip install hunyo-capture
 
 # Then in your notebook, add one line:
-# from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
-# enable_unified_tracking()
+# from hunyo_capture import enable_unified_tracking
+# enable_unified_tracking()  # Auto-detects environment (Marimo/Jupyter/etc.)
 
 # Option 2: Quick Start (Run without installing)
 pipx run hunyo-mcp-server --notebook analysis.py

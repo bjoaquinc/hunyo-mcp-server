@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
-from hunyo_capture.unified_marimo_interceptor import UnifiedMarimoInterceptor
+from hunyo_capture.unified_notebook_interceptor import UnifiedNotebookInterceptor
 
 
 class TestLineageLoggingRobustness:
@@ -32,14 +32,16 @@ class TestLineageLoggingRobustness:
         return {
             "runtime": tmp_path / "runtime_test.jsonl",
             "lineage": tmp_path / "lineage_test.jsonl",
+            "dataframe_lineage": tmp_path / "dataframe_lineage_test.jsonl",
         }
 
     @pytest.fixture
     def interceptor(self, temp_files):
         """Create interceptor for testing"""
-        return UnifiedMarimoInterceptor(
+        return UnifiedNotebookInterceptor(
             runtime_file=str(temp_files["runtime"]),
             lineage_file=str(temp_files["lineage"]),
+            dataframe_lineage_file=str(temp_files["dataframe_lineage"]),
         )
 
     @pytest.fixture

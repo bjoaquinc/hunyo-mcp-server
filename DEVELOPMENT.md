@@ -1,6 +1,8 @@
 # Contributing Guide
 
-We welcome all kinds of contributions to the **Hunyo MCP Server** project. _You don't need to be an expert in MCP protocol or marimo development to help out._
+We welcome all kinds of contributions to the **Hunyo MCP Server** project. _You don't need to be an expert in MCP protocol or notebook development to help out._
+
+The project now features **environment-agnostic architecture** supporting multiple notebook environments (Marimo, Jupyter, etc.) with unified tracking APIs.
 
 ## Checklist
 
@@ -43,8 +45,8 @@ hatch shell
 ```bash
 # Test basic functionality (should all pass)
 hatch run test:python -c "import hunyo_capture; import hunyo_mcp_server; print('✅ Packages imported')"
-hatch run test:python -c "from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking; print('✅ Capture system working')"
-hatch run test  # Should pass all 107 tests
+hatch run test:python -c "from hunyo_capture import enable_unified_tracking; print('✅ Environment-agnostic capture system working')"
+hatch run test  # Should pass all 84+ tests
 ```
 
 ## Package Structure
@@ -54,15 +56,20 @@ This project uses separated packages for modularity:
 ```
 hunyo-notebook-memories-mcp/
 ├── packages/
-│   ├── hunyo-capture/              # Data capture system
+│   ├── hunyo-capture/              # Environment-agnostic data capture system
 │   │   ├── src/hunyo_capture/      # Capture source code
-│   │   ├── tests/                  # Capture tests (24 tests)
+│   │   │   ├── environments/       # Environment detection and abstractions
+│   │   │   ├── hooks/             # Notebook hook abstractions (Marimo, Jupyter, etc.)
+│   │   │   ├── adapters/          # Context extraction adapters per environment
+│   │   │   ├── factory.py         # Component factory for environment selection
+│   │   │   └── unified_notebook_interceptor.py  # Environment-agnostic interceptor
+│   │   ├── tests/                  # Capture tests (84+ tests)
 │   │   └── pyproject.toml          # Capture package config
 │   └── hunyo-mcp-server/           # MCP server implementation
 │       ├── src/hunyo_mcp_server/   # Server source code
-│       ├── tests/                  # Server tests (60 tests)
+│       ├── tests/                  # Server tests (60+ tests)
 │       └── pyproject.toml          # Server package config
-├── tests/                          # Integration tests (23 tests)
+├── tests/                          # Integration tests (26+ tests)
 ├── sandbox/                        # Interactive development playground
 ├── schemas/                        # Database and JSON schemas
 └── pyproject.toml                  # Workspace configuration

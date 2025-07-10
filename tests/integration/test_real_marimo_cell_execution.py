@@ -508,6 +508,13 @@ class TestRealMarimoCellExecution:
         with open(schema_path, encoding="utf-8") as f:
             return json.load(f)
 
+    @pytest.fixture
+    def dataframe_lineage_schema(self):
+        """Load DataFrame lineage events schema for validation"""
+        schema_path = Path("schemas/json/dataframe_lineage_schema.json")
+        with open(schema_path, encoding="utf-8") as f:
+            return json.load(f)
+
     def validate_event_against_schema(
         self, event: dict[str, Any], schema: dict[str, Any]
     ) -> tuple[bool, str | None]:
@@ -524,7 +531,11 @@ class TestRealMarimoCellExecution:
     @pytest.mark.timeout(90)  # Extended timeout for CI/CD environments (90 seconds)
     @pytest.mark.skipif(not PLAYWRIGHT_AVAILABLE, reason="Playwright not available")
     async def test_marimo_edit_mode_hooks_with_playwright(
-        self, temp_hunyo_dir, runtime_events_schema, openlineage_events_schema
+        self,
+        temp_hunyo_dir,
+        runtime_events_schema,
+        openlineage_events_schema,
+        dataframe_lineage_schema,
     ):
         """Test hooks firing during real marimo edit mode execution"""
 
@@ -556,12 +567,13 @@ def setup_tracking():
         sys.path.insert(0, str(src_path))
 
     # Import and enable unified tracking
-    from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+        from hunyo_capture.unified_notebook_interceptor import enable_unified_tracking
 
     # Enable tracking with specific files
     tracker = enable_unified_tracking(
         runtime_file="test_runtime_events.jsonl",
-        lineage_file="test_lineage_events.jsonl"
+        lineage_file="test_lineage_events.jsonl",
+        dataframe_lineage_file="test_dataframe_lineage_events.jsonl"
     )
 
     print(f"[SETUP] Tracker installed: {tracker.session_id}")
@@ -631,9 +643,15 @@ if __name__ == "__main__":
             # Check for event files
             runtime_file = temp_hunyo_dir / "test_runtime_events.jsonl"
             lineage_file = temp_hunyo_dir / "test_lineage_events.jsonl"
+            dataframe_lineage_file = (
+                temp_hunyo_dir / "test_dataframe_lineage_events.jsonl"
+            )
 
             test_logger.info(f"[TEST] Checking for runtime events at: {runtime_file}")
             test_logger.info(f"[TEST] Checking for lineage events at: {lineage_file}")
+            test_logger.info(
+                f"[TEST] Checking for DataFrame lineage events at: {dataframe_lineage_file}"
+            )
 
             # List all files in temp dir for debugging
             test_logger.info("[TEST] Files in temp dir:")
@@ -674,6 +692,26 @@ if __name__ == "__main__":
 
                 events_found = True
                 test_logger.info("[TEST] Lineage events validation passed!")
+
+            if dataframe_lineage_file.exists():
+                test_logger.info(
+                    "[TEST] DataFrame lineage events file found! Validating..."
+                )
+                with open(dataframe_lineage_file) as f:
+                    dataframe_lineage_events = [
+                        json.loads(line.strip()) for line in f if line.strip()
+                    ]
+
+                test_logger.info(
+                    f"[TEST] Found {len(dataframe_lineage_events)} DataFrame lineage events"
+                )
+
+                # Validate against schema
+                for event in dataframe_lineage_events:
+                    jsonschema.validate(event, dataframe_lineage_schema)
+
+                events_found = True
+                test_logger.info("[TEST] DataFrame lineage events validation passed!")
 
             # Assert that we found events
             assert (

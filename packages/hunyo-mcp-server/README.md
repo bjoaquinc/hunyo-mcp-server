@@ -1,8 +1,8 @@
 # Hunyo MCP Server
 
-**Zero-configuration DataFrame tracking and runtime debugging for Marimo notebooks via MCP**
+**Zero-configuration DataFrame tracking and runtime debugging for multiple notebook environments via MCP**
 
-A single-command orchestrator that provides automatic marimo notebook instrumentation, real-time event capture, DuckDB ingestion, and LLM-accessible query tools via the Model Context Protocol (MCP).
+A single-command orchestrator that provides automatic notebook instrumentation, real-time event capture, DuckDB ingestion, and LLM-accessible query tools via the Model Context Protocol (MCP). Features environment-agnostic architecture supporting Marimo, Jupyter, and other notebook environments.
 
 ## 🚀 Quick Start
 
@@ -43,7 +43,8 @@ hunyo-mcp-server --notebook my_analysis.py
 
 ### Data Flow
 ```
-Marimo Notebook → Capture Layer → JSONL Events → File Watcher → 
+Notebook Environment → Environment-Agnostic Capture Layer → JSONL Events → File Watcher → 
+(Marimo/Jupyter/etc.)    (Auto-detects environment)
 DuckDB Database → MCP Query Tools → LLM Analysis
 ```
 
@@ -115,7 +116,10 @@ GROUP BY operation;
 
 ### Prerequisites
 - **Python 3.10+** (3.11+ recommended) 
-- **Marimo notebooks** - Works with `.py` marimo notebook files
+- **Notebook environments** - Environment-agnostic support:
+  - **Marimo notebooks** - Full support for `.py` marimo notebook files
+  - **Jupyter notebooks** - Extensible architecture for future integration
+  - **Auto-detection** - Automatically detects and adapts to environment
 - **Cross-platform** - Fully compatible with Windows, macOS, and Linux
 
 ### Installation Options

@@ -21,8 +21,8 @@ from hunyo_capture.logger import get_logger
 
 # Check marimo availability (will be verified at test execution time)
 # Import the REAL implementations (not mocks)
-from hunyo_capture.unified_marimo_interceptor import (
-    UnifiedMarimoInterceptor,
+from hunyo_capture.unified_notebook_interceptor import (
+    UnifiedNotebookInterceptor,
 )
 
 # Create test logger instance
@@ -53,14 +53,18 @@ class TestRealMarimoExecution:
     def test_real_tracker_detects_implementation_changes(
         self, temp_hunyo_dir, runtime_events_schema
     ):
-        """Test that fails if UnifiedMarimoInterceptor implementation breaks schema compliance"""
+        """Test that fails if UnifiedNotebookInterceptor implementation breaks schema compliance"""
 
         runtime_events_file = temp_hunyo_dir / "change_detection_runtime_events.jsonl"
         lineage_events_file = temp_hunyo_dir / "change_detection_lineage_events.jsonl"
 
         # Use REAL unified tracker (this is the key difference!)
-        tracker = UnifiedMarimoInterceptor(
-            runtime_file=str(runtime_events_file), lineage_file=str(lineage_events_file)
+        tracker = UnifiedNotebookInterceptor(
+            runtime_file=str(runtime_events_file),
+            lineage_file=str(lineage_events_file),
+            dataframe_lineage_file=str(
+                temp_hunyo_dir / "change_detection_dataframe_lineage_events.jsonl"
+            ),
         )
 
         tracker.install()
@@ -170,7 +174,7 @@ def __():
 @app.cell
 def __(os, pd, Path):
     # Initialize our unified tracking system properly
-            from hunyo_capture.unified_marimo_interceptor import enable_unified_tracking
+            from hunyo_capture.unified_notebook_interceptor import enable_unified_tracking
 
     hunyo_dir = os.environ.get("HUNYO_DATA_DIR", ".hunyo")
     runtime_events_file = os.path.join(hunyo_dir, "runtime_events.jsonl")
@@ -179,7 +183,8 @@ def __(os, pd, Path):
     # Enable unified tracking (tracks both cell execution AND DataFrame operations)
     unified_interceptor = enable_unified_tracking(
         runtime_file=runtime_events_file,
-        lineage_file=lineage_events_file
+        lineage_file=lineage_events_file,
+        dataframe_lineage_file=os.path.join(hunyo_dir, "dataframe_lineage_events.jsonl")
     )
 
     print(">>> Unified tracking enabled!")
@@ -233,13 +238,18 @@ if __name__ == "__main__":
         """Test that our hooks can be installed and are present in marimo's hook lists"""
 
         # Import our unified interceptor (REAL implementation)
-        from hunyo_capture.unified_marimo_interceptor import UnifiedMarimoInterceptor
+        from hunyo_capture.unified_notebook_interceptor import (
+            UnifiedNotebookInterceptor,
+        )
 
         # Create interceptor (should install hooks)
         runtime_file = temp_hunyo_dir / "test_runtime.jsonl"
         lineage_file = temp_hunyo_dir / "test_lineage.jsonl"
-        interceptor = UnifiedMarimoInterceptor(
-            runtime_file=str(runtime_file), lineage_file=str(lineage_file)
+        dataframe_lineage_file = temp_hunyo_dir / "test_dataframe_lineage.jsonl"
+        interceptor = UnifiedNotebookInterceptor(
+            runtime_file=str(runtime_file),
+            lineage_file=str(lineage_file),
+            dataframe_lineage_file=str(dataframe_lineage_file),
         )
 
         try:
@@ -311,14 +321,19 @@ if __name__ == "__main__":
         """Test that manually simulates marimo hook execution to prove system works end-to-end"""
 
         # Import the REAL unified system (not mocks)
-        from hunyo_capture.unified_marimo_interceptor import UnifiedMarimoInterceptor
+        from hunyo_capture.unified_notebook_interceptor import (
+            UnifiedNotebookInterceptor,
+        )
 
         # Create interceptor and install hooks
         runtime_file = temp_hunyo_dir / "simulated_runtime.jsonl"
         lineage_file = temp_hunyo_dir / "simulated_lineage.jsonl"
+        dataframe_lineage_file = temp_hunyo_dir / "simulated_dataframe_lineage.jsonl"
 
-        interceptor = UnifiedMarimoInterceptor(
-            runtime_file=str(runtime_file), lineage_file=str(lineage_file)
+        interceptor = UnifiedNotebookInterceptor(
+            runtime_file=str(runtime_file),
+            lineage_file=str(lineage_file),
+            dataframe_lineage_file=str(dataframe_lineage_file),
         )
 
         try:
@@ -486,11 +501,15 @@ if __name__ == "__main__":
 
             runtime_file = temp_hunyo_dir / "dataframe_mod_runtime.jsonl"
             lineage_file = temp_hunyo_dir / "dataframe_mod_lineage.jsonl"
+            dataframe_lineage_file = (
+                temp_hunyo_dir / "dataframe_mod_dataframe_lineage.jsonl"
+            )
 
             # Create interceptor with REAL implementation
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 runtime_file=str(runtime_file),
                 lineage_file=str(lineage_file),
+                dataframe_lineage_file=str(dataframe_lineage_file),
             )
 
             try:
@@ -701,11 +720,13 @@ if __name__ == "__main__":
 
             runtime_file = temp_hunyo_dir / "failure_runtime.jsonl"
             lineage_file = temp_hunyo_dir / "failure_lineage.jsonl"
+            dataframe_lineage_file = temp_hunyo_dir / "failure_dataframe_lineage.jsonl"
 
             # Create interceptor with REAL implementation
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 runtime_file=str(runtime_file),
                 lineage_file=str(lineage_file),
+                dataframe_lineage_file=str(dataframe_lineage_file),
             )
 
             try:
@@ -832,11 +853,13 @@ if __name__ == "__main__":
 
             runtime_file = temp_hunyo_dir / "abortion_runtime.jsonl"
             lineage_file = temp_hunyo_dir / "abortion_lineage.jsonl"
+            dataframe_lineage_file = temp_hunyo_dir / "abortion_dataframe_lineage.jsonl"
 
             # Create interceptor with REAL implementation
-            interceptor = UnifiedMarimoInterceptor(
+            interceptor = UnifiedNotebookInterceptor(
                 runtime_file=str(runtime_file),
                 lineage_file=str(lineage_file),
+                dataframe_lineage_file=str(dataframe_lineage_file),
             )
 
             try:
@@ -960,11 +983,13 @@ if __name__ == "__main__":
 
         runtime_file = temp_hunyo_dir / "cell_error_runtime.jsonl"
         lineage_file = temp_hunyo_dir / "cell_error_lineage.jsonl"
+        dataframe_lineage_file = temp_hunyo_dir / "cell_error_dataframe_lineage.jsonl"
 
         # Create interceptor with REAL implementation
-        interceptor = UnifiedMarimoInterceptor(
+        interceptor = UnifiedNotebookInterceptor(
             runtime_file=str(runtime_file),
             lineage_file=str(lineage_file),
+            dataframe_lineage_file=str(dataframe_lineage_file),
         )
 
         try:
