@@ -14,6 +14,7 @@ from typing import Final
 # ========================================
 
 VERSION: Final[str] = "0.1.0"
+__version__ = "0.1.0"  # For hatch version parsing
 
 # ========================================
 # Data Capture Limits and Constraints

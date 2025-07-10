@@ -23,7 +23,7 @@ test = [
 ]
 
 [tool.hatch.version]
-path = "src/hunyo_capture/__init__.py"
+path = "src/hunyo_capture/constants.py"
 
 [tool.hatch.envs.test]
 dependencies = [
