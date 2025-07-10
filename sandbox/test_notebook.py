@@ -1,8 +1,9 @@
 # ruff: noqa
 # This is a marimo notebook - ignore linting rules
+
 import marimo
 
-__generated_with = "0.14.10"
+__generated_with = "0.14.9"
 app = marimo.App()
 
 
@@ -91,13 +92,14 @@ def _(df):
 @app.cell
 def _(df_filtered):
     # Final analysis
-    senior_employees = df_filtered[df_filtered["age"] >= 30]
+    senior_employees = df_filtered[df_filtered["age"] >= 25]
     result = {
         "total_senior_employees": len(senior_employees),
         "senior_avg_salary": senior_employees["salary"].mean(),
     }
     print(f"Analysis complete: {result}")
     print("test")
+    return
 
 
 if __name__ == "__main__":

@@ -6,9 +6,10 @@ Provides a secure interface for LLMs to query the captured notebook data
 using SQL with safety constraints and helpful query templates.
 """
 
-from typing import Any, ClassVar
+from typing import Annotated, Any, ClassVar
 
 import sqlparse
+from pydantic import Field
 from sqlparse import tokens
 from sqlparse.sql import Statement
 
@@ -349,8 +350,19 @@ class SQLSecurityValidator:
         return "Check your SQL syntax and ensure it's a valid SELECT query"
 
 
-@mcp.tool("query_memories")
-def query_memories(sql_query: str, limit: int = 100) -> dict[str, Any]:
+@mcp.tool(
+    "query_memories",
+    description="Execute SQL queries against notebook execution memories with enhanced security",
+)
+def query_memories(
+    sql_query: Annotated[
+        str, Field(description="SQL query to execute (SELECT statements only)")
+    ],
+    limit: Annotated[
+        int,
+        Field(description="Maximum number of rows to return (default: 100, max: 1000)"),
+    ] = 100,
+) -> dict[str, Any]:
     """
     Execute SQL queries against notebook execution memories with enhanced security.
 

@@ -67,8 +67,15 @@ def get_hunyo_data_dir() -> Path:
 
     if is_development_mode():
         # Development: use .hunyo in repository root
-        repo_root = get_repository_root()
-        return repo_root / ".hunyo"
+        # Check if HUNYO_DEV_MODE is explicitly set (for testing)
+        env_dev_mode = os.environ.get("HUNYO_DEV_MODE")
+        if env_dev_mode is not None:
+            # Use current working directory when explicitly set for testing
+            return Path.cwd() / ".hunyo"
+        else:
+            # Use repository root for normal development
+            repo_root = get_repository_root()
+            return repo_root / ".hunyo"
     else:
         # Production: use ~/.hunyo in user home directory
         return Path.home() / ".hunyo"
@@ -98,7 +105,12 @@ def is_development_mode() -> bool:
         # Look for development indicators
         has_git = (repo_root / ".git").exists()
         has_pyproject = (repo_root / "pyproject.toml").exists()
-        has_src_dir = (repo_root / "src" / "hunyo_mcp_server").exists()
+
+        # Check for monorepo structure (packages/hunyo-mcp-server/src/hunyo_mcp_server)
+        # or standard structure (src/hunyo_mcp_server)
+        has_src_dir = (
+            repo_root / "packages" / "hunyo-mcp-server" / "src" / "hunyo_mcp_server"
+        ).exists() or (repo_root / "src" / "hunyo_mcp_server").exists()
 
         return has_git and has_pyproject and has_src_dir
 
@@ -319,9 +331,10 @@ def get_event_file_path(event_type: str, notebook_path: str | None = None) -> Pa
     events_dir = data_dir / "events" / event_type
 
     if notebook_path:
-        # Create unique filename based on notebook
+        # Create unique filename based on notebook with hash prefix for compatibility
+        notebook_hash = get_notebook_file_hash(notebook_path)
         notebook_name = Path(notebook_path).stem
-        filename = f"{notebook_name}_{event_type}_events.jsonl"
+        filename = f"{notebook_hash}_{notebook_name}_{event_type}_events.jsonl"
     else:
         # Default filename
         filename = f"{event_type}_events.jsonl"

@@ -6,7 +6,9 @@ Provides information about database tables, columns, views, and relationships
 to help LLMs understand the data structure for query construction.
 """
 
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 # Import logging utility
 from hunyo_mcp_server.logger import get_logger
@@ -19,12 +21,21 @@ tool_logger = get_logger("hunyo.tools.schema")
 from hunyo_mcp_server.mcp_instance import mcp
 
 
-@mcp.tool("inspect_schema")
+@mcp.tool(
+    "inspect_schema",
+    description="Inspect database schema to understand table structures and relationships",
+)
 def inspect_schema(
-    table_name: str | None = None,
+    table_name: Annotated[
+        str | None, Field(description="Specific table to inspect (None for all tables)")
+    ] = None,
     *,
-    include_views: bool = True,
-    include_samples: bool = False,
+    include_views: Annotated[
+        bool, Field(description="Whether to include view definitions")
+    ] = True,
+    include_samples: Annotated[
+        bool, Field(description="Whether to include sample data (first few rows)")
+    ] = False,
 ) -> dict[str, Any]:
     """
     Inspect database schema to understand table structures and relationships.
