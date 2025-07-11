@@ -107,6 +107,7 @@ class FileWatcher:
     - Automatic file type detection
     - Error handling and recovery
     - Background processing with asyncio
+    - File processing coordination to prevent concurrent access
     """
 
     def __init__(
@@ -136,6 +137,10 @@ class FileWatcher:
         self._processing_queue = asyncio.Queue()
         self._processing_task: asyncio.Task | None = None
         self._background_tasks: set[asyncio.Task] = set()
+
+        # File processing coordination - prevents concurrent processing of same file
+        self._processing_registry: set[Path] = set()
+        self._registry_lock = threading.Lock()
 
         # Statistics
         self.files_processed = 0
@@ -217,6 +222,10 @@ class FileWatcher:
                     timeout=3.0,
                 )
 
+            # Clear processing registry
+            with self._registry_lock:
+                self._processing_registry.clear()
+
             watcher_logger.success("[OK] File watcher stopped")
 
         except asyncio.TimeoutError:
@@ -237,9 +246,19 @@ class FileWatcher:
         for file_path in runtime_files:
             watcher_logger.info(f"Processing existing runtime file: {file_path.name}")
             try:
-                await self._process_file(file_path, "runtime")
+                # Register file for processing to prevent conflicts
+                if self._register_file_for_processing(file_path):
+                    try:
+                        await self._process_file(file_path, "runtime")
+                    finally:
+                        self._unregister_file_from_processing(file_path)
+                else:
+                    watcher_logger.debug(
+                        f"File already being processed, skipping: {file_path.name}"
+                    )
             except Exception as e:
                 watcher_logger.error(f"Runtime file processing error: {e}")
+                self._unregister_file_from_processing(file_path)
 
         # Process lineage files - only for current notebook hash
         lineage_pattern = f"{self.notebook_hash}_*.jsonl"
@@ -248,9 +267,19 @@ class FileWatcher:
         for file_path in lineage_files:
             watcher_logger.info(f"Processing existing lineage file: {file_path.name}")
             try:
-                await self._process_file(file_path, "lineage")
+                # Register file for processing to prevent conflicts
+                if self._register_file_for_processing(file_path):
+                    try:
+                        await self._process_file(file_path, "lineage")
+                    finally:
+                        self._unregister_file_from_processing(file_path)
+                else:
+                    watcher_logger.debug(
+                        f"File already being processed, skipping: {file_path.name}"
+                    )
             except Exception as e:
                 watcher_logger.error(f"Lineage file processing error: {e}")
+                self._unregister_file_from_processing(file_path)
 
         # Process DataFrame lineage files - only for current notebook hash
         dataframe_lineage_pattern = f"{self.notebook_hash}_*.jsonl"
@@ -263,9 +292,19 @@ class FileWatcher:
                 f"Processing existing DataFrame lineage file: {file_path.name}"
             )
             try:
-                await self._process_file(file_path, "dataframe_lineage")
+                # Register file for processing to prevent conflicts
+                if self._register_file_for_processing(file_path):
+                    try:
+                        await self._process_file(file_path, "dataframe_lineage")
+                    finally:
+                        self._unregister_file_from_processing(file_path)
+                else:
+                    watcher_logger.debug(
+                        f"File already being processed, skipping: {file_path.name}"
+                    )
             except Exception as e:
                 watcher_logger.error(f"DataFrame lineage file processing error: {e}")
+                self._unregister_file_from_processing(file_path)
 
         watcher_logger.success(
             f"[OK] Processed {len(runtime_files)} runtime + {len(lineage_files)} lineage + {len(dataframe_lineage_files)} DataFrame lineage files for notebook {self.notebook_hash}"
@@ -301,26 +340,57 @@ class FileWatcher:
 
         for file_path in pending_files:
             try:
-                # Determine file type based on directory (resolve paths for proper comparison)
-                file_parent = file_path.parent.resolve()
-                runtime_dir_resolved = self.runtime_dir.resolve()
-                lineage_dir_resolved = self.lineage_dir.resolve()
-                dataframe_lineage_dir_resolved = self.dataframe_lineage_dir.resolve()
-
-                if file_parent == runtime_dir_resolved:
-                    event_type = "runtime"
-                elif file_parent == lineage_dir_resolved:
-                    event_type = "lineage"
-                elif file_parent == dataframe_lineage_dir_resolved:
-                    event_type = "dataframe_lineage"
-                else:
-                    watcher_logger.warning(f"[WARN] Unknown file location: {file_path}")
+                # Check if file is already being processed
+                if not self._register_file_for_processing(file_path):
+                    watcher_logger.debug(
+                        f"File already being processed, skipping: {file_path.name}"
+                    )
                     continue
 
-                await self._process_file(file_path, event_type)
+                try:
+                    # Determine file type based on directory (resolve paths for proper comparison)
+                    file_parent = file_path.parent.resolve()
+                    runtime_dir_resolved = self.runtime_dir.resolve()
+                    lineage_dir_resolved = self.lineage_dir.resolve()
+                    dataframe_lineage_dir_resolved = (
+                        self.dataframe_lineage_dir.resolve()
+                    )
+
+                    if file_parent == runtime_dir_resolved:
+                        event_type = "runtime"
+                    elif file_parent == lineage_dir_resolved:
+                        event_type = "lineage"
+                    elif file_parent == dataframe_lineage_dir_resolved:
+                        event_type = "dataframe_lineage"
+                    else:
+                        watcher_logger.warning(
+                            f"[WARN] Unknown file location: {file_path}"
+                        )
+                        continue
+
+                    await self._process_file(file_path, event_type)
+
+                finally:
+                    # Always unregister the file when done
+                    self._unregister_file_from_processing(file_path)
 
             except Exception as e:
                 watcher_logger.error(f"Failed to process file {file_path}: {e}")
+                # Ensure file is unregistered on error
+                self._unregister_file_from_processing(file_path)
+
+    def _register_file_for_processing(self, file_path: Path) -> bool:
+        """Register a file for processing. Returns False if already being processed."""
+        with self._registry_lock:
+            if file_path in self._processing_registry:
+                return False
+            self._processing_registry.add(file_path)
+            return True
+
+    def _unregister_file_from_processing(self, file_path: Path) -> None:
+        """Unregister a file from processing."""
+        with self._registry_lock:
+            self._processing_registry.discard(file_path)
 
     async def _process_file(self, file_path: Path, event_type: str) -> None:
         """Process a single JSONL file."""
@@ -383,26 +453,83 @@ class FileWatcher:
         """Manually trigger processing of a specific file."""
         watcher_logger.info(f"[PROC] Manual processing: {file_path.name}")
 
-        # Determine file type (resolve paths for proper comparison)
-        file_parent = file_path.parent.resolve()
-        runtime_dir_resolved = self.runtime_dir.resolve()
-        lineage_dir_resolved = self.lineage_dir.resolve()
-        dataframe_lineage_dir_resolved = self.dataframe_lineage_dir.resolve()
+        # Check if file is already being processed
+        if not self._register_file_for_processing(file_path):
+            watcher_logger.debug(
+                f"File already being processed by background watcher, skipping: {file_path.name}"
+            )
+            return 0
 
-        if file_parent == runtime_dir_resolved:
-            event_type = "runtime"
-        elif file_parent == lineage_dir_resolved:
-            event_type = "lineage"
-        elif file_parent == dataframe_lineage_dir_resolved:
-            event_type = "dataframe_lineage"
-        else:
-            msg = f"File not in watched directories: {file_path}"
-            raise ValueError(msg)
+        try:
+            # Determine file type (resolve paths for proper comparison)
+            file_parent = file_path.parent.resolve()
+            runtime_dir_resolved = self.runtime_dir.resolve()
+            lineage_dir_resolved = self.lineage_dir.resolve()
+            dataframe_lineage_dir_resolved = self.dataframe_lineage_dir.resolve()
 
-        # Process the file once and return the event count
-        events_before = self.events_processed
-        await self._process_file(file_path, event_type)
-        return self.events_processed - events_before
+            if file_parent == runtime_dir_resolved:
+                event_type = "runtime"
+            elif file_parent == lineage_dir_resolved:
+                event_type = "lineage"
+            elif file_parent == dataframe_lineage_dir_resolved:
+                event_type = "dataframe_lineage"
+            else:
+                msg = f"File not in watched directories: {file_path}"
+                raise ValueError(msg)
+
+            # Process the file directly with EventProcessor to get accurate count
+            # This avoids the race condition with shared global counter
+            if not file_path.exists():
+                watcher_logger.warning(f"File no longer exists: {file_path}")
+                return 0
+
+            try:
+                # Validate the file is actually complete (not currently being written)
+                try:
+                    # Quick check: file size should be stable
+                    size_before = file_path.stat().st_size
+                    await asyncio.sleep(0.1)  # Brief wait
+                    size_after = file_path.stat().st_size
+
+                    if size_before != size_after:
+                        watcher_logger.debug(
+                            f"File {file_path.name} still being written, skipping"
+                        )
+                        return 0
+                except Exception as e:
+                    watcher_logger.error(f"Error validating file {file_path}: {e}")
+                    return 0
+
+                # Process file with event processor directly - this returns the actual count
+                events_count = self.event_processor.process_jsonl_file(
+                    file_path, event_type
+                )
+
+                # Update statistics only if events were processed
+                if events_count > 0:
+                    self.files_processed += 1
+                    self.events_processed += events_count
+
+                    if self.verbose:
+                        watcher_logger.success(
+                            f"[OK] Processed {events_count} events from {file_path.name}"
+                        )
+                    else:
+                        watcher_logger.tracking(
+                            f"Processed {events_count} {event_type} events"
+                        )
+                else:
+                    watcher_logger.warning(f"No events processed from {file_path.name}")
+
+                return events_count
+
+            except Exception as e:
+                watcher_logger.error(f"Error processing file {file_path}: {e}")
+                return 0
+
+        finally:
+            # Always unregister the file when done
+            self._unregister_file_from_processing(file_path)
 
 
 # Utility functions for testing and CLI usage

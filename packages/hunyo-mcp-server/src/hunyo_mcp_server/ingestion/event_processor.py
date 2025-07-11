@@ -7,6 +7,7 @@ from runtime, lineage, and DataFrame lineage JSONL files into DuckDB.
 """
 
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +35,7 @@ class EventProcessor:
     - Batch processing for efficiency
     - Error handling and logging
     - Supports runtime, lineage, and DataFrame lineage events
+    - Thread-safe database access via locking
     """
 
     def __init__(
@@ -45,6 +47,9 @@ class EventProcessor:
         self.processed_events = 0
         self.failed_events = 0
         self.strict_validation = strict_validation
+
+        # Thread-safe database access - prevents concurrent transaction conflicts
+        self._db_lock = threading.Lock()
 
         # Load JSON schemas at initialization for performance
         self.runtime_schema = self._load_schema("runtime_events_schema.json")
@@ -589,62 +594,65 @@ class EventProcessor:
         """Insert single event with individual transaction and constraint handling."""
         import duckdb
 
-        def insert_operation():
-            """Nested function for retry mechanism."""
-            # Each event gets its own transaction to prevent cascade failures
-            self.db_manager.begin_transaction()
+        # Serialize all database access to prevent concurrent transaction conflicts
+        with self._db_lock:
+
+            def insert_operation():
+                """Nested function for retry mechanism."""
+                # Each event gets its own transaction to prevent cascade failures
+                self.db_manager.begin_transaction()
+
+                try:
+                    if event_type == "runtime":
+                        self.db_manager.insert_runtime_event(event_data)
+                    elif event_type == "lineage":
+                        self.db_manager.insert_lineage_event(event_data)
+                    elif event_type == "dataframe_lineage":
+                        self.db_manager.insert_dataframe_lineage_event(event_data)
+                    else:
+                        error_msg = f"Unknown event type: {event_type}"
+                        raise ValueError(error_msg)
+
+                    self.db_manager.commit_transaction()
+                    return True
+
+                except Exception as e:
+                    self.db_manager.rollback_transaction()
+
+                    # Handle specific DuckDB exceptions per best practices guide
+                    if isinstance(e, duckdb.ConstraintException):
+                        # Primary key violation - skip this event but continue processing
+                        processor_logger.warning(
+                            f"Skipping duplicate event (constraint violation): {e}"
+                        )
+                        return False
+                    elif isinstance(e, duckdb.BinderException):
+                        # Column or function not found
+                        processor_logger.error(f"Database binding error: {e}")
+                        return False
+                    elif isinstance(e, duckdb.CatalogException):
+                        # Table/schema not found
+                        processor_logger.error(f"Database catalog error: {e}")
+                        return False
+                    elif isinstance(e, duckdb.InternalException):
+                        # Internal errors trigger restricted mode - connection must be restarted
+                        processor_logger.error(
+                            f"DuckDB internal error (restricted mode): {e}"
+                        )
+                        self.db_manager.close()
+                        raise
+                    else:
+                        # Unknown error - return False (already rolled back)
+                        processor_logger.error(f"Database insertion failed: {e}")
+                        return False
 
             try:
-                if event_type == "runtime":
-                    self.db_manager.insert_runtime_event(event_data)
-                elif event_type == "lineage":
-                    self.db_manager.insert_lineage_event(event_data)
-                elif event_type == "dataframe_lineage":
-                    self.db_manager.insert_dataframe_lineage_event(event_data)
-                else:
-                    error_msg = f"Unknown event type: {event_type}"
-                    raise ValueError(error_msg)
-
-                self.db_manager.commit_transaction()
-                return True
-
+                return self._execute_with_retry(insert_operation)
             except Exception as e:
-                self.db_manager.rollback_transaction()
-
-                # Handle specific DuckDB exceptions per best practices guide
-                if isinstance(e, duckdb.ConstraintException):
-                    # Primary key violation - skip this event but continue processing
-                    processor_logger.warning(
-                        f"Skipping duplicate event (constraint violation): {e}"
-                    )
-                    return False
-                elif isinstance(e, duckdb.BinderException):
-                    # Column or function not found
-                    processor_logger.error(f"Database binding error: {e}")
-                    return False
-                elif isinstance(e, duckdb.CatalogException):
-                    # Table/schema not found
-                    processor_logger.error(f"Database catalog error: {e}")
-                    return False
-                elif isinstance(e, duckdb.InternalException):
-                    # Internal errors trigger restricted mode - connection must be restarted
-                    processor_logger.error(
-                        f"DuckDB internal error (restricted mode): {e}"
-                    )
-                    self.db_manager.close()
-                    raise
-                else:
-                    # Unknown error - return False (already rolled back)
-                    processor_logger.error(f"Database insertion failed: {e}")
-                    return False
-
-        try:
-            return self._execute_with_retry(insert_operation)
-        except Exception as e:
-            processor_logger.error(
-                f"Failed to insert {event_type} event after retries: {e}"
-            )
-            return False
+                processor_logger.error(
+                    f"Failed to insert {event_type} event after retries: {e}"
+                )
+                return False
 
     def get_validation_summary(self) -> dict[str, Any]:
         """Get validation and processing summary."""

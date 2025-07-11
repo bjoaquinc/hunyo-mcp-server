@@ -330,21 +330,18 @@ class TestFileWatcher:
         runtime_file = temp_dirs["runtime"] / "immediate.jsonl"
         runtime_file.write_text('{"event_type": "test"}\n')
 
+        # Mock the event processor to return a known count
+        file_watcher.event_processor.process_jsonl_file.return_value = 5
+
         # Mock the events_processed counter to simulate processing
         file_watcher.events_processed = 0
-
-        # Mock _process_file to increment events_processed
-        async def mock_process_file(_file_path, _event_type):
-            file_watcher.events_processed += 5
-
-        file_watcher._process_file = mock_process_file
 
         result = await file_watcher.process_file_now(runtime_file)
 
         # Should determine file type and process
-        # Now returns the number of events processed (events_processed diff)
-        assert result == 5  # Events processed diff
-        assert file_watcher.events_processed == 5
+        # Now returns the actual count from EventProcessor
+        assert result == 5  # Events processed count from EventProcessor
+        assert file_watcher.events_processed == 5  # Global counter updated
 
     @pytest.mark.asyncio
     async def test_background_processor_handles_pending_files(self, file_watcher):
@@ -437,14 +434,8 @@ class TestFileWatcher:
         lineage_file.write_text('{"eventType": "START"}\n')
         dataframe_lineage_file.write_text('{"event_type": "dataframe_lineage"}\n')
 
-        # Mock _process_file to track calls
-        call_history = []
-
-        async def mock_process_file(_file_path, _event_type):
-            call_history.append((_file_path, _event_type))
-            file_watcher.events_processed += 1
-
-        file_watcher._process_file = mock_process_file
+        # Mock event processor to return a known count
+        file_watcher.event_processor.process_jsonl_file.return_value = 1
 
         # Test each file type
         await file_watcher.process_file_now(runtime_file)
@@ -452,10 +443,13 @@ class TestFileWatcher:
         await file_watcher.process_file_now(dataframe_lineage_file)
 
         # Should have detected correct event types
-        assert len(call_history) == 3
-        assert call_history[0][1] == "runtime"
-        assert call_history[1][1] == "lineage"
-        assert call_history[2][1] == "dataframe_lineage"
+        calls = file_watcher.event_processor.process_jsonl_file.call_args_list
+        assert len(calls) == 3
+
+        # Check that the correct file paths and event types were called
+        assert calls[0][0] == (runtime_file, "runtime")
+        assert calls[1][0] == (lineage_file, "lineage")
+        assert calls[2][0] == (dataframe_lineage_file, "dataframe_lineage")
 
     @pytest.mark.asyncio
     async def test_dataframe_lineage_file_processing_end_to_end(

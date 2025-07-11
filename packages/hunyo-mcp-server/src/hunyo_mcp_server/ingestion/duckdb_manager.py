@@ -11,6 +11,7 @@ import json
 import os
 import platform
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,7 @@ class DuckDBManager:
         self.database_path = Path(database_path)
         self.connection: duckdb.DuckDBPyConnection | None = None
         self._schema_initialized = False
+        self._db_lock = threading.Lock()
 
         # Platform-specific configuration
         self.platform_config = self._get_platform_config()
@@ -423,38 +425,39 @@ class DuckDBManager:
         self, query: str, parameters: list | None = None, timeout: float = 30.0
     ) -> list[dict[str, Any]]:
         """Execute a query and return results as list of dictionaries with timeout support."""
-        self._ensure_connected()
+        with self._db_lock:
+            self._ensure_connected()
 
-        def _execute():
+            def _execute():
+                try:
+                    if parameters:
+                        result = self.connection.execute(query, parameters)
+                    else:
+                        result = self.connection.execute(query)
+
+                    # Convert to list of dictionaries
+                    columns = (
+                        [desc[0] for desc in result.description]
+                        if result.description
+                        else []
+                    )
+                    rows = result.fetchall()
+
+                    return [dict(zip(columns, row, strict=False)) for row in rows]
+
+                except Exception as e:
+                    db_logger.error(f"Query execution failed: {e}")
+                    db_logger.error(f"Query: {query}")
+                    raise
+
+            # Execute with timeout handling
             try:
-                if parameters:
-                    result = self.connection.execute(query, parameters)
-                else:
-                    result = self.connection.execute(query)
-
-                # Convert to list of dictionaries
-                columns = (
-                    [desc[0] for desc in result.description]
-                    if result.description
-                    else []
-                )
-                rows = result.fetchall()
-
-                return [dict(zip(columns, row, strict=False)) for row in rows]
-
-            except Exception as e:
-                db_logger.error(f"Query execution failed: {e}")
-                db_logger.error(f"Query: {query}")
+                return self._execute_with_timeout(_execute, timeout)
+            except TimeoutError:
+                db_logger.error(f"Query timed out after {timeout}s: {query[:100]}...")
+                # Connection may be unstable after timeout
+                self.connection = None
                 raise
-
-        # Execute with timeout handling
-        try:
-            return self._execute_with_timeout(_execute, timeout)
-        except TimeoutError:
-            db_logger.error(f"Query timed out after {timeout}s: {query[:100]}...")
-            # Connection may be unstable after timeout
-            self.connection = None
-            raise
 
     def execute_query_with_retry(
         self,
@@ -493,7 +496,7 @@ class DuckDBManager:
             raise RuntimeError(error_msg)
 
     def insert_runtime_event(
-        self, event_data: dict[str, Any], timeout: float = 10.0
+        self, event_data: dict[str, Any], timeout: float = 10.0  # noqa: ARG002
     ) -> None:
         """Insert a runtime event into the database with timeout."""
         query = """
@@ -526,13 +529,11 @@ class DuckDBManager:
 
         self._ensure_connected()
 
-        def _insert():
-            return self.connection.execute(query, parameters)
-
-        self._execute_with_timeout(_insert, timeout)
+        # Direct execution without timeout to prevent segfault
+        self.connection.execute(query, parameters)
 
     def insert_lineage_event(
-        self, event_data: dict[str, Any], timeout: float = 10.0
+        self, event_data: dict[str, Any], timeout: float = 10.0  # noqa: ARG002
     ) -> None:
         """Insert a lineage event into the database with timeout."""
         query = """
@@ -582,13 +583,11 @@ class DuckDBManager:
 
         self._ensure_connected()
 
-        def _insert():
-            return self.connection.execute(query, parameters)
-
-        self._execute_with_timeout(_insert, timeout)
+        # Direct execution without timeout to prevent segfault
+        self.connection.execute(query, parameters)
 
     def insert_dataframe_lineage_event(
-        self, event_data: dict[str, Any], timeout: float = 10.0
+        self, event_data: dict[str, Any], timeout: float = 10.0  # noqa: ARG002
     ) -> None:
         """Insert a DataFrame lineage event into the database with timeout."""
         query = """
@@ -638,10 +637,8 @@ class DuckDBManager:
 
         self._ensure_connected()
 
-        def _insert():
-            return self.connection.execute(query, parameters)
-
-        self._execute_with_timeout(_insert, timeout)
+        # Direct execution without timeout to prevent segfault
+        self.connection.execute(query, parameters)
 
     def get_table_info(self, table_name: str) -> list[dict[str, Any]]:
         """Get information about a table's structure."""
@@ -656,18 +653,21 @@ class DuckDBManager:
 
     def begin_transaction(self) -> None:
         """Begin a database transaction."""
-        self._ensure_connected()
-        self.connection.begin()
+        with self._db_lock:
+            self._ensure_connected()
+            self.connection.begin()
 
     def commit_transaction(self) -> None:
         """Commit the current transaction."""
-        self._ensure_connected()
-        self.connection.commit()
+        with self._db_lock:
+            self._ensure_connected()
+            self.connection.commit()
 
     def rollback_transaction(self) -> None:
         """Rollback the current transaction."""
-        self._ensure_connected()
-        self.connection.rollback()
+        with self._db_lock:
+            self._ensure_connected()
+            self.connection.rollback()
 
     def _ensure_connected(self) -> None:
         """Ensure database connection is active."""
