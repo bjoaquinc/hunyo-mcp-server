@@ -8,7 +8,6 @@ the race condition locally.
 
 import asyncio
 import json
-import time
 
 import pytest
 from hunyo_capture.logger import get_logger
@@ -410,8 +409,9 @@ class TestOrchestratorRaceCondition:
             orchestrator.stop()
 
     @pytest.mark.integration
+    @pytest.mark.asyncio
     @pytest.mark.timeout(30)
-    def test_repeated_orchestrator_race_attempts(self, temp_notebook_file):
+    async def test_repeated_orchestrator_race_attempts(self, temp_notebook_file):
         """
         Run multiple attempts to trigger the race condition.
         """
@@ -427,7 +427,7 @@ class TestOrchestratorRaceCondition:
 
             try:
                 orchestrator.start()
-                time.sleep(0.1)  # Minimal delay
+                await asyncio.sleep(0.2)  # Slightly longer delay for CI stability
 
                 notebook_hash = orchestrator.notebook_hash
                 file_watcher = orchestrator.file_watcher
@@ -443,10 +443,11 @@ class TestOrchestratorRaceCondition:
 
                 # Process the file
                 try:
-                    # Use asyncio.run to create a new event loop for each attempt
-                    import asyncio
+                    # Use await instead of asyncio.run to avoid event loop conflicts
+                    result = await file_watcher.process_file_now(runtime_file)
 
-                    result = asyncio.run(file_watcher.process_file_now(runtime_file))
+                    # Allow some time for database operations to complete
+                    await asyncio.sleep(0.1)
 
                     # Check database
                     db_manager = orchestrator.get_db_manager()
@@ -471,7 +472,7 @@ class TestOrchestratorRaceCondition:
 
             finally:
                 orchestrator.stop()
-                time.sleep(0.1)  # Brief pause between attempts
+                await asyncio.sleep(0.1)  # Brief pause between attempts
 
         race_logger.info(f"[REPEAT] Completed {max_attempts} attempts")
         race_logger.info(f"[REPEAT] Failures: {len(failures)}")
